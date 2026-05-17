@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, TypeVar, cast
+from typing import Annotated, Any, TypeVar, cast, get_args, get_origin
 
 from pydantic import Field as PydanticField
 from pydantic.fields import FieldInfo
@@ -79,10 +79,9 @@ def resolve_related_model(
     """Resolve the related model class for a relationship field."""
     if metadata.related_model is not None:
         return metadata.related_model
-    origin = getattr(annotation, "__origin__", None)
+    origin = get_origin(annotation)
     if origin is not None:
-        args = getattr(annotation, "__args__", ())
-        for arg in args:
+        for arg in get_args(annotation):
             if arg is not type(None) and isinstance(arg, type):
                 return arg
     if isinstance(annotation, type):

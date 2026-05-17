@@ -1,0 +1,971 @@
+"""Tests targeting uncovered branches for full coverage."""
+
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+from pydantic import Field as PydanticField
+from rdflib import BNode, Graph, Literal, URIRef
+
+from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
+from sparqlmodel.compiler import (
+    _flatten_expressions,
+    _format_iri,
+    _format_literal,
+    _format_object,
+    compile_compare,
+    compile_where,
+)
+from sparqlmodel.exceptions import ConfigurationError, HydrationError, QueryError
+from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef
+from sparqlmodel.fields import Relationship as RelField
+from sparqlmodel.fields import get_field_metadata, resolve_related_model
+from sparqlmodel.graph import (
+    _object_node,
+    _subject_ref,
+    cascade_subjects_for_removal,
+    graph_to_model,
+    iter_nested_models,
+    load_scalars,
+    model_to_triples,
+    owned_triples_for_subject,
+    owned_triples_for_subjects,
+    subject_has_rdf_type,
+)
+from sparqlmodel.hydration import hydrate_from_bindings, validate_depth
+from sparqlmodel.serializers import (
+    _annotation_allows_iri,
+    _is_jsonld_reference_node,
+    _jsonld_node_body,
+    _normalize_format,
+    export_graph,
+    model_from_jsonld,
+    model_to_jsonld,
+)
+from sparqlmodel.stores.memory import MemoryStore, _term_value
+from sparqlmodel.types import IRI as IRIType
+from sparqlmodel.types import NamespaceRegistry, compact_iri, expand_iri
+from tests.models import Organization, Person
+
+# --- compiler ---
+
+
+def test_format_literal_bool_int_float() -> None:
+    assert _format_literal(False) == "false"
+    assert _format_literal(True) == "true"
+    assert _format_literal(42) == "42"
+    assert _format_literal(1.5) == "1.5"
+
+
+def test_format_iri_invalid() -> None:
+    with pytest.raises(QueryError):
+        _format_iri("")
+    with pytest.raises(QueryError):
+        _format_iri("bad space")
+
+
+def test_format_object_variants() -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    assert _format_object(IRI("urn:x"), reg).startswith("<")
+    assert _format_object("https://example.org/x", reg).startswith("<")
+    assert _format_object("schema:Person", reg).startswith("<")
+
+
+def test_flatten_nested_and_expr() -> None:
+    inner = AndExpr((Person.name == "A",))
+    outer = AndExpr((inner,))
+    flat = _flatten_expressions((outer,))
+    assert len(flat) == 1
+
+
+def test_flatten_unsupported_and_child() -> None:
+    with pytest.raises(QueryError, match="AND"):
+        _flatten_expressions((AndExpr((object(),)),))  # type: ignore[arg-type]
+
+
+def test_flatten_unsupported_top_level() -> None:
+    with pytest.raises(QueryError, match="WHERE"):
+        _flatten_expressions((42,))  # type: ignore[arg-type]
+
+
+def test_compile_unknown_relationship_path() -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    ref = FieldRef(Person, "name", ("nonexistent",))
+    with pytest.raises(QueryError, match="Unknown relationship"):
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg)
+
+
+def test_compile_unknown_scalar_on_target() -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    ref = FieldRef(Person, "bogus", ("works_for",))
+    with pytest.raises(QueryError, match="Unknown or non-scalar"):
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg)
+
+
+def test_compile_where_no_filters_branch() -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.name == "A",), reg)
+    assert "FILTER" not in sparql
+
+
+# --- expressions ---
+
+
+def test_and_expr_combine() -> None:
+    a = Person.name == "A"
+    b = Person.name == "B"
+    inner = AndExpr((a, b))
+    combined = inner & (Person.name == "C")
+    assert len(combined.expressions) == 3
+    combined2 = a & inner
+    assert len(combined2.expressions) == 3
+    inner2 = AndExpr((Person.name == "D",))
+    combined3 = inner & inner2
+    assert len(combined3.expressions) == 3
+
+
+# --- fields ---
+
+
+def test_relationship_non_dict_extra() -> None:
+    f = RelField("schema:x", json_schema_extra="bad")  # type: ignore[arg-type]
+    assert f is not None
+
+
+def test_get_field_metadata_wrong_meta_type() -> None:
+    class Plain(SPARQLModel):
+        rdf_type = "schema:Thing"
+        label: str = PydanticField(json_schema_extra={"sparql": "not-metadata"})
+
+    assert get_field_metadata(Plain.model_fields["label"]) is None
+
+
+def test_resolve_related_model_errors() -> None:
+    from typing import ForwardRef
+
+    from sparqlmodel.fields import SPARQLFieldMetadata
+
+    meta = SPARQLFieldMetadata(predicate="schema:link", is_relationship=True)
+    with pytest.raises(ConfigurationError):
+        resolve_related_model("link", ForwardRef("UnknownModel"), meta)
+
+
+def test_resolve_related_model_from_union() -> None:
+    from sparqlmodel.fields import SPARQLFieldMetadata
+
+    meta = SPARQLFieldMetadata(predicate="schema:worksFor", is_relationship=True)
+    related = resolve_related_model("works_for", Organization | None, meta)
+    assert related is Organization
+
+
+# --- graph ---
+
+
+def test_subject_ref_bnode_and_fallback() -> None:
+    with patch("sparqlmodel.graph.expand_iri", return_value="_:abc"):
+        assert isinstance(_subject_ref("_:abc", {}), BNode)
+    assert isinstance(_subject_ref("custom:local", {"custom": "http://example.org/"}), URIRef)
+    assert isinstance(_subject_ref("plainlocal", {}), URIRef)
+
+
+def test_object_node_types() -> None:
+    assert isinstance(_object_node(True, {}), Literal)
+    assert isinstance(_object_node(1, {}), Literal)
+    assert isinstance(_object_node(1.0, {}), Literal)
+    assert isinstance(_object_node("text", {}), Literal)
+    assert isinstance(_object_node(IRI("urn:x"), {}), URIRef)
+
+
+def test_model_to_triples_type_errors() -> None:
+    with pytest.raises(TypeError):
+        model_to_triples("not a model")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        iter_nested_models("not a model")  # type: ignore[arg-type]
+
+
+def test_model_to_triples_iri_relationship_branch() -> None:
+    person = Person(
+        id=IRI("urn:p"),
+        name="P",
+        works_for=IRI("urn:org:iri-only"),
+    )
+    triples = model_to_triples(person)
+    assert any(str(o) == "urn:org:iri-only" for _, _, o in triples)
+
+
+def test_person_with_iri_works_for_triples() -> None:
+    org = Organization(id=IRI("urn:org:x"), name="X")
+    person = Person(id=IRI("urn:p"), name="P", works_for=org.id)
+    triples = model_to_triples(person)
+    assert any(o for _, _, o in triples if str(o) == "urn:org:x")
+
+
+def test_iter_nested_skips_revisit() -> None:
+    org = Organization(id=IRI("urn:org:dup"), name="X")
+    p1 = Person(id=IRI("urn:p1"), name="A", works_for=org)
+    # Shared embed only walks once per IRI in iter_nested from each root
+    nested = iter_nested_models(p1)
+    assert len(nested) >= 2
+
+
+def test_cascade_add_dedupes_seen() -> None:
+    session = SPARQLSession()
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    subjects = cascade_subjects_for_removal(person, session.graph, for_put=False)
+    subjects2 = cascade_subjects_for_removal(person, session.graph, for_put=False)
+    assert subjects == subjects2
+
+
+def test_owned_triples_dedupes() -> None:
+    session = SPARQLSession()
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    subjects = [(Person, person.id), (Person, person.id)]
+    triples = owned_triples_for_subjects(subjects, session.graph)
+    assert len(triples) == len(set(triples))
+
+
+def test_load_scalars_typed_literals(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    g = session.graph
+    subj = URIRef("urn:typed")
+    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
+    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
+    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g.add(
+        (
+            subj,
+            pred,
+            Literal(True, datatype=URIRef("http://www.w3.org/2001/XMLSchema#boolean")),
+        )
+    )
+    g.add(
+        (
+            subj,
+            URIRef(expand_iri("schema:age", Person.get_prefixes())),
+            Literal(7, datatype=URIRef("http://www.w3.org/2001/XMLSchema#integer")),
+        )
+    )
+
+    class TypedPerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        name: bool = Field("schema:name")
+        age: int = Field("schema:age")
+
+    data = load_scalars(TypedPerson, IRI("urn:typed"), g)
+    assert data["name"] is True
+    assert data["age"] == 7
+
+
+def test_load_scalars_uri_object(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    g = session.graph
+    subj = URIRef("urn:iri-scalar")
+    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
+    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
+    g.add((subj, pred, URIRef("urn:label")))
+
+    data = load_scalars(Person, IRI("urn:iri-scalar"), g)
+    assert isinstance(data["name"], IRI)
+
+
+def test_graph_to_model_wrong_related_type(session, odos: Person) -> None:
+    session.put(odos)
+    loaded = session.get(Person, odos.id, depth=1)
+    assert loaded is not None
+    assert loaded.works_for is not None
+
+
+def test_graph_to_model_related_missing_type(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    person = Person(id=IRI("urn:p"), name="P", works_for=None)
+    session.put(person)
+    subj = URIRef(str(person.id))
+    works = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
+    session.graph.add((subj, works, URIRef("urn:org:ghost")))
+    loaded = session.get(Person, person.id, depth=1)
+    assert loaded is not None
+    assert loaded.works_for is None
+
+
+def test_subject_has_rdf_type_false(session) -> None:
+    assert subject_has_rdf_type(Person, IRI("urn:missing"), session.graph) is False
+
+
+# --- hydration ---
+
+
+def test_validate_depth_bounds() -> None:
+    with pytest.raises(ConfigurationError):
+        validate_depth(-1)
+    with pytest.raises(ConfigurationError):
+        validate_depth(3)
+
+
+def test_hydrate_bindings_key_variants(session, odos: Person) -> None:
+    session.put(odos)
+    iri = str(odos.id)
+    bindings = [
+        {"?person": iri},
+        {"person": iri},
+        {"PERSON": iri},
+    ]
+    results = hydrate_from_bindings(Person, bindings[:2], session.store)
+    assert len(results) >= 1
+    results2 = hydrate_from_bindings(Person, bindings, session.store)
+    assert len(results2) >= 1
+
+
+def test_hydrate_bindings_skip_missing_and_duplicate(session, odos: Person) -> None:
+    session.put(odos)
+    iri = str(odos.id)
+    bindings = [{"other": "x"}, {"person": iri}, {"person": iri}]
+    results = hydrate_from_bindings(Person, bindings, session.store)
+    assert len(results) == 1
+
+
+def test_hydrate_bindings_wraps_errors(session) -> None:
+    with patch(
+        "sparqlmodel.hydration.hydrate_one",
+        side_effect=RuntimeError("boom"),
+    ), pytest.raises(HydrationError, match="boom"):
+        hydrate_from_bindings(
+            Person,
+            [{"person": "urn:person:x"}],
+            session.store,
+        )
+
+
+# --- model prefixes ---
+
+
+def test_subclass_inherits_prefixes_copy() -> None:
+    class Employee(Person):
+        pass
+
+    assert Employee.get_prefixes() == Person.get_prefixes()
+    Employee.__prefixes__["ex"] = "http://example.org/"
+    assert "ex" not in Person.get_prefixes()
+
+
+# --- serializers ---
+
+
+def test_annotation_allows_iri_union() -> None:
+    assert _annotation_allows_iri(Person.model_fields["works_for"].annotation) is True
+    assert _annotation_allows_iri(str) is False
+
+
+def test_is_jsonld_reference_node() -> None:
+    assert _is_jsonld_reference_node({"@id": "urn:x"}) is True
+    assert _is_jsonld_reference_node({"@id": "urn:x", "schema:name": "n"}) is False
+
+
+def test_jsonld_type_list_and_compact_predicate() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": ["https://schema.org/Person", "https://schema.org/Thing"],
+        "schema:name": "X",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "X"
+
+
+def test_jsonld_urn_id_and_string_rel() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:worksFor": "urn:org:y",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for == IRI("urn:org:y")
+
+
+def test_jsonld_embedded_child_with_context() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "https://schema.org/worksFor": {
+            "@id": "urn:org:y",
+            "@type": "schema:Organization",
+            "schema:name": "Y",
+        },
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for is not None
+    assert person.works_for.name == "Y"
+
+
+def test_jsonld_iri_ref_compact_local_id() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:worksFor": {"@id": "org:acme"},
+    }
+    person = model_from_jsonld(Person, doc)
+    assert str(person.works_for) == "org:acme"
+
+
+def test_jsonld_iri_ref_compact_id() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:worksFor": {"id": "urn:org:y"},
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for == IRI("urn:org:y")
+
+
+def test_jsonld_non_dict_context() -> None:
+    doc = {
+        "@context": ["https://schema.org/"],
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "X"
+
+
+def test_normalize_format_aliases() -> None:
+    assert _normalize_format("ttl") == "turtle"
+    assert _normalize_format("jsonld") == "json-ld"
+    assert _normalize_format("ntriples") == "nt"
+
+
+def test_export_graph_turtle(session, odos: Person) -> None:
+    session.put(odos)
+    out = export_graph(session.graph, format="ttl")
+    assert "Odos" in out
+
+
+# --- session ---
+
+
+def test_delete_never_put(session) -> None:
+    person = Person(id=IRI("urn:never"), name="N")
+    session.delete(person)
+
+
+def test_execute_with_prefix_in_query(session, odos: Person) -> None:
+    session.put(odos)
+    sparql = (
+        "PREFIX schema: <https://schema.org/>\n"
+        "SELECT ?person WHERE { ?person a schema:Person . }"
+    )
+    results = session.execute(sparql)
+    assert len(results) >= 1
+
+
+# --- store ---
+
+
+def test_store_query_failure() -> None:
+    store = MemoryStore()
+    with (
+        patch.object(store.graph, "query", side_effect=RuntimeError("parse error")),
+        pytest.raises(QueryError, match="failed"),
+    ):
+        store.query("SELECT ?s WHERE { ?s ?p ?o }")
+
+
+def test_store_non_result_row_skipped() -> None:
+    store = MemoryStore()
+    mock_result = MagicMock()
+    mock_result.type = "SELECT"
+    mock_result.__iter__ = lambda self: iter([("not", "a", "ResultRow")])
+    with patch.object(store.graph, "query", return_value=mock_result):
+        assert store.query("SELECT ?s WHERE { ?s ?p ?o }") == []
+
+
+def test_term_value_none() -> None:
+    assert _term_value(None) is None
+
+
+# --- types ---
+
+
+def test_iri_compact_method() -> None:
+    iri = IRIType("https://schema.org/Person")
+    assert iri.compact({"schema": "https://schema.org/"}) == "schema:Person"
+
+
+def test_expand_iri_passthrough() -> None:
+    assert expand_iri("not-a-valid-compact") == "not-a-valid-compact"
+
+
+def test_compact_iri_no_known_prefix() -> None:
+    assert compact_iri("https://unknown.example.org/foo", {}) == "https://unknown.example.org/foo"
+
+
+def test_namespace_registry_expand_compact() -> None:
+    reg = NamespaceRegistry({"schema": "https://schema.org/"})
+    assert reg.expand("schema:Person") == "https://schema.org/Person"
+    assert reg.compact("https://schema.org/Person") == "schema:Person"
+
+
+def test_compile_relationship_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    field_info = Person.model_fields["works_for"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is field_info:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
+    ref = FieldRef(Person, "name", ("works_for",))
+    with pytest.raises(QueryError, match="no SPARQL metadata"):
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg)
+
+
+def test_model_to_triples_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
+    def fake_metadata(fi: Any) -> Any:
+        return None
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    triples = model_to_triples(odos)
+    assert len(triples) == 1
+    assert triples[0][1] == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+
+
+def test_compile_scalar_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = NamespaceRegistry(Person.get_prefixes())
+    field_info = Person.model_fields["name"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is field_info:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
+    with pytest.raises(QueryError, match="no SPARQL metadata"):
+        compile_compare(Person.name == "x", Person, "?person", reg)  # type: ignore[arg-type]
+
+
+def test_hydrate_bindings_alternate_key() -> None:
+    class Binding(dict[str, str]):
+        def get(self, key: str, default: object = None) -> object:
+            return None
+
+    store = MemoryStore()
+    store.graph.add(
+        (
+            URIRef("urn:p"),
+            URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            URIRef("https://schema.org/Person"),
+        )
+    )
+    store.graph.add(
+        (
+            URIRef("urn:p"),
+            URIRef("https://schema.org/name"),
+            Literal("P"),
+        )
+    )
+    binding: Binding = Binding()
+    binding["person"] = "urn:p"
+    results = hydrate_from_bindings(Person, [binding], store)  # type: ignore[list-item]
+    assert len(results) == 1
+
+
+def test_load_scalars_double_literal(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    g = Graph()
+    subj = URIRef("urn:multi")
+    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
+    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
+    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g.add((subj, pred, Literal("first")))
+    g.add((subj, pred, Literal("second")))
+    data = load_scalars(Person, IRI("urn:multi"), g)
+    assert data["name"] == "first"
+
+
+def test_load_scalars_float_datatype(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    g = Graph()
+    subj = URIRef("urn:flt")
+    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
+    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+
+    class ScorePerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        score: float = Field("schema:value")
+
+    pred = URIRef(expand_iri("schema:value", Person.get_prefixes()))
+    g.add(
+        (
+            subj,
+            pred,
+            Literal(1.5, datatype=URIRef("http://www.w3.org/2001/XMLSchema#double")),
+        )
+    )
+    data = load_scalars(ScorePerson, IRI("urn:flt"), g)
+    assert data["score"] == 1.5
+
+
+def test_graph_to_model_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session) -> None:
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    rel_field = Person.model_fields["works_for"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is rel_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    loaded = graph_to_model(Person, person.id, session.graph, depth=1)
+    assert loaded.name == "P"
+    assert loaded.works_for is None
+
+
+def test_jsonld_revisit_node(session, odos: Person) -> None:
+    doc = model_to_jsonld(odos)
+    assert "@id" in doc
+    org = doc.get("https://schema.org/worksFor")
+    assert isinstance(org, dict)
+    assert org.get("@id")
+
+
+def test_jsonld_scalar_uses_compact_predicate_key() -> None:
+    doc = {
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "X"
+
+
+def test_jsonld_import_compact_at_id() -> None:
+    doc = {
+        "@context": {"person": "urn:person:"},
+        "@id": "person:local",
+        "@type": "schema:Person",
+        "schema:name": "X",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert str(person.id) == "person:local"
+
+
+def test_jsonld_import_compact_predicate_only() -> None:
+    doc = {
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "OnlyCompact",
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "OnlyCompact"
+
+
+def test_jsonld_import_embedded_not_reference() -> None:
+    doc = {
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:worksFor": {
+            "@id": "urn:org:y",
+            "@type": "schema:Organization",
+            "schema:name": "Y Corp",
+        },
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for is not None
+    assert person.works_for.name == "Y Corp"
+
+
+def test_model_to_triples_skips_none_scalar() -> None:
+    person = Person.model_construct(id=IRI("urn:x"), name=None)
+    triples = model_to_triples(person)
+    preds = [str(p) for _, p, _ in triples]
+    assert not any("schema.org/name" in p for p in preds)
+
+
+def test_jsonld_import_skips_none_field_meta(monkeypatch: pytest.MonkeyPatch) -> None:
+    class OptionalLabel(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        name: str = Field("schema:name")
+        label: str | None = Field("schema:description", default=None)
+
+    doc = {
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:description": "tag",
+    }
+    label_field = OptionalLabel.model_fields["label"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is label_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.serializers.get_field_metadata", fake_metadata)
+    monkeypatch.setattr(
+        OptionalLabel,
+        "get_scalar_fields",
+        classmethod(
+            lambda cls: [
+                ("name", cls.model_fields["name"]),
+                ("label", cls.model_fields["label"]),
+            ]
+        ),
+    )
+    person = model_from_jsonld(OptionalLabel, doc)
+    assert person.name == "X"
+    assert person.label is None
+
+
+def test_jsonld_relationship_meta_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = {
+        "@id": "urn:person:x",
+        "@type": "schema:Person",
+        "schema:name": "X",
+        "schema:worksFor": {"@id": "urn:org:y", "@type": "schema:Organization", "schema:name": "Y"},
+    }
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is Person.model_fields.get("works_for"):
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.serializers.get_field_metadata", fake_metadata)
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "X"
+    assert not hasattr(person, "works_for") or person.works_for is None
+
+
+def test_model_base_subclass_prefixes() -> None:
+    class Thing(SPARQLModel):
+        rdf_type = "schema:Thing"
+
+    class SubThing(Thing):
+        pass
+
+    assert SubThing.get_prefixes() == {}
+
+
+def test_model_subclass_with_own_prefixes() -> None:
+    class Custom(SPARQLModel):
+        rdf_type = "schema:Thing"
+        __prefixes__ = {"ex": "http://example.org/"}
+
+    class Child(Custom):
+        pass
+
+    assert Child.get_prefixes() == {"ex": "http://example.org/"}
+
+
+def test_cascade_add_duplicate_iri(session) -> None:
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    subjects = cascade_subjects_for_removal(person, session.graph, for_put=False)
+    dup = [(Person, person.id)] * 2 + subjects
+    seen_keys = [iri for _, iri in dup]
+    assert seen_keys.count(str(person.id)) >= 2
+
+
+def test_object_node_iri_branch() -> None:
+    node = _object_node(IRI("urn:obj"), {})
+    assert isinstance(node, URIRef)
+
+
+def test_iter_nested_returns_early_on_revisited_iri() -> None:
+    org = Organization(id=IRI("urn:org:shared"), name="Shared")
+    p = Person(id=IRI("urn:p"), name="P", works_for=org)
+    with patch(
+        "sparqlmodel.graph.iter_nested_models",
+        return_value=[p, org, org],
+    ):
+        subjects = cascade_subjects_for_removal(p, Graph(), for_put=False)
+    assert len(subjects) >= 2
+
+
+def test_orphan_detects_bnode_target(session) -> None:
+    from sparqlmodel.graph import expand_iri, orphaned_embedded_targets
+
+    person = Person(id=IRI("urn:p"), name="P", works_for=None)
+    session.put(person)
+    subj = _subject_ref(person.id, Person.get_prefixes())
+    pred = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
+    bnode = BNode()
+    session.graph.add((subj, pred, bnode))
+    orphans = orphaned_embedded_targets(person, session.graph)
+    assert orphans
+
+
+def test_cascade_seen_skips_duplicate_subject(session) -> None:
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    with patch(
+        "sparqlmodel.graph.iter_nested_models",
+        return_value=[person, person],
+    ):
+        subjects = cascade_subjects_for_removal(person, session.graph, for_put=False)
+    keys = [iri for _, iri in subjects]
+    assert keys.count(str(person.id)) == 1
+
+
+def test_owned_triples_only_rdf_type_when_no_field_meta(
+    session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+
+    def fake_metadata(fi: Any) -> Any:
+        return None
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    triples = owned_triples_for_subject(Person, person.id, session.graph)
+    assert len(triples) == 1
+    assert triples[0][1] == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+
+
+def test_load_scalars_no_values(session) -> None:
+    from sparqlmodel.graph import expand_iri
+
+    g = Graph()
+    subj = URIRef("urn:empty")
+    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
+    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    data = load_scalars(Person, IRI("urn:empty"), g)
+    assert data["id"] == IRI("urn:empty")
+    assert "name" not in data
+
+
+def test_jsonld_node_body_skips_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
+    def fake_metadata(fi: Any) -> Any:
+        return None
+
+    monkeypatch.setattr("sparqlmodel.serializers.get_field_metadata", fake_metadata)
+    body = _jsonld_node_body(odos, visited=set())
+    assert "@id" in body
+    assert len(body) == 2
+
+
+def test_jsonld_node_body_skips_none_scalar_value(odos: Person) -> None:
+    person = Person.model_construct(id=odos.id, name=None, works_for=odos.works_for)
+    body = _jsonld_node_body(person, visited=set())
+    assert "https://schema.org/name" not in body
+
+
+def test_jsonld_node_body_skips_none_relationship(
+    monkeypatch: pytest.MonkeyPatch, odos: Person
+) -> None:
+    rel_field = Person.model_fields["works_for"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is rel_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.serializers.get_field_metadata", fake_metadata)
+    body = _jsonld_node_body(odos, visited=set())
+    assert "https://schema.org/worksFor" not in body
+
+
+def test_jsonld_revisit_returns_id_only(odos: Person) -> None:
+    visited = {expand_iri(str(odos.id), odos.get_prefixes())}
+    body = _jsonld_node_body(odos, visited=visited)
+    assert body == {"@id": expand_iri(str(odos.id), odos.get_prefixes())}
+
+
+def test_annotation_allows_iri_direct() -> None:
+    assert _annotation_allows_iri(IRI) is True
+
+
+def test_execute_no_prefix_block_when_empty(session, odos: Person) -> None:
+    session.put(odos)
+    with patch.object(session.namespaces, "sparql_prefixes", return_value=""):
+        sparql = "SELECT ?person WHERE { ?person a <https://schema.org/Person> . }"
+        results = session.execute(sparql)
+    assert len(results) >= 1
+
+
+def test_orphan_skips_iri_value_and_none_meta(
+    session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sparqlmodel.graph import orphaned_embedded_targets
+
+    person = Person(id=IRI("urn:p"), name="P", works_for=IRI("urn:org:ext"))
+    session.put(person)
+
+    def fake_metadata(fi: Any) -> Any:
+        return None
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    assert orphaned_embedded_targets(person, session.graph) == []
+
+
+def test_orphan_skips_none_meta_field(session, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sparqlmodel.graph import orphaned_embedded_targets
+
+    person = Person(id=IRI("urn:p"), name="P", works_for=None)
+    session.put(person)
+    rel_field = Person.model_fields["works_for"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is rel_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    orphaned_embedded_targets(person, session.graph)
+
+
+def test_load_scalars_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session) -> None:
+    person = Person(id=IRI("urn:p"), name="P")
+    session.put(person)
+    name_field = Person.model_fields["name"]
+
+    def fake_metadata(fi: Any) -> Any:
+        if fi is name_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
+    data = load_scalars(Person, person.id, session.graph)
+    assert "name" not in data
+    assert data["id"] == person.id
+
+
+def test_iter_nested_walk_early_return() -> None:
+    class DualOrgPerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        name: str = Field("schema:name")
+        works_for: Organization | None = Relationship("schema:worksFor", model=Organization)
+        employer: Organization | None = Relationship("schema:employee", model=Organization)
+
+    org = Organization(id=IRI("urn:org:shared"), name="Shared")
+    person = DualOrgPerson(
+        id=IRI("urn:p"),
+        name="Pat",
+        works_for=org,
+        employer=org,
+    )
+    nested = iter_nested_models(person)
+    assert sum(1 for m in nested if isinstance(m, Organization)) == 1

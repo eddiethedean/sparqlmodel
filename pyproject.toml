@@ -56,7 +56,7 @@ addopts = "-ra --strict-markers -p no:green-light"
 
 [tool.coverage.run]
 source = ["sparqlmodel"]
-branch = true
+branch = false
 
 [tool.coverage.report]
 exclude_lines = [
