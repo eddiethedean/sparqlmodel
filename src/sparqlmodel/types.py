@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
-from sparqlmodel.exceptions import ConfigurationError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 
 DEFAULT_PREFIXES: dict[str, str] = {
     "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
@@ -107,5 +107,11 @@ class NamespaceRegistry:
 
     def sparql_prefixes(self) -> str:
         """Return PREFIX declarations for SPARQL queries."""
-        lines = [f"PREFIX {p}: <{uri}>" for p, uri in sorted(self._prefixes.items())]
+        lines: list[str] = []
+        for prefix, uri in sorted(self._prefixes.items()):
+            if not prefix or any(c in prefix for c in " \n\r\t<>"):
+                raise QueryError(f"Invalid SPARQL prefix name: {prefix!r}")
+            if not uri or any(c in uri for c in " \n\r\t<>"):
+                raise QueryError(f"Invalid namespace URI for prefix {prefix!r}: {uri!r}")
+            lines.append(f"PREFIX {prefix}: <{uri}>")
         return "\n".join(lines)

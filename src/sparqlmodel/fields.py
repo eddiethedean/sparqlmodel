@@ -77,11 +77,17 @@ def resolve_related_model(
     field_name: str, annotation: Any, metadata: SPARQLFieldMetadata
 ) -> type[Any]:
     """Resolve the related model class for a relationship field."""
+    from sparqlmodel.model import SPARQLModel
+
     if metadata.related_model is not None:
         return metadata.related_model
     origin = get_origin(annotation)
     if origin is not None:
-        for arg in get_args(annotation):
+        args = get_args(annotation)
+        for arg in args:
+            if arg is not type(None) and isinstance(arg, type) and issubclass(arg, SPARQLModel):
+                return arg
+        for arg in args:
             if arg is not type(None) and isinstance(arg, type):
                 return arg
     if isinstance(annotation, type):

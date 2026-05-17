@@ -23,6 +23,7 @@ from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef
 from sparqlmodel.fields import Relationship as RelField
 from sparqlmodel.fields import get_field_metadata, resolve_related_model
 from sparqlmodel.graph import (
+    _graph_subject_key,
     _object_node,
     _subject_ref,
     cascade_subjects_for_removal,
@@ -55,8 +56,9 @@ from tests.models import Organization, Person
 def test_format_literal_bool_int_float() -> None:
     assert _format_literal(False) == "false"
     assert _format_literal(True) == "true"
-    assert _format_literal(42) == "42"
-    assert _format_literal(1.5) == "1.5"
+    assert "integer" in _format_literal(42)
+    assert "42" in _format_literal(42)
+    assert "double" in _format_literal(1.5)
 
 
 def test_format_iri_invalid() -> None:
@@ -67,10 +69,17 @@ def test_format_iri_invalid() -> None:
 
 
 def test_format_object_variants() -> None:
+    from sparqlmodel.compiler import _annotation_expects_iri
+
     reg = NamespaceRegistry(Person.get_prefixes())
     assert _format_object(IRI("urn:x"), reg).startswith("<")
     assert _format_object("https://example.org/x", reg).startswith("<")
-    assert _format_object("schema:Person", reg).startswith("<")
+    assert '"schema:Person"' in _format_object("schema:Person", reg)
+    assert _format_object("schema:Person", reg, field_annotation=IRI).startswith("<")
+    assert _annotation_expects_iri(str | IRI | None) is True
+    assert _format_object("unknown:foo", NamespaceRegistry({}), field_annotation=IRI) == (
+        '"unknown:foo"'
+    )
 
 
 def test_flatten_nested_and_expr() -> None:
@@ -94,14 +103,14 @@ def test_compile_unknown_relationship_path() -> None:
     reg = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Person, "name", ("nonexistent",))
     with pytest.raises(QueryError, match="Unknown relationship"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg)
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0])
 
 
 def test_compile_unknown_scalar_on_target() -> None:
     reg = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Person, "bogus", ("works_for",))
     with pytest.raises(QueryError, match="Unknown or non-scalar"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg)
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0])
 
 
 def test_compile_where_no_filters_branch() -> None:
@@ -164,10 +173,15 @@ def test_resolve_related_model_from_union() -> None:
 
 
 def test_subject_ref_bnode_and_fallback() -> None:
+    assert isinstance(_subject_ref("_:bn123", {}), BNode)
     with patch("sparqlmodel.graph.expand_iri", return_value="_:abc"):
-        assert isinstance(_subject_ref("_:abc", {}), BNode)
+        assert isinstance(_subject_ref("x:local", {}), BNode)
     assert isinstance(_subject_ref("custom:local", {"custom": "http://example.org/"}), URIRef)
     assert isinstance(_subject_ref("plainlocal", {}), URIRef)
+
+
+def test_graph_subject_key_literal() -> None:
+    assert _graph_subject_key(Literal("x"), {}) == str(Literal("x"))
 
 
 def test_object_node_types() -> None:
@@ -333,10 +347,13 @@ def test_hydrate_bindings_skip_missing_and_duplicate(session, odos: Person) -> N
 
 
 def test_hydrate_bindings_wraps_errors(session) -> None:
-    with patch(
-        "sparqlmodel.hydration.hydrate_one",
-        side_effect=RuntimeError("boom"),
-    ), pytest.raises(HydrationError, match="boom"):
+    with (
+        patch(
+            "sparqlmodel.hydration.hydrate_one",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(HydrationError, match="boom"),
+    ):
         hydrate_from_bindings(
             Person,
             [{"person": "urn:person:x"}],
@@ -467,8 +484,7 @@ def test_delete_never_put(session) -> None:
 def test_execute_with_prefix_in_query(session, odos: Person) -> None:
     session.put(odos)
     sparql = (
-        "PREFIX schema: <https://schema.org/>\n"
-        "SELECT ?person WHERE { ?person a schema:Person . }"
+        "PREFIX schema: <https://schema.org/>\nSELECT ?person WHERE { ?person a schema:Person . }"
     )
     results = session.execute(sparql)
     assert len(results) >= 1
@@ -533,7 +549,7 @@ def test_compile_relationship_no_metadata(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
     ref = FieldRef(Person, "name", ("works_for",))
     with pytest.raises(QueryError, match="no SPARQL metadata"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg)
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg, [0])
 
 
 def test_model_to_triples_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
@@ -557,7 +573,7 @@ def test_compile_scalar_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
     with pytest.raises(QueryError, match="no SPARQL metadata"):
-        compile_compare(Person.name == "x", Person, "?person", reg)  # type: ignore[arg-type]
+        compile_compare(Person.name == "x", Person, "?person", reg, [0])  # type: ignore[arg-type]
 
 
 def test_hydrate_bindings_alternate_key() -> None:
@@ -905,9 +921,7 @@ def test_execute_no_prefix_block_when_empty(session, odos: Person) -> None:
     assert len(results) >= 1
 
 
-def test_orphan_skips_iri_value_and_none_meta(
-    session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_orphan_skips_iri_value_and_none_meta(session, monkeypatch: pytest.MonkeyPatch) -> None:
     from sparqlmodel.graph import orphaned_embedded_targets
 
     person = Person(id=IRI("urn:p"), name="P", works_for=IRI("urn:org:ext"))

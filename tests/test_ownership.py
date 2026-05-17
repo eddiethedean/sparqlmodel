@@ -1,8 +1,9 @@
 """Tests for nested resource cascade on put/delete."""
 
-from rdflib import URIRef
+from rdflib import BNode, URIRef
 
 from sparqlmodel import IRI
+from sparqlmodel.graph import expand_iri
 from tests.models import Location, Organization, Person
 
 
@@ -32,6 +33,23 @@ def test_put_changing_works_for_removes_old_org(session, acme: Organization) -> 
     assert session.get(Organization, other.id).name == "Other Corp"
 
 
+def test_put_embedded_to_iri_removes_old_org_triples(session) -> None:
+    old_org = Organization(id=IRI("urn:org:old"), name="Old Corp")
+    new_org = Organization(id=IRI("urn:org:new"), name="New Corp")
+    session.put(new_org)
+    person = Person(id=IRI("urn:person:p1"), name="Pat", works_for=old_org)
+    session.put(person)
+
+    old_org_ref = URIRef(str(old_org.id.expand(old_org.get_prefixes())))
+    assert len(list(session.graph.triples((old_org_ref, None, None)))) >= 1
+
+    person.works_for = new_org.id
+    session.put(person)
+
+    assert len(list(session.graph.triples((old_org_ref, None, None)))) == 0
+    assert session.get(Organization, new_org.id) is not None
+
+
 def test_delete_does_not_cascade_iri_only_reference(session, acme: Organization) -> None:
     session.put(acme)
     person = Person(id=IRI("urn:person:ref"), name="Ref", works_for=acme.id)
@@ -58,6 +76,23 @@ def test_put_nested_location_orphan_removed(session) -> None:
     assert len(list(session.graph.triples((hq_ref, None, None)))) == 0
     assert session.get(Location, hq.id) is None
     assert session.get(Location, IRI("urn:loc:new")) is not None
+
+
+def test_put_removes_stale_bnode_relationship_target(session) -> None:
+    person = Person(id=IRI("urn:person:bnode"), name="Pat", works_for=None)
+    session.put(person)
+    subj = URIRef(str(person.id.expand(Person.get_prefixes())))
+    pred = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
+    bnode = BNode()
+    session.graph.add((subj, pred, bnode))
+    assert len(list(session.graph.triples((subj, pred, bnode)))) == 1
+
+    acme = Organization(id=IRI("urn:org:acme"), name="Acme")
+    person.works_for = acme
+    session.put(person)
+
+    assert len(list(session.graph.triples((subj, pred, bnode)))) == 0
+    assert session.get(Organization, acme.id) is not None
 
 
 def test_add_same_id_leaves_stale_literals(session) -> None:

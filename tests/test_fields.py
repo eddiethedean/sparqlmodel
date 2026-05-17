@@ -1,6 +1,6 @@
 """Tests for field metadata."""
 
-from sparqlmodel import Field, Relationship, SPARQLModel
+from sparqlmodel import IRI, Field, Relationship, SPARQLModel
 from sparqlmodel.fields import get_field_metadata, resolve_related_model
 
 
@@ -44,6 +44,30 @@ def test_resolve_related_direct_annotation() -> None:
     meta = get_field_metadata(field_info)
     assert meta is not None
     related = resolve_related_model("works_for", Direct.model_fields["works_for"].annotation, meta)
+    assert related is _Org
+
+
+def test_resolve_related_model_iri_only_union() -> None:
+    class IriOnly(SPARQLModel):
+        rdf_type = "schema:Person"
+        ref: IRI | None = Relationship("schema:ref")
+
+    field_info = IriOnly.model_fields["ref"]
+    meta = get_field_metadata(field_info)
+    assert meta is not None
+    related = resolve_related_model("ref", field_info.annotation, meta)
+    assert related is IRI
+
+
+def test_resolve_related_model_prefers_sparqlmodel_over_iri() -> None:
+    class RefFirst(SPARQLModel):
+        rdf_type = "schema:Person"
+        works_for: IRI | _Org | None = Relationship("schema:worksFor")
+
+    field_info = RefFirst.model_fields["works_for"]
+    meta = get_field_metadata(field_info)
+    assert meta is not None
+    related = resolve_related_model("works_for", field_info.annotation, meta)
     assert related is _Org
 
 

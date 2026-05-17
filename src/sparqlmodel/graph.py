@@ -38,8 +38,20 @@ def subject_has_rdf_type(
     return any(str(t) == expected for t in types)
 
 
+def _graph_subject_key(node: Node, prefixes: dict[str, str]) -> str:
+    """Stable subject key for cascade/orphan set lookups (expanded IRIs and ``_:id`` BNodes)."""
+    if isinstance(node, BNode):
+        return f"_:{node}"
+    if isinstance(node, URIRef):
+        return _expanded_iri_key(str(node), prefixes)
+    return str(node)
+
+
 def _subject_ref(iri: str | IRI, prefixes: dict[str, str]) -> URIRef | BNode:
-    expanded = expand_iri(str(iri), prefixes)
+    raw = str(iri)
+    if raw.startswith("_:"):
+        return BNode(raw[2:])
+    expanded = expand_iri(raw, prefixes)
     if expanded.startswith("urn:") or expanded.startswith("http"):
         return URIRef(expanded)
     if expanded.startswith("_:"):
@@ -169,19 +181,24 @@ def orphaned_embedded_targets(
     subject = _subject_ref(model.ensure_id(), prefixes)
     orphans: list[tuple[type[SPARQLModel], str]] = []
 
+    from sparqlmodel.model import SPARQLModel as _SPARQLModel
+
     for name, field_info, related_cls in model.get_relationship_fields():
-        value = getattr(model, name, None)
-        if isinstance(value, IRI):
-            continue
         meta = get_field_metadata(field_info)
         if meta is None:
             continue
+        value = getattr(model, name, None)
+        protected = set(nested_iris)
+        if isinstance(value, IRI):
+            protected.add(_expanded_iri_key(value, prefixes))
+        elif isinstance(value, _SPARQLModel):
+            protected.add(_expanded_iri_key(value.ensure_id(), value.get_prefixes()))
         pred = _predicate_ref(meta.predicate, prefixes)
         for obj in graph.objects(subject, pred):
             if isinstance(obj, (URIRef, BNode)):
-                obj_key = _expanded_iri_key(str(obj), prefixes)
-                if obj_key not in nested_iris:
-                    orphans.append((related_cls, str(obj)))
+                obj_key = _graph_subject_key(obj, prefixes)
+                if obj_key not in protected:
+                    orphans.append((related_cls, obj_key))
     return orphans
 
 
@@ -196,7 +213,8 @@ def cascade_subjects_for_removal(
     subjects: list[tuple[type[SPARQLModel], str]] = []
 
     def add(model_cls: type[SPARQLModel], iri: str | IRI) -> None:
-        key = str(iri)
+        raw = str(iri)
+        key = raw if raw.startswith("_:") else _expanded_iri_key(iri, model_cls.get_prefixes())
         if key in seen:
             return
         seen.add(key)

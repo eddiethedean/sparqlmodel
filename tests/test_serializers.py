@@ -2,7 +2,7 @@
 
 import pytest
 
-from sparqlmodel import IRI
+from sparqlmodel import IRI, Field, SPARQLModel
 from sparqlmodel.serializers import export_model, import_graph, model_from_jsonld, model_to_jsonld
 from tests.cycle_models import CycleA, CycleB
 from tests.models import Organization, Person
@@ -76,6 +76,53 @@ def test_model_from_jsonld_missing_id() -> None:
 def test_export_xml(odos: Person) -> None:
     data = export_model(odos, format="xml")
     assert "Odos" in data
+
+
+def test_model_from_jsonld_empty_type_list() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": [],
+        "schema:name": "X",
+    }
+    with pytest.raises(ValueError, match="@type"):
+        model_from_jsonld(Person, doc)
+
+
+def test_jsonld_scalar_iri_field() -> None:
+    class Tagged(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        same_as: IRI = Field("schema:sameAs")
+
+    model = Tagged(id=IRI("urn:person:1"), same_as=IRI("urn:person:2"))
+    doc = model_to_jsonld(model)
+    assert doc["https://schema.org/sameAs"] == {"@id": "urn:person:2"}
+
+
+def test_model_from_jsonld_empty_relationship_list_skipped() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:empty-rel",
+        "@type": "schema:Person",
+        "schema:name": "Empty",
+        "schema:worksFor": [],
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for is None
+
+
+def test_model_from_jsonld_relationship_array() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:arr",
+        "@type": "schema:Person",
+        "schema:name": "Arr",
+        "schema:worksFor": [{"@id": "urn:org:acme"}],
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.works_for == IRI("urn:org:acme")
 
 
 def test_model_from_jsonld_wrong_type() -> None:

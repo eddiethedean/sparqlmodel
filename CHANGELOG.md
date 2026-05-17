@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-05-16
+
+### Fixed
+
+- `put` orphan cleanup when a relationship changes from embedded model to `IRI` reference (old embedded triples removed)
+- SPARQL compiler: unique join variables for parallel nested filters; reject filters on wrong model class
+- BNode relationship targets removed correctly on `put` orphan cleanup
+- Cascade/orphan subject keys use expanded IRIs and stable `_:id` BNode keys consistently
+- `iter_nested_models` raises on cycles (aligned with serialization)
+- Query filters: string literals no longer coerced to IRIs unless field type is `IRI`; unknown compact prefixes stay literals
+- Typed numeric filter literals use XSD datatypes (match graph serialization)
+- `resolve_related_model` prefers `SPARQLModel` over `IRI` in union annotations
+- JSON-LD: empty `@type` list error; relationship arrays; scalar `IRI` fields export as `@id` nodes
+- SPARQL `PREFIX` declarations validate prefix names and namespace URIs
+- IRI values in filters serialized via RDFLib `URIRef.n3()`
+- `compile_where` rejects negative `limit`
+
 ## [0.1.3] - 2026-05-16
 
 ### Fixed

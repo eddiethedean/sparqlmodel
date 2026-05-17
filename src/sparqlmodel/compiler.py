@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from rdflib import Literal
+from typing import Any, get_args, get_origin
 
-from sparqlmodel.exceptions import QueryError
+from rdflib import Literal, URIRef
+
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
@@ -15,28 +17,51 @@ def _model_var_name(model_cls: type[SPARQLModel]) -> str:
     return f"?{model_cls.__name__.lower()}"
 
 
+def _annotation_expects_iri(annotation: Any) -> bool:
+    if annotation is IRI:
+        return True
+    origin = get_origin(annotation)
+    if origin is None:
+        return False
+    return any(arg is IRI for arg in get_args(annotation))
+
+
 def _format_literal(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
+    if isinstance(value, int):
+        return Literal(value).n3()
+    if isinstance(value, float):
+        return Literal(value).n3()
     return Literal(str(value)).n3()
 
 
 def _format_iri(iri: str) -> str:
     if not iri or any(c in iri for c in " \n\r\t<>"):
         raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
-    return f"<{iri}>"
+    return URIRef(iri).n3()
 
 
-def _format_object(value: object, registry: NamespaceRegistry) -> str:
+def _format_object(
+    value: object,
+    registry: NamespaceRegistry,
+    *,
+    field_annotation: Any = None,
+) -> str:
     if isinstance(value, IRI):
         expanded = registry.expand(str(value))
         return _format_iri(expanded)
     if isinstance(value, str) and value.startswith(("http://", "https://", "urn:")):
         return _format_iri(value)
-    if isinstance(value, str) and is_compact_iri(value):
-        expanded = registry.expand(value)
+    if (
+        isinstance(value, str)
+        and is_compact_iri(value)
+        and _annotation_expects_iri(field_annotation)
+    ):
+        try:
+            expanded = registry.expand(value)
+        except ConfigurationError:
+            return _format_literal(value)
         return _format_iri(expanded)
     return _format_literal(value)
 
@@ -67,13 +92,14 @@ def _follow_path(
     path: tuple[str, ...],
     root_var: str,
     registry: NamespaceRegistry,
+    join_counter: list[int],
 ) -> tuple[type[SPARQLModel], str, list[str]]:
     """Walk relationship path; return target model, final variable, patterns."""
     patterns: list[str] = []
     current_cls = model_cls
     current_var = root_var
 
-    for i, segment in enumerate(path):
+    for segment in path:
         rel_map = {n: (fi, rc) for n, fi, rc in current_cls.get_relationship_fields()}
         if segment not in rel_map:
             raise QueryError(f"Unknown relationship field '{segment}' on {current_cls.__name__}")
@@ -81,7 +107,8 @@ def _follow_path(
         meta = get_field_metadata(field_info)
         if meta is None:
             raise QueryError(f"Field '{segment}' has no SPARQL metadata")
-        join_var = f"?{segment}{i}"
+        join_counter[0] += 1
+        join_var = f"?__join_{join_counter[0]}"
         pred_expanded = expand_iri(meta.predicate, registry.prefixes)
         patterns.append(f"{current_var} <{pred_expanded}> {join_var} .")
         type_expanded = expand_iri(related_cls.rdf_type, registry.prefixes)
@@ -97,12 +124,19 @@ def compile_compare(
     model_cls: type[SPARQLModel],
     root_var: str,
     registry: NamespaceRegistry,
+    join_counter: list[int],
 ) -> tuple[list[str], list[str]]:
     """Compile a comparison; return (patterns, filters)."""
     if expr.right is None:
         raise QueryError("Filter value cannot be None; use explicit existence checks")
 
     left = expr.left
+    if left.model_cls is not model_cls:
+        raise QueryError(
+            f"Filter field {left.model_cls.__name__}.{left.field_name} does not match "
+            f"query model {model_cls.__name__}"
+        )
+
     path = left.path
     field_name = left.field_name
 
@@ -110,7 +144,9 @@ def compile_compare(
     filters: list[str] = []
 
     if path:
-        target_model, subject_var, path_patterns = _follow_path(model_cls, path, root_var, registry)
+        target_model, subject_var, path_patterns = _follow_path(
+            model_cls, path, root_var, registry, join_counter
+        )
         patterns.extend(path_patterns)
     else:
         target_model = model_cls
@@ -120,12 +156,13 @@ def compile_compare(
     if field_name not in scalar_map:
         raise QueryError(f"Unknown or non-scalar field '{field_name}' on {target_model.__name__}")
 
-    meta = get_field_metadata(scalar_map[field_name])
+    field_info = scalar_map[field_name]
+    meta = get_field_metadata(field_info)
     if meta is None:
         raise QueryError(f"Field '{field_name}' has no SPARQL metadata")
 
     pred_expanded = expand_iri(meta.predicate, registry.prefixes)
-    obj = _format_object(expr.right, registry)
+    obj = _format_object(expr.right, registry, field_annotation=field_info.annotation)
 
     if expr.op == CompareOp.EQ:
         patterns.append(f"{subject_var} <{pred_expanded}> {obj} .")
@@ -152,9 +189,10 @@ def compile_where(
     all_filters: list[str] = []
 
     flat_exprs = _flatten_expressions(expressions)
+    join_counter = [0]
 
     for compare in flat_exprs:
-        pats, filts = compile_compare(compare, model_cls, root_var, registry)
+        pats, filts = compile_compare(compare, model_cls, root_var, registry, join_counter)
         all_patterns.extend(pats)
         all_filters.extend(filts)
 
@@ -165,6 +203,8 @@ def compile_where(
     else:
         where_clause = where_body
 
+    if limit is not None and limit < 0:
+        raise QueryError("limit must be non-negative")
     limit_clause = f"\nLIMIT {limit}" if limit is not None else ""
     prefixes = registry.sparql_prefixes()
     prefix_block = f"{prefixes}\n\n" if prefixes else ""

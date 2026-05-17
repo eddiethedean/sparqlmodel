@@ -77,7 +77,10 @@ def _jsonld_node_body(
         if value is None:
             continue
         key = expand_iri(meta.predicate, prefixes)
-        node[key] = value
+        if isinstance(value, IRI):
+            node[key] = {"@id": expand_iri(str(value), prefixes)}
+        else:
+            node[key] = value
 
     for name, field_info, _ in model.get_relationship_fields():
         meta = get_field_metadata(field_info)
@@ -112,9 +115,12 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
 
     raw_type = data.get("@type")
     if raw_type is not None:
-        type_str = str(raw_type)
         if isinstance(raw_type, list):
+            if not raw_type:
+                raise ValueError("JSON-LD @type list cannot be empty")
             type_str = str(raw_type[0])
+        else:
+            type_str = str(raw_type)
         if type_str.startswith("http"):
             type_str = compact_iri(type_str, prefixes)
         expected = expand_iri(model_cls.rdf_type, prefixes)
@@ -154,6 +160,10 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
         rel_data = data.get(expanded) or data.get(meta.predicate)
         if rel_data is None:
             continue
+        if isinstance(rel_data, list):
+            if not rel_data:
+                continue
+            rel_data = rel_data[0]
         if isinstance(rel_data, dict):
             if _is_jsonld_reference_node(rel_data) and _annotation_allows_iri(
                 field_info.annotation
