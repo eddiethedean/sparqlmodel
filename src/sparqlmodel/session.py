@@ -6,13 +6,13 @@ from typing import Any
 
 from rdflib import Graph
 
-from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.graph import (
+    cascade_subjects_for_removal,
     model_to_graph,
-    owned_triples_for_subject,
+    owned_triples_for_subjects,
     triples_to_graph,
 )
-from sparqlmodel.hydration import hydrate_one
+from sparqlmodel.hydration import hydrate_one, validate_depth
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.query import Query
 from sparqlmodel.stores.memory import MemoryStore
@@ -54,21 +54,19 @@ class SPARQLSession:
         return model
 
     def put(self, model: SPARQLModel) -> SPARQLModel:
-        """Upsert model: remove owned triples then insert."""
-        subject = model.ensure_id()
-        remove_g = triples_to_graph(
-            owned_triples_for_subject(type(model), subject, self._store.graph)
-        )
+        """Upsert model and cascaded embedded resources."""
+        model.ensure_id()
+        subjects = cascade_subjects_for_removal(model, self._store.graph, for_put=True)
+        remove_g = triples_to_graph(owned_triples_for_subjects(subjects, self._store.graph))
         add_g = model_to_graph(model)
         self._store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
         return model
 
     def delete(self, model: SPARQLModel) -> None:
-        """Remove owned triples for the model."""
-        subject = model.ensure_id()
-        remove_g = triples_to_graph(
-            owned_triples_for_subject(type(model), subject, self._store.graph)
-        )
+        """Remove owned triples for the model and cascaded embedded resources."""
+        model.ensure_id()
+        subjects = cascade_subjects_for_removal(model, self._store.graph, for_put=False)
+        remove_g = triples_to_graph(owned_triples_for_subjects(subjects, self._store.graph))
         if len(remove_g):
             self._store.update_graph(remove=remove_g)
 
@@ -80,8 +78,7 @@ class SPARQLSession:
         depth: int = 0,
     ) -> SPARQLModel | None:
         """Load a model by IRI with optional relationship depth."""
-        if depth < 0 or depth > 2:
-            raise ConfigurationError("depth must be 0, 1, or 2")
+        validate_depth(depth)
         return hydrate_one(model_cls, iri, self._store, depth=depth)
 
     def query(self, model_cls: type[SPARQLModel]) -> Query:

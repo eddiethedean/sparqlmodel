@@ -24,9 +24,11 @@ def test_compile_nested() -> None:
 
 def test_compile_and() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
-    combined = AndExpr((Person.name == "Odos", Person.name == "Odos"))
+    combined = AndExpr((Person.name == "Odos", Person.name != "Other"))
     sparql = compile_where(Person, (combined,), registry)
-    assert sparql.count("person") >= 1
+    assert '"Odos"' in sparql
+    assert '"Other"' in sparql
+    assert sparql.count("FILTER") >= 1
 
 
 def test_unknown_field() -> None:

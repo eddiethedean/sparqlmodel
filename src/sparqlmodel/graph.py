@@ -43,14 +43,23 @@ def _object_node(value: Any, prefixes: dict[str, str]) -> Node:
     return Literal(str(value))
 
 
-def model_to_triples(model: SPARQLModel) -> list[tuple[Node, Node, Node]]:
+def model_to_triples(
+    model: SPARQLModel,
+    *,
+    visited: set[str] | None = None,
+) -> list[tuple[Node, Node, Node]]:
     """Serialize a model instance to RDF triples."""
     from sparqlmodel.model import SPARQLModel
 
     if not isinstance(model, SPARQLModel):
         raise TypeError("Expected SPARQLModel instance")
 
+    visited = visited or set()
     subject_iri = model.ensure_id()
+    subject_key = str(subject_iri)
+    if subject_key in visited:
+        raise ConfigurationError(f"Cycle detected serializing {subject_key}")
+    visited.add(subject_key)
     prefixes = model.get_prefixes()
     subject = _subject_ref(subject_iri, prefixes)
     type_iri = expand_iri(model.rdf_type, prefixes)
@@ -77,7 +86,7 @@ def model_to_triples(model: SPARQLModel) -> list[tuple[Node, Node, Node]]:
             pred = _predicate_ref(meta.predicate, prefixes)
             obj = _subject_ref(value.ensure_id(), prefixes)
             triples.append((subject, pred, obj))
-            triples.extend(model_to_triples(value))
+            triples.extend(model_to_triples(value, visited=visited.copy()))
         elif isinstance(value, IRI):
             pred = _predicate_ref(meta.predicate, prefixes)
             triples.append((subject, pred, _subject_ref(value, prefixes)))
@@ -101,6 +110,98 @@ def model_to_graph(model: SPARQLModel) -> Graph:
     for triple in model_to_triples(model):
         g.add(triple)
     return g
+
+
+def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
+    """Return root and embedded ``SPARQLModel`` instances (composition tree)."""
+    from sparqlmodel.model import SPARQLModel
+
+    visited: set[str] = set()
+    models: list[SPARQLModel] = []
+
+    def walk(model: SPARQLModel) -> None:
+        iri = str(model.ensure_id())
+        if iri in visited:
+            return
+        visited.add(iri)
+        models.append(model)
+        for name, _field_info, _ in model.get_relationship_fields():
+            value = getattr(model, name, None)
+            if isinstance(value, SPARQLModel):
+                walk(value)
+
+    if not isinstance(root, SPARQLModel):
+        raise TypeError("Expected SPARQLModel instance")
+    walk(root)
+    return models
+
+
+def orphaned_embedded_targets(
+    model: SPARQLModel,
+    graph: Graph,
+) -> list[tuple[type[SPARQLModel], str]]:
+    """Graph-linked resources dropped from an embedded relationship (put orphan cleanup)."""
+    nested_iris = {str(m.ensure_id()) for m in iter_nested_models(model)}
+    prefixes = model.get_prefixes()
+    subject = _subject_ref(model.ensure_id(), prefixes)
+    orphans: list[tuple[type[SPARQLModel], str]] = []
+
+    for name, field_info, related_cls in model.get_relationship_fields():
+        value = getattr(model, name, None)
+        if isinstance(value, IRI):
+            continue
+        meta = get_field_metadata(field_info)
+        if meta is None:
+            continue
+        pred = _predicate_ref(meta.predicate, prefixes)
+        for obj in graph.objects(subject, pred):
+            if isinstance(obj, (URIRef, BNode)):
+                obj_str = str(obj)
+                if obj_str not in nested_iris:
+                    orphans.append((related_cls, obj_str))
+    return orphans
+
+
+def cascade_subjects_for_removal(
+    model: SPARQLModel,
+    graph: Graph,
+    *,
+    for_put: bool = False,
+) -> list[tuple[type[SPARQLModel], str]]:
+    """Subjects whose owned triples should be removed on put/delete of ``model``."""
+    seen: set[str] = set()
+    subjects: list[tuple[type[SPARQLModel], str]] = []
+
+    def add(model_cls: type[SPARQLModel], iri: str | IRI) -> None:
+        key = str(iri)
+        if key in seen:
+            return
+        seen.add(key)
+        subjects.append((model_cls, key))
+
+    for nested in iter_nested_models(model):
+        add(type(nested), nested.ensure_id())
+
+    if for_put:
+        for model_cls, iri in orphaned_embedded_targets(model, graph):
+            add(model_cls, iri)
+
+    return subjects
+
+
+def owned_triples_for_subjects(
+    subjects: Iterable[tuple[type[SPARQLModel], str | IRI]],
+    graph: Graph,
+) -> list[tuple[Node, Node, Node]]:
+    """Union of owned triples for multiple subjects (deduplicated)."""
+    triples: list[tuple[Node, Node, Node]] = []
+    seen: set[tuple[Node, Node, Node]] = set()
+    for model_cls, iri in subjects:
+        for triple in owned_triples_for_subject(model_cls, iri, graph):
+            if triple not in seen:
+                seen.add(triple)
+                triples.append(triple)
+    return triples
 
 
 def owned_triples_for_subject(
@@ -189,15 +290,12 @@ def graph_to_model(
                 data[name] = None
                 continue
             related_iri = IRI(str(values[0]))
-            if depth >= 1:
-                data[name] = graph_to_model(
-                    related_cls,
-                    related_iri,
-                    graph,
-                    depth=depth - 1,
-                    visited=visited.copy(),
-                )
-            else:
-                data[name] = related_iri
+            data[name] = graph_to_model(
+                related_cls,
+                related_iri,
+                graph,
+                depth=depth - 1,
+                visited=visited.copy(),
+            )
 
     return model_cls.model_validate(data)

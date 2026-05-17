@@ -6,7 +6,7 @@ from typing import Any
 
 from rdflib import RDF
 
-from sparqlmodel.exceptions import HydrationError
+from sparqlmodel.exceptions import ConfigurationError, HydrationError
 from sparqlmodel.graph import _subject_ref, graph_to_model
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.stores.memory import MemoryStore
@@ -17,6 +17,12 @@ def _model_var_name(model_cls: type[SPARQLModel]) -> str:
     return model_cls.__name__.lower()
 
 
+def validate_depth(depth: int) -> None:
+    """Raise if hydration depth is outside the supported range (0–2)."""
+    if depth < 0 or depth > 2:
+        raise ConfigurationError("depth must be 0, 1, or 2")
+
+
 def hydrate_from_bindings(
     model_cls: type[SPARQLModel],
     bindings: list[dict[str, Any]],
@@ -25,6 +31,7 @@ def hydrate_from_bindings(
     depth: int = 0,
 ) -> list[SPARQLModel]:
     """Hydrate models from SPARQL SELECT bindings."""
+    validate_depth(depth)
     results: list[SPARQLModel] = []
     seen: set[str] = set()
     var_name = _model_var_name(model_cls).lstrip("?")
@@ -66,13 +73,15 @@ def hydrate_one(
     depth: int = 0,
 ) -> SPARQLModel | None:
     """Load a single model by IRI from the store."""
+    validate_depth(depth)
     prefixes = model_cls.get_prefixes()
     subject = _subject_ref(iri, prefixes)
     types = list(store.graph.objects(subject, RDF.type))
     if not types:
         return None
     expected = model_cls.namespace_registry().expand(model_cls.rdf_type)
-    if str(types[0]) != expected:
+    type_strs = {str(t) for t in types}
+    if expected not in type_strs:
         return None
 
     return graph_to_model(model_cls, IRI(str(iri)), store.graph, depth=depth)

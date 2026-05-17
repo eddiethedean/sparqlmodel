@@ -69,3 +69,37 @@ def test_model_from_jsonld_compact_keys() -> None:
 def test_model_from_jsonld_missing_id() -> None:
     with pytest.raises(ValueError):
         model_from_jsonld(Person, {"schema:name": "X"})
+
+
+def test_export_xml(odos: Person) -> None:
+    data = export_model(odos, format="xml")
+    assert "Odos" in data
+
+
+def test_model_from_jsonld_wrong_type() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "https://schema.org/Organization",
+        "schema:name": "X",
+    }
+    with pytest.raises(ValueError, match="@type"):
+        model_from_jsonld(Person, doc)
+
+
+def test_model_from_jsonld_nested_no_parent_leak() -> None:
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:x",
+        "@type": "https://schema.org/Person",
+        "schema:name": "X",
+        "https://schema.org/worksFor": {
+            "@id": "urn:org:y",
+            "@type": "https://schema.org/Organization",
+            "schema:name": "Y",
+        },
+    }
+    person = model_from_jsonld(Person, doc)
+    assert person.name == "X"
+    assert person.works_for is not None
+    assert person.works_for.name == "Y"

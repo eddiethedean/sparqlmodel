@@ -43,6 +43,11 @@ class CompareExpr:
     op: CompareOp
     right: object
 
+    def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
+        if isinstance(other, AndExpr):
+            return AndExpr((self,) + other.expressions)
+        return AndExpr((self, other))
+
 
 @dataclass(frozen=True)
 class AndExpr:

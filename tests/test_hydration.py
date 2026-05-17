@@ -21,12 +21,18 @@ def test_hydration_depth_1(session, odos: Person) -> None:
     assert loaded.works_for.name == "Acme Corp"
 
 
-def test_hydration_depth_2(session, odos: Person) -> None:
+def test_hydration_depth_2(session, acme: Organization) -> None:
+    from tests.models import Location
+
+    hq = Location(id=IRI("urn:loc:hq"), name="HQ")
+    acme.located_in = hq
+    odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
     session.put(odos)
     loaded = session.get(Person, odos.id, depth=2)
     assert loaded is not None
     assert loaded.works_for is not None
-    assert loaded.works_for.name == "Acme Corp"
+    assert loaded.works_for.located_in is not None
+    assert loaded.works_for.located_in.name == "HQ"
 
 
 def test_missing_related(session, odos: Person) -> None:

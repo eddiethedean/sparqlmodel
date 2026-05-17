@@ -6,7 +6,7 @@ from sparqlmodel.exceptions import QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.types import NamespaceRegistry, expand_iri
+from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_compact_iri
 
 
 def _model_var_name(model_cls: type[SPARQLModel]) -> str:
@@ -23,9 +23,12 @@ def _format_literal(value: object) -> str:
 
 
 def _format_object(value: object, registry: NamespaceRegistry) -> str:
+    if isinstance(value, IRI):
+        expanded = registry.expand(str(value))
+        return f"<{expanded}>"
     if isinstance(value, str) and value.startswith(("http://", "https://", "urn:")):
         return f"<{value}>"
-    if isinstance(value, str) and ":" in value:
+    if isinstance(value, str) and is_compact_iri(value):
         expanded = registry.expand(value)
         return f"<{expanded}>"
     return _format_literal(value)
@@ -96,7 +99,7 @@ def compile_compare(
     if expr.op == CompareOp.EQ:
         patterns.append(f"{subject_var} <{pred_expanded}> {obj} .")
     else:
-        neq_var = f"?__neq_{field_name}"
+        neq_var = f"?__neq_{field_name}_{id(expr)}"
         patterns.append(f"{subject_var} <{pred_expanded}> {neq_var} .")
         filters.append(f"{neq_var} != {obj}")
 

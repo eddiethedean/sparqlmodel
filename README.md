@@ -70,6 +70,18 @@ print(export_model(odos, format="turtle"))
 - Graph hydration — `session.get(Model, iri, depth=0|1|2)`
 - Serializers — Turtle, N-Triples, RDF/XML, JSON-LD
 
+### Persistence semantics
+
+- **`put`** upserts the model and any **embedded** nested `SPARQLModel` values (composition). Owned triples are removed for the root, nested objects in the current tree, and relationship targets previously stored in the graph for that subject (orphan cleanup). Relationship values stored as **`IRI` only** are external references and are not cascade-deleted.
+- **`add`** inserts triples without removing existing ones; re-`add`ing the same `id` can leave stale literal values.
+- **`delete`** removes owned triples for the model and cascaded embedded resources (same rules as `put`). Shared resources linked only by `IRI` reference are kept.
+
+### Query filters
+
+- **`==`** — exact match on a predicate value.
+- **`!=`** — matches subjects that have **some** value for the predicate that is not equal to the right-hand side (subjects with no value are excluded).
+- Combine filters with `.where(a, b)` or `(a) & (b)`.
+
 ## Roadmap (0.2)
 
 - HTTP SPARQL 1.1 endpoint store (`httpx`)

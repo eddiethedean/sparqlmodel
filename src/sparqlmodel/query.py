@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from sparqlmodel.compiler import compile_where
 from sparqlmodel.expressions import AndExpr, CompareExpr
-from sparqlmodel.hydration import hydrate_from_bindings
+from sparqlmodel.hydration import hydrate_from_bindings, validate_depth
 from sparqlmodel.model import SPARQLModel
 
 if TYPE_CHECKING:
@@ -51,6 +51,7 @@ class Query:
 
     def all(self, *, depth: int = 0) -> list[SPARQLModel]:
         """Execute query and return all matching models."""
+        validate_depth(depth)
         sparql = self._compile()
         bindings = self._session.execute(sparql)
         return hydrate_from_bindings(
@@ -62,8 +63,18 @@ class Query:
 
     def first(self, *, depth: int = 0) -> SPARQLModel | None:
         """Return the first matching model or None."""
+        validate_depth(depth)
         original_limit = self._limit
         self._limit = 1
-        results = self.all(depth=depth)
-        self._limit = original_limit
+        try:
+            sparql = self._compile()
+            bindings = self._session.execute(sparql)
+            results = hydrate_from_bindings(
+                self._model_cls,
+                bindings,
+                self._session.store,
+                depth=depth,
+            )
+        finally:
+            self._limit = original_limit
         return results[0] if results else None

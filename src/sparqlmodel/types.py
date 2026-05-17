@@ -20,6 +20,13 @@ DEFAULT_PREFIXES: dict[str, str] = {
 _COMPACT_IRI_RE = re.compile(r"^([a-zA-Z_][\w-]*):([^:]+)$")
 
 
+def is_compact_iri(value: str) -> bool:
+    """Return True if value is a prefix:local compact IRI (not a plain literal with a colon)."""
+    if value.startswith(("http://", "https://", "urn:")):
+        return False
+    return _COMPACT_IRI_RE.match(value) is not None
+
+
 class IRI(str):
     """RDF IRI identifier (compact or absolute)."""
 

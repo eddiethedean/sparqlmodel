@@ -15,8 +15,11 @@ class _Person(SPARQLModel):
 
 
 def test_get_field_metadata() -> None:
-    info = _Person.model_fields.get("name")
-    assert info is None or get_field_metadata(info) is None
+    field_info = _Person.model_fields["works_for"]
+    meta = get_field_metadata(field_info)
+    assert meta is not None
+    assert meta.predicate == "schema:worksFor"
+    assert meta.is_relationship is True
 
 
 def test_resolve_related_model() -> None:

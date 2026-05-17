@@ -44,3 +44,8 @@ def test_auto_id(session) -> None:
     assert person.id is not None
     loaded = session.get(Person, person.id)
     assert loaded is not None
+
+
+def test_get_wrong_model_type(session, odos: Person) -> None:
+    session.put(odos)
+    assert session.get(Organization, odos.id) is None

@@ -92,21 +92,43 @@ Compiles to:
 ?person schema:name "Odos" .
 ```
 
+Filter semantics:
+
+- `==` — triple pattern match.
+- `!=` — subject must have some value for the predicate that differs from the right-hand side (not SQL `NOT EXISTS` for absent values).
+- String literals with colons (e.g. `"12:30"`) are not treated as compact IRIs unless they match `prefix:local` form and the prefix is known.
+
 ---
 
 # RDF Persistence
 
-## Insert
+## Implementation (0.1.x)
 
-Objects serialize into RDF triples and generate INSERT DATA queries.
+Persistence uses **RDFLib graph add/remove** via `MemoryStore.update_graph`, not generated SPARQL Update strings. HTTP backends may use SPARQL Update in a future release.
 
-## Update
+## Insert (`add`)
 
-Updates use DELETE/INSERT SPARQL operations.
+Objects serialize to RDF triples and are added to the store. `add` does not remove existing triples for the same subject.
+
+## Update (`put`)
+
+`put` removes owned triples for the model, embedded nested objects, and orphaned composition targets, then writes the current serialization (see Ownership).
 
 ## Delete
 
-Deletes remove owned triples for model predicates.
+`delete` removes owned triples for the model’s subject and cascaded embedded resources (see Ownership).
+
+## Ownership
+
+When a relationship field holds a nested `SPARQLModel`, `put` and `delete` treat it as **composition**:
+
+- Embedded objects are serialized recursively.
+- On `put`, owned triples are cleared for the root, all nested models in the in-memory tree, and embedded relationship targets previously linked in the graph but no longer present (orphan cleanup).
+- On `delete`, owned triples are cleared for the root and embedded models in the in-memory tree.
+
+When a relationship stores an **`IRI` reference only** (not an embedded model), the target resource is **not** cascade-deleted—only the link triple on the parent is removed.
+
+If the same resource IRI is embedded from multiple parents, deleting one parent will remove that resource’s triples; use `IRI` references for shared entities.
 
 ---
 

@@ -79,6 +79,19 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
 
     from sparqlmodel.types import compact_iri
 
+    raw_type = data.get("@type")
+    if raw_type is not None:
+        type_str = str(raw_type)
+        if type_str.startswith("http"):
+            type_str = compact_iri(type_str, prefixes)
+        expected = expand_iri(model_cls.rdf_type, prefixes)
+        actual = expand_iri(type_str, prefixes)
+        if actual != expected:
+            raise ValueError(
+                f"JSON-LD @type {type_str!r} does not match {model_cls.__name__} "
+                f"(expected {model_cls.rdf_type!r})"
+            )
+
     raw_id = data.get("@id", data.get("id"))
     if raw_id is None:
         raise ValueError("JSON-LD document must contain @id")
@@ -108,11 +121,11 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
         rel_data = data.get(expanded) or data.get(meta.predicate)
         if rel_data is None:
             continue
-        if isinstance(rel_data, dict) and "@id" in rel_data:
-            merged = {**data, **rel_data, "@context": prefixes}
-            kwargs[name] = model_from_jsonld(related_cls, merged)
-        elif isinstance(rel_data, dict):
-            kwargs[name] = model_from_jsonld(related_cls, rel_data)
+        if isinstance(rel_data, dict):
+            child_doc: dict[str, Any] = dict(rel_data)
+            if "@context" not in child_doc:
+                child_doc["@context"] = prefixes
+            kwargs[name] = model_from_jsonld(related_cls, child_doc)
         else:
             kwargs[name] = IRI(str(rel_data))
 
