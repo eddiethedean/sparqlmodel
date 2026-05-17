@@ -61,7 +61,7 @@ from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
-## Features (0.1.0)
+## Features (0.1.x)
 
 - `SPARQLModel` — Pydantic v2 models mapped to RDF predicates
 - `SPARQLSession` — in-memory CRUD against an RDFLib graph
@@ -104,10 +104,11 @@ For development, run tests from the project virtualenv: `.venv/bin/pytest`.
 
 ## Documentation
 
-- [Technical specification](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/SPECS.md)
-- [Project plan](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/PLAN.md)
-- [Roadmap](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/ROADMAP.md)
+- [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md)
+- [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md)
+- [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md)
+- [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md)
 
 ## License
 
-MIT — see [LICENSE](https://github.com/odosmatthews/sparqlmodel/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE).

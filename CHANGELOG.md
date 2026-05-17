@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SPARQL compiler: unique join variables for parallel nested filters; reject filters on wrong model class
 - BNode relationship targets removed correctly on `put` orphan cleanup
 - Cascade/orphan subject keys use expanded IRIs and stable `_:id` BNode keys consistently
-- `iter_nested_models` raises on cycles (aligned with serialization)
+- `iter_nested_models` dedupes shared embedded resources; serialization still rejects true cycles
 - Query filters: string literals no longer coerced to IRIs unless field type is `IRI`; unknown compact prefixes stay literals
 - Typed numeric filter literals use XSD datatypes (match graph serialization)
 - `resolve_related_model` prefers `SPARQLModel` over `IRI` in union annotations
@@ -75,4 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) and `model_dump_jsonld()`
 - Test suite with pytest and CI (ruff, ty, coverage ≥85%)
 
-[0.1.0]: https://github.com/odosmatthews/sparqlmodel/releases/tag/v0.1.0
+[0.1.4]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.4
+[0.1.3]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.3
+[0.1.2]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.2
+[0.1.1]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.1
+[0.1.0]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.0
