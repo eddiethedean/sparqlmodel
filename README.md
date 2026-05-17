@@ -91,9 +91,10 @@ print(export_model(odos, format="turtle"))
 
 ## Documentation
 
-- [Technical specification](docs/SPECS.md)
-- [Project plan](docs/PLAN.md)
+- [Technical specification](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/SPECS.md)
+- [Project plan](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/PLAN.md)
+- [Roadmap](https://github.com/odosmatthews/sparqlmodel/blob/main/docs/ROADMAP.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/odosmatthews/sparqlmodel/blob/main/LICENSE).
