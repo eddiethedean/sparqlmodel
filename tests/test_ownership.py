@@ -3,7 +3,7 @@
 from rdflib import URIRef
 
 from sparqlmodel import IRI
-from tests.models import Organization, Person
+from tests.models import Location, Organization, Person
 
 
 def test_delete_cascades_embedded_org_triples(session, odos: Person, acme: Organization) -> None:
@@ -41,6 +41,23 @@ def test_delete_does_not_cascade_iri_only_reference(session, acme: Organization)
     session.delete(person)
     assert session.get(Person, person.id) is None
     assert len(list(session.graph.triples((org_ref, None, None)))) >= 1
+
+
+def test_put_nested_location_orphan_removed(session) -> None:
+    hq = Location(id=IRI("urn:loc:hq"), name="HQ")
+    acme = Organization(id=IRI("urn:org:acme"), name="Acme", located_in=hq)
+    odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
+    session.put(odos)
+
+    hq_ref = URIRef(str(hq.id.expand(hq.get_prefixes())))
+    assert len(list(session.graph.triples((hq_ref, None, None)))) >= 1
+
+    acme.located_in = Location(id=IRI("urn:loc:new"), name="New HQ")
+    session.put(odos)
+
+    assert len(list(session.graph.triples((hq_ref, None, None)))) == 0
+    assert session.get(Location, hq.id) is None
+    assert session.get(Location, IRI("urn:loc:new")) is not None
 
 
 def test_add_same_id_leaves_stale_literals(session) -> None:

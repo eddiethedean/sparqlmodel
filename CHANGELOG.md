@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-05-16
+
+### Fixed
+
+- `put` orphan cleanup now runs for embedded models (e.g. changing `Organization.located_in` removes the old `Location`)
+- Canonical expanded IRIs used for orphan detection and cycle/visited keys (compact vs absolute mismatch)
+- JSON-LD: `IRI` relationship references round-trip; `ensure_id` on export; cycle-safe serialization via `@id` references
+- `hydrate_from_bindings` and nested `graph_to_model` respect `rdf:type` (wrong-type bindings skipped)
+- Query compiler: RDFLib literal escaping, IRI validation, `None` filter rejection, nested `AndExpr` flattening, invalid `where()` raises `QueryError`
+- `Query.limit()` rejects negative values
+- Per-subclass `__prefixes__` copy (no shared mutable class dict)
+
+### Documented
+
+- Known limitations in README (shared embeds, `add`, multi-valued predicates, JSON-LD paths, export side effects)
+
 ## [0.1.2] - 2026-05-16
 
 ### Changed

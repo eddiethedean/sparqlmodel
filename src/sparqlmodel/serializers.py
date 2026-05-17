@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_args, get_origin
 
 from rdflib import Graph
 
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.graph import model_to_graph
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.types import IRI, expand_iri
+from sparqlmodel.types import IRI, compact_iri, expand_iri
 
 T = TypeVar("T", bound=SPARQLModel)
 
@@ -35,12 +35,37 @@ def export_model(model: SPARQLModel, format: str = "turtle") -> str:
     return export_graph(model_to_graph(model), format)
 
 
-def model_to_jsonld(model: SPARQLModel) -> dict[str, Any]:
-    """Convert a model to a JSON-LD document."""
+def _annotation_allows_iri(annotation: Any) -> bool:
+    """Return True if the field annotation includes ``IRI``."""
+    if annotation is IRI:
+        return True
+    origin = get_origin(annotation)
+    if origin is None:
+        return False
+    return any(arg is IRI for arg in get_args(annotation))
+
+
+def _is_jsonld_reference_node(data: dict[str, Any]) -> bool:
+    """True when ``data`` is a bare JSON-LD node reference (``@id`` only)."""
+    keys = set(data.keys()) - {"@context"}
+    return keys <= {"@id", "id"} and ("@id" in data or "id" in data)
+
+
+def _jsonld_node_body(
+    model: SPARQLModel,
+    *,
+    visited: set[str],
+) -> dict[str, Any]:
+    """Build JSON-LD node fields (excluding ``@context``) for ``model``."""
     prefixes = model.get_prefixes()
-    ctx: dict[str, Any] = {"@context": dict(prefixes)}
+    model.ensure_id()
+    subject_key = expand_iri(str(model.id), prefixes)
+    if subject_key in visited:
+        return {"@id": subject_key}
+    visited.add(subject_key)
+
     node: dict[str, Any] = {
-        "@id": expand_iri(str(model.id), prefixes),
+        "@id": subject_key,
         "@type": expand_iri(model.rdf_type, prefixes),
     }
 
@@ -63,10 +88,18 @@ def model_to_jsonld(model: SPARQLModel) -> dict[str, Any]:
             continue
         key = expand_iri(meta.predicate, prefixes)
         if isinstance(value, SPARQLModel):
-            node[key] = model_to_jsonld(value)
+            node[key] = _jsonld_node_body(value, visited=visited)
         elif isinstance(value, IRI):
             node[key] = {"@id": expand_iri(str(value), prefixes)}
 
+    return node
+
+
+def model_to_jsonld(model: SPARQLModel) -> dict[str, Any]:
+    """Convert a model to a JSON-LD document."""
+    prefixes = model.get_prefixes()
+    ctx: dict[str, Any] = {"@context": dict(prefixes)}
+    node = _jsonld_node_body(model, visited=set())
     return {**ctx, **node}
 
 
@@ -77,11 +110,11 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
     if isinstance(context, dict):
         prefixes.update({k: v for k, v in context.items() if isinstance(v, str)})
 
-    from sparqlmodel.types import compact_iri
-
     raw_type = data.get("@type")
     if raw_type is not None:
         type_str = str(raw_type)
+        if isinstance(raw_type, list):
+            type_str = str(raw_type[0])
         if type_str.startswith("http"):
             type_str = compact_iri(type_str, prefixes)
         expected = expand_iri(model_cls.rdf_type, prefixes)
@@ -96,7 +129,7 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
     if raw_id is None:
         raise ValueError("JSON-LD document must contain @id")
     raw_id_str = str(raw_id)
-    if raw_id_str.startswith("http"):
+    if raw_id_str.startswith(("http", "urn:")):
         model_id = IRI(compact_iri(raw_id_str, prefixes))
     else:
         model_id = IRI(raw_id_str)
@@ -122,10 +155,20 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
         if rel_data is None:
             continue
         if isinstance(rel_data, dict):
-            child_doc: dict[str, Any] = dict(rel_data)
-            if "@context" not in child_doc:
-                child_doc["@context"] = prefixes
-            kwargs[name] = model_from_jsonld(related_cls, child_doc)
+            if _is_jsonld_reference_node(rel_data) and _annotation_allows_iri(
+                field_info.annotation
+            ):
+                ref_id = rel_data.get("@id", rel_data.get("id"))
+                ref_str = str(ref_id)
+                if ref_str.startswith(("http", "urn:")):
+                    kwargs[name] = IRI(compact_iri(ref_str, prefixes))
+                else:
+                    kwargs[name] = IRI(ref_str)
+            else:
+                child_doc: dict[str, Any] = dict(rel_data)
+                if "@context" not in child_doc:
+                    child_doc["@context"] = prefixes
+                kwargs[name] = model_from_jsonld(related_cls, child_doc)
         else:
             kwargs[name] = IRI(str(rel_data))
 

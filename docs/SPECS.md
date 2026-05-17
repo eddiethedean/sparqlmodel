@@ -96,6 +96,8 @@ Filter semantics:
 
 - `==` — triple pattern match.
 - `!=` — subject must have some value for the predicate that differs from the right-hand side (not SQL `NOT EXISTS` for absent values).
+- `None` as a filter value raises `QueryError`.
+- String literals are escaped via RDFLib term serialization.
 - String literals with colons (e.g. `"12:30"`) are not treated as compact IRIs unless they match `prefix:local` form and the prefix is known.
 
 ---
@@ -123,12 +125,26 @@ Objects serialize to RDF triples and are added to the store. `add` does not remo
 When a relationship field holds a nested `SPARQLModel`, `put` and `delete` treat it as **composition**:
 
 - Embedded objects are serialized recursively.
-- On `put`, owned triples are cleared for the root, all nested models in the in-memory tree, and embedded relationship targets previously linked in the graph but no longer present (orphan cleanup).
+- On `put`, owned triples are cleared for the root, all nested models in the in-memory tree, and embedded relationship targets previously linked in the graph but no longer present (orphan cleanup), including orphans detected on **any** embedded model in the tree (not only the root).
 - On `delete`, owned triples are cleared for the root and embedded models in the in-memory tree.
 
 When a relationship stores an **`IRI` reference only** (not an embedded model), the target resource is **not** cascade-deleted—only the link triple on the parent is removed.
 
 If the same resource IRI is embedded from multiple parents, deleting one parent will remove that resource’s triples; use `IRI` references for shared entities.
+
+Orphan detection compares **expanded** IRIs so compact model ids and absolute graph URIs match consistently.
+
+---
+
+# Known limitations (0.1.x)
+
+| Area | Behavior |
+|------|----------|
+| **Multi-valued predicates** | Load and query use the first object per predicate; `add` can accumulate duplicates; compound `!=` on multiple values follows RDF existential semantics |
+| **Extension triples** | `put`/`delete` only remove declared field predicates plus `rdf:type` |
+| **Nested query filters** | Require `rdf:type` on relationship targets in the graph |
+| **JSON-LD** | Custom `model_dump_jsonld` path vs RDFLib `export_model(..., "json-ld")`; bare `@id` nodes deserialize to `IRI` when the field allows it |
+| **Export** | `ensure_id()` may assign ids when serializing models with `id=None` |
 
 ---
 

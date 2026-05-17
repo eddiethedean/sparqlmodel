@@ -46,6 +46,13 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
         super().__init_subclass__(**kwargs)
         if not getattr(cls, "rdf_type", None):
             raise ConfigurationError(f"{cls.__name__} must define rdf_type")
+        if "__prefixes__" not in cls.__dict__:
+            prefixes: dict[str, str] = {}
+            for base in cls.__mro__[1:]:
+                if "__prefixes__" in base.__dict__:
+                    prefixes = dict(base.__dict__["__prefixes__"])
+                    break
+            cls.__prefixes__ = prefixes
 
     @classmethod
     def get_prefixes(cls) -> dict[str, str]:

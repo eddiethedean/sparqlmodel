@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rdflib import RDF
-
 from sparqlmodel.exceptions import ConfigurationError, HydrationError
-from sparqlmodel.graph import _subject_ref, graph_to_model
+from sparqlmodel.graph import graph_to_model, subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI
@@ -52,13 +50,9 @@ def hydrate_from_bindings(
             continue
         seen.add(iri_str)
         try:
-            model = graph_to_model(
-                model_cls,
-                IRI(iri_str),
-                store.graph,
-                depth=depth,
-            )
-            results.append(model)
+            model = hydrate_one(model_cls, IRI(iri_str), store, depth=depth)
+            if model is not None:
+                results.append(model)
         except Exception as exc:
             raise HydrationError(f"Failed to hydrate {iri_str}: {exc}") from exc
 
@@ -74,14 +68,7 @@ def hydrate_one(
 ) -> SPARQLModel | None:
     """Load a single model by IRI from the store."""
     validate_depth(depth)
-    prefixes = model_cls.get_prefixes()
-    subject = _subject_ref(iri, prefixes)
-    types = list(store.graph.objects(subject, RDF.type))
-    if not types:
-        return None
-    expected = model_cls.namespace_registry().expand(model_cls.rdf_type)
-    type_strs = {str(t) for t in types}
-    if expected not in type_strs:
+    if not subject_has_rdf_type(model_cls, iri, store.graph):
         return None
 
     return graph_to_model(model_cls, IRI(str(iri)), store.graph, depth=depth)

@@ -18,6 +18,26 @@ if TYPE_CHECKING:
 RDF_TYPE = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 
 
+def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
+    """Canonical expanded IRI string for set lookups and cycle detection."""
+    return expand_iri(str(iri), prefixes)
+
+
+def subject_has_rdf_type(
+    model_cls: type[SPARQLModel],
+    subject_iri: str | IRI,
+    graph: Graph,
+) -> bool:
+    """Return True if the graph subject has the expected ``rdf:type`` for ``model_cls``."""
+    prefixes = model_cls.get_prefixes()
+    subject = _subject_ref(subject_iri, prefixes)
+    types = list(graph.objects(subject, RDF_TYPE))
+    if not types:
+        return False
+    expected = expand_iri(model_cls.rdf_type, prefixes)
+    return any(str(t) == expected for t in types)
+
+
 def _subject_ref(iri: str | IRI, prefixes: dict[str, str]) -> URIRef | BNode:
     expanded = expand_iri(str(iri), prefixes)
     if expanded.startswith("urn:") or expanded.startswith("http"):
@@ -56,11 +76,11 @@ def model_to_triples(
 
     visited = visited or set()
     subject_iri = model.ensure_id()
-    subject_key = str(subject_iri)
+    prefixes = model.get_prefixes()
+    subject_key = _expanded_iri_key(subject_iri, prefixes)
     if subject_key in visited:
         raise ConfigurationError(f"Cycle detected serializing {subject_key}")
     visited.add(subject_key)
-    prefixes = model.get_prefixes()
     subject = _subject_ref(subject_iri, prefixes)
     type_iri = expand_iri(model.rdf_type, prefixes)
     triples: list[tuple[Node, Node, Node]] = [(subject, RDF_TYPE, URIRef(type_iri))]
@@ -120,7 +140,8 @@ def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
     models: list[SPARQLModel] = []
 
     def walk(model: SPARQLModel) -> None:
-        iri = str(model.ensure_id())
+        prefixes = model.get_prefixes()
+        iri = _expanded_iri_key(model.ensure_id(), prefixes)
         if iri in visited:
             return
         visited.add(iri)
@@ -141,8 +162,10 @@ def orphaned_embedded_targets(
     graph: Graph,
 ) -> list[tuple[type[SPARQLModel], str]]:
     """Graph-linked resources dropped from an embedded relationship (put orphan cleanup)."""
-    nested_iris = {str(m.ensure_id()) for m in iter_nested_models(model)}
     prefixes = model.get_prefixes()
+    nested_iris = {
+        _expanded_iri_key(m.ensure_id(), m.get_prefixes()) for m in iter_nested_models(model)
+    }
     subject = _subject_ref(model.ensure_id(), prefixes)
     orphans: list[tuple[type[SPARQLModel], str]] = []
 
@@ -156,9 +179,9 @@ def orphaned_embedded_targets(
         pred = _predicate_ref(meta.predicate, prefixes)
         for obj in graph.objects(subject, pred):
             if isinstance(obj, (URIRef, BNode)):
-                obj_str = str(obj)
-                if obj_str not in nested_iris:
-                    orphans.append((related_cls, obj_str))
+                obj_key = _expanded_iri_key(str(obj), prefixes)
+                if obj_key not in nested_iris:
+                    orphans.append((related_cls, str(obj)))
     return orphans
 
 
@@ -183,8 +206,9 @@ def cascade_subjects_for_removal(
         add(type(nested), nested.ensure_id())
 
     if for_put:
-        for model_cls, iri in orphaned_embedded_targets(model, graph):
-            add(model_cls, iri)
+        for nested in iter_nested_models(model):
+            for model_cls, iri in orphaned_embedded_targets(nested, graph):
+                add(model_cls, iri)
 
     return subjects
 
@@ -270,7 +294,8 @@ def graph_to_model(
     """Hydrate a model from graph data."""
 
     visited = visited or set()
-    subject_key = str(subject_iri)
+    prefixes = model_cls.get_prefixes()
+    subject_key = _expanded_iri_key(subject_iri, prefixes)
     if subject_key in visited:
         raise ConfigurationError(f"Cycle detected loading {subject_key}")
     visited.add(subject_key)
@@ -278,7 +303,6 @@ def graph_to_model(
     data = load_scalars(model_cls, subject_iri, graph)
 
     if depth > 0:
-        prefixes = model_cls.get_prefixes()
         subject = _subject_ref(subject_iri, prefixes)
         for name, field_info, related_cls in model_cls.get_relationship_fields():
             meta = get_field_metadata(field_info)
@@ -290,6 +314,9 @@ def graph_to_model(
                 data[name] = None
                 continue
             related_iri = IRI(str(values[0]))
+            if not subject_has_rdf_type(related_cls, related_iri, graph):
+                data[name] = None
+                continue
             data[name] = graph_to_model(
                 related_cls,
                 related_iri,

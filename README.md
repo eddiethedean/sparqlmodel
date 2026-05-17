@@ -81,6 +81,19 @@ print(export_model(odos, format="turtle"))
 - **`==`** — exact match on a predicate value.
 - **`!=`** — matches subjects that have **some** value for the predicate that is not equal to the right-hand side (subjects with no value are excluded).
 - Combine filters with `.where(a, b)` or `(a) & (b)`.
+- Filter values cannot be `None` (raises `QueryError`).
+- Nested filters require the related resource to have the expected `rdf:type` in the graph.
+
+### Known limitations
+
+- **Shared embedded resources** — If the same IRI is embedded from multiple parents, `put`/`delete` on one parent can remove that resource’s triples. Use `IRI` references for shared entities.
+- **`add` vs `put`** — `add` never removes triples; duplicate `add` after in-place edits can leave stale literals. Prefer `put` for updates.
+- **Multi-valued predicates** — Only the first object per predicate is loaded; multiple `!=` filters on multi-valued predicates follow RDF existential semantics (see SPECS).
+- **Declared predicates only** — `put`/`delete` remove triples for mapped predicates plus `rdf:type`, not arbitrary extension triples on a subject.
+- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` differ from `export_model(..., format="json-ld")` (RDFLib serialization). Typed literals and relationship lists are not fully supported in the custom JSON-LD path.
+- **Export side effect** — RDF export may assign a `urn:uuid:…` id via `ensure_id()` when `id` is unset.
+
+For development, run tests from the project virtualenv: `.venv/bin/pytest`.
 
 ## Roadmap (0.2)
 

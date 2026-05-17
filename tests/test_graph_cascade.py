@@ -31,6 +31,17 @@ def test_cascade_subjects_includes_graph_orphan_on_put(session) -> None:
     assert "urn:person:p" in keys
 
 
+def test_cascade_subjects_includes_nested_location_orphan_on_put(session) -> None:
+    hq = Location(id=IRI("urn:loc:hq"), name="HQ")
+    acme = Organization(id=IRI("urn:org:acme"), name="Acme", located_in=hq)
+    person = Person(id=IRI("urn:person:p"), name="Pat", works_for=acme)
+    session.put(person)
+    acme.located_in = Location(id=IRI("urn:loc:new"), name="New HQ")
+    subjects = cascade_subjects_for_removal(person, session.graph, for_put=True)
+    keys = {iri for _, iri in subjects}
+    assert "urn:loc:hq" in keys
+
+
 def test_cascade_subjects_skips_iri_reference_orphans(session, acme: Organization) -> None:
     session.put(acme)
     person = Person(id=IRI("urn:person:ref"), name="Ref", works_for=acme.id)

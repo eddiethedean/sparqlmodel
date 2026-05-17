@@ -2,8 +2,10 @@
 
 import pytest
 
+from sparqlmodel import IRI
 from sparqlmodel.serializers import export_model, import_graph, model_from_jsonld, model_to_jsonld
-from tests.models import Person
+from tests.cycle_models import CycleA, CycleB
+from tests.models import Organization, Person
 
 
 def test_export_turtle(odos: Person) -> None:
@@ -85,6 +87,32 @@ def test_model_from_jsonld_wrong_type() -> None:
     }
     with pytest.raises(ValueError, match="@type"):
         model_from_jsonld(Person, doc)
+
+
+def test_jsonld_iri_reference_round_trip(acme: Organization) -> None:
+    person = Person(id=IRI("urn:person:ref"), name="Ref", works_for=acme.id)
+    doc = model_to_jsonld(person)
+    restored = model_from_jsonld(Person, doc)
+    assert restored.works_for == acme.id
+
+
+def test_jsonld_ensure_id_on_export() -> None:
+    person = Person(name="NoId")
+    doc = model_to_jsonld(person)
+    assert doc["@id"] is not None
+    assert doc["@id"] != "None"
+    assert person.id is not None
+
+
+def test_jsonld_cycle_emits_reference() -> None:
+    a = CycleA(id=IRI("urn:cycle:a"), name="A")
+    b = CycleB(id=IRI("urn:cycle:b"), name="B", a_ref=a)
+    a.b = b
+    doc = model_to_jsonld(a)
+    works = doc.get("https://schema.org/worksFor", doc.get("schema:worksFor"))
+    assert isinstance(works, dict)
+    assert works.get("@id") == "urn:cycle:b"
+    assert "schema:name" not in works or works.get("schema:name") is None
 
 
 def test_model_from_jsonld_nested_no_parent_leak() -> None:

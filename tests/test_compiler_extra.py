@@ -1,6 +1,10 @@
 """Additional compiler tests."""
 
+import pytest
+
 from sparqlmodel.compiler import compile_where
+from sparqlmodel.exceptions import QueryError
+from sparqlmodel.expressions import AndExpr
 from sparqlmodel.types import NamespaceRegistry, is_compact_iri
 from tests.models import Person
 
@@ -23,3 +27,30 @@ def test_is_compact_iri() -> None:
     assert not is_compact_iri("12:30")
     assert not is_compact_iri("a:b:c")
     assert not is_compact_iri("http://example.org/x")
+
+
+def test_literal_newline_escaped() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.name == "a\nb",), registry)
+    where = sparql.split("WHERE", 1)[1]
+    assert '"""' in where or "\\n" in where
+
+
+def test_filter_none_raises() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    with pytest.raises(QueryError, match="None"):
+        compile_where(Person, (Person.name == None,), registry)  # noqa: E711
+
+
+def test_nested_and_expr_flattens() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    inner = AndExpr((Person.name == "A", Person.name != "B"))
+    sparql = compile_where(Person, (inner,), registry)
+    assert "FILTER" in sparql
+    assert sparql.count("https://schema.org/name") >= 2
+
+
+def test_invalid_where_expression_raises() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    with pytest.raises(QueryError, match="Unsupported"):
+        compile_where(Person, ("not an expr",), registry)  # type: ignore[arg-type]

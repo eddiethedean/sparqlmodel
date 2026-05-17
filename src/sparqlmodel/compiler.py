@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from rdflib import Literal
+
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp
 from sparqlmodel.fields import get_field_metadata
@@ -18,20 +20,46 @@ def _format_literal(value: object) -> str:
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return str(value)
-    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    return Literal(str(value)).n3()
+
+
+def _format_iri(iri: str) -> str:
+    if not iri or any(c in iri for c in " \n\r\t<>"):
+        raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
+    return f"<{iri}>"
 
 
 def _format_object(value: object, registry: NamespaceRegistry) -> str:
     if isinstance(value, IRI):
         expanded = registry.expand(str(value))
-        return f"<{expanded}>"
+        return _format_iri(expanded)
     if isinstance(value, str) and value.startswith(("http://", "https://", "urn:")):
-        return f"<{value}>"
+        return _format_iri(value)
     if isinstance(value, str) and is_compact_iri(value):
         expanded = registry.expand(value)
-        return f"<{expanded}>"
+        return _format_iri(expanded)
     return _format_literal(value)
+
+
+def _flatten_expressions(
+    expressions: tuple[CompareExpr | AndExpr, ...],
+) -> list[CompareExpr]:
+    """Flatten ``AndExpr`` trees into a list of ``CompareExpr``."""
+    flat: list[CompareExpr] = []
+    for expr in expressions:
+        if isinstance(expr, AndExpr):
+            for child in expr.expressions:
+                if isinstance(child, AndExpr):
+                    flat.extend(_flatten_expressions((child,)))
+                elif isinstance(child, CompareExpr):
+                    flat.append(child)
+                else:
+                    raise QueryError(f"Unsupported expression type in AND: {type(child).__name__}")
+        elif isinstance(expr, CompareExpr):
+            flat.append(expr)
+        else:
+            raise QueryError(f"Unsupported WHERE expression type: {type(expr).__name__}")
+    return flat
 
 
 def _follow_path(
@@ -71,6 +99,9 @@ def compile_compare(
     registry: NamespaceRegistry,
 ) -> tuple[list[str], list[str]]:
     """Compile a comparison; return (patterns, filters)."""
+    if expr.right is None:
+        raise QueryError("Filter value cannot be None; use explicit existence checks")
+
     left = expr.left
     path = left.path
     field_name = left.field_name
@@ -120,12 +151,7 @@ def compile_where(
     all_patterns: list[str] = [f"{root_var} a <{type_expanded}> ."]
     all_filters: list[str] = []
 
-    flat_exprs: list[CompareExpr] = []
-    for expr in expressions:
-        if isinstance(expr, AndExpr):
-            flat_exprs.extend(expr.expressions)
-        elif isinstance(expr, CompareExpr):
-            flat_exprs.append(expr)
+    flat_exprs = _flatten_expressions(expressions)
 
     for compare in flat_exprs:
         pats, filts = compile_compare(compare, model_cls, root_var, registry)

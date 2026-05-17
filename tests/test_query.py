@@ -3,7 +3,7 @@
 import pytest
 
 from sparqlmodel import IRI
-from sparqlmodel.exceptions import ConfigurationError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from tests.models import Organization, Person
 
 
@@ -85,3 +85,8 @@ def test_nested_query(session, odos: Person) -> None:
     session.put(odos)
     results = session.query(Person).where(Person.works_for.name == "Acme Corp").all()
     assert len(results) == 1
+
+
+def test_query_negative_limit(session) -> None:
+    with pytest.raises(QueryError):
+        session.query(Person).limit(-1)

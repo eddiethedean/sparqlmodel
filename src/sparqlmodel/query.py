@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sparqlmodel.compiler import compile_where
+from sparqlmodel.exceptions import QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr
 from sparqlmodel.hydration import hydrate_from_bindings, validate_depth
 from sparqlmodel.model import SPARQLModel
@@ -33,6 +34,8 @@ class Query:
 
     def limit(self, n: int) -> Query:
         """Limit the number of results."""
+        if n < 0:
+            raise QueryError("limit must be non-negative")
         self._limit = n
         return self
 
