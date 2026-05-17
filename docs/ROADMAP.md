@@ -1,6 +1,8 @@
 # SparqlModel Roadmap
 
-This document tracks what is shipped, what is planned next, and longer-term direction. For implementation detail, see [SPECS.md](SPECS.md). For product vision, see [PLAN.md](PLAN.md).
+This document tracks what is shipped, what is planned next, and longer-term direction. For implementation detail, see [SPECS.md](SPECS.md). For product vision and ecosystem boundaries, see [PLAN.md](PLAN.md) and [ECOSYSTEM.md](ECOSYSTEM.md).
+
+**Ecosystem rule:** SparqlModel gets thinner as [RDFModel](https://github.com/eddiethedean/rdfmodel) matures. Features that help a script with no `SPARQLSession` belong in RDFModel; session, SPARQL compilation, stores, and cascade policy stay here.
 
 ---
 
@@ -14,15 +16,17 @@ This document tracks what is shipped, what is planned next, and longer-term dire
 | Query builder (`where`, `all`, `first`, `limit`) | Done |
 | SPARQL compiler (`==`, `!=`, `&`, single-hop nested filters) | Done |
 | Hydration (`depth` 0–2) | Done |
-| RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) | Done |
+| RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) | Done (to delegate in 0.3+) |
 | Cascade ownership for embedded models on `put`/`delete` | Done (0.1.2) |
 | CI (pytest, ruff, ty, coverage ≥85%) | Done |
+
+**Technical debt:** `graph.py`, `fields.py`, `types.py`, `serializers.py`, and parts of `hydration.py` overlap RDFModel until integration (see [ECOSYSTEM.md — Current overlap](ECOSYSTEM.md#current-overlap-technical-debt)).
 
 ---
 
 ## 0.2 — Operational persistence & ergonomics
 
-Target: make SparqlModel usable against real triple stores and typical API workloads.
+Target: real triple stores and typical API workloads. **No required `rdfmodel` PyPI dependency** — pin RDFModel in dev only (`pip install -e ../rdfmodel`) and prototype adapters.
 
 ### Remote SPARQL store
 
@@ -51,72 +55,128 @@ Target: make SparqlModel usable against real triple stores and typical API workl
 - [ ] Response classes for Turtle, JSON-LD, RDF/XML
 - [ ] Content negotiation on read endpoints
 
-### Persistence polish
+### Persistence polish (SparqlModel-owned)
 
 - [ ] `add` vs `put` clarity — optional `merge` mode or stale-literal warnings on re-`add`
 - [ ] Reference counting or explicit `cascade=False` on `Relationship` for shared embedded IRIs
-- [ ] SPARQL literal escaping via RDFLib term serialization
+- [ ] Coordinate with RDFModel 0.2 sync/remove when integrating (avoid divergent stale-triple behavior)
+
+### RDFModel prep (dev-only)
+
+- [ ] `_rdf.py` adapter proof of concept: one `SPARQLModel` ↔ `RdfModel` config
+- [ ] Track [RDFModel ROADMAP](https://github.com/eddiethedean/rdfmodel/blob/main/ROADMAP.md) for 0.2 gate (sync/remove, namespaces, nested embeds, multi-value)
 
 ---
 
-## 0.3 — Graph modeling & data quality
+## 0.3 — RDFModel integration & graph modeling
 
-Target: safer RDF modeling and production data constraints.
+Target: single mapping code path through RDFModel; public SparqlModel API unchanged for typical apps.
 
-### Cardinality & validation
+**Dependency gate:** declare `rdfmodel>=0.2,<0.3` (adjust to actual RDFModel releases) when upstream provides sync/remove, namespace bind, nested embedded models, and multi-valued fields.
 
-- [ ] Multi-valued fields (`list[T]` ↔ multiple objects per predicate)
-- [ ] Detect ambiguous duplicate predicates on load (two fields → one predicate)
-- [ ] Validate unique expanded predicates per model at class definition
+### Integration (required for 0.3 release)
 
-### Graph features
+- [ ] Runtime dependency on `rdfmodel` per gate in [ECOSYSTEM.md](ECOSYSTEM.md#rdfmodel-releases-to-wait-for-dependency-gate)
+- [ ] Replace `model_to_graph` / primary load path via RDFModel; keep `put`/`delete` orchestration and cascade in `session.py` + `graph.py` policy helpers
+- [ ] Field metadata adapter: preserve `Field("curie")` / `Relationship` UX over `rdf_field` / `Predicate`
+- [ ] Contract tests: RDFModel round-trip matches legacy graph output for core models
+- [ ] Remove duplicated term conversion from `graph.py` once coverage is green
+- [ ] Document integration in README and CHANGELOG
 
-- [ ] Named graphs / contexts on `Field` and `Relationship`
-- [ ] Blank node strategy documented and configurable (`_:id` vs stable skolem)
+### Upstream-first (implement in RDFModel; consume in SparqlModel)
 
-### SHACL & schemas
+| Feature | Owner | SparqlModel action |
+|---------|--------|-------------------|
+| Multi-valued fields (`list[T]`) | **RDFModel** | Hydration/query consume RDFModel load |
+| XSD / literal correctness | **RDFModel** | Stop extending local converters |
+| Subject IRI prefix safety | **RDFModel** | — |
+| Duplicate predicate detection on load | **RDFModel** | — |
+| Blank nodes / RDF lists (if still embedding BNodes) | **RDFModel** 0.3 | Align cascade keys with upstream |
 
-- [ ] Optional SHACL shapes generation from models
-- [ ] Validate instances on `put` when `pyshacl` extra is installed
+### SparqlModel-only (0.3)
 
-### Hydration & types
-
-- [ ] Narrow `HydrationError` to validation/config failures (avoid masking bugs)
-- [ ] Stricter `IRI` validation mode (optional RFC 3987 checks)
 - [ ] `resolve_related_model` improvements for unions and `ForwardRef`
+- [ ] Narrow `HydrationError` to validation/config failures
+- [ ] Optional stricter `IRI` validation mode
+- [ ] Optional `session.put` validation hook via `rdfmodel[shacl]` (do not bundle `pyshacl` in core)
+
+### Deferred until RDFModel 0.4+
+
+- [ ] Delegate `export_model` / file formats to `model.to_graph().serialize(...)` ([ECOSYSTEM.md](ECOSYSTEM.md))
+- [ ] Named graphs / `Dataset` — after RDFModel 0.5
+- [ ] SHACL shapes **generation** — RDFModel; SparqlModel may only hook validation on `put`
 
 ---
 
-## 0.4+ — Ecosystem & advanced RDF
+## 0.4 — File I/O delegation & advanced persistence
+
+Target: thin `serializers.py`; SparqlModel focuses on session and SPARQL.
+
+**Dependency gate:** `rdfmodel>=0.4` for `parse` / `serialize` and base URI handling.
+
+- [ ] Replace most of `serializers.py` with RDFModel parse/serialize
+- [ ] Named graphs on `Field` / `Relationship` when RDFModel 0.5 `Dataset` support lands
+- [ ] Blank node strategy documented and configurable (`_:id` vs stable skolem) — align with RDFModel
+
+### Stay in SparqlModel (0.4+)
+
+- `compiler.py`, `query.py`, `HttpStore` hardening, identity map refinements
+- Cascade/orphan rules on `put`/`delete`
+- FastAPI extras and content negotiation polish
+
+---
+
+## 0.5+ — Ecosystem & advanced RDF
 
 Longer-term, optional capabilities. Not committed to a release date.
 
-| Theme | Ideas |
-|-------|--------|
-| **Interop** | semantic-sqlmodel backend adapter; SPARQL endpoint federation |
-| **Reasoning** | Optional OWL/RDFS materialization hooks (not a full reasoner) |
-| **Export** | OWL ontology export from model metadata |
-| **Engines** | pyoxigraph / Oxigraph store backend; Neo4j bridge experiments |
-| **AI** | JSON-LD round-trip for extraction pipelines; PydanticAI-friendly helpers |
-| **Docs** | MkDocs site, tutorials, deployment guides |
+| Theme | Owner | Notes |
+|-------|--------|--------|
+| **semantic-sqlmodel** | SparqlModel adapter | Optional RDF/SPARQL backend |
+| **Federation** | SparqlModel | SPARQL endpoint federation |
+| **Reasoning** | Optional hooks | Not a full reasoner; materialization hooks only |
+| **Engines** | SparqlModel `stores/` | pyoxigraph / Oxigraph backend experiments |
+| **AI** | Both | JSON-LD pipelines; PydanticAI-friendly helpers |
+| **Docs** | SparqlModel | MkDocs, tutorials, deployment guides |
+| **OWL export** | Low priority | From model metadata; not core ORM |
 
 Explicitly **out of scope** for SparqlModel core:
 
 - Ontology editing (Protégé replacement)
 - Built-in OWL reasoning engine
-- Full academic OWL tooling surface
+- Copy-pasting `python_to_term` or Turtle parsers from RDFModel into `graph.py`
+- Pushing session or query-compiler code into RDFModel
+
+---
+
+## RDFModel milestone tracker
+
+Track [RDFModel ROADMAP](https://github.com/eddiethedean/rdfmodel/blob/main/ROADMAP.md) before bumping SparqlModel’s `rdfmodel` pin.
+
+| RDFModel release | Unblocks in SparqlModel |
+|------------------|-------------------------|
+| **0.2** | Required dep; replace graph sync path; multi-value; namespaces |
+| **0.3** | Blank node / RDF list alignment for embedded resources |
+| **0.4** | Delegate `serializers.py`; parse/serialize in docs/examples |
+| **0.5** | Named graphs / `@graph` on models if pursued |
 
 ---
 
 ## How priorities are chosen
 
 1. **Operational first** — remote stores and FastAPI beat niche RDF features.
-2. **Explicit over magic** — behavior (cascade, `!=`, `add`) stays documented and predictable.
-3. **Pydantic-native** — models and validation remain central; raw triple APIs stay secondary.
-4. **Optional extras** — heavy dependencies (SHACL, pyld, FastAPI) ship as optional install groups.
+2. **Upstream mapping** — term, file, and multi-value work goes to RDFModel before growing SparqlModel.
+3. **Explicit over magic** — cascade, `!=`, and `add` vs `put` stay documented and predictable.
+4. **Stable public API** — `SPARQLModel`, `Field`, `session.put` remain familiar; internal duplication is what shrinks.
+5. **Optional extras** — FastAPI, HTTP store, SHACL via RDFModel extras — not heavy deps in core.
 
 ---
 
 ## Contributing
 
-When picking up work, align PRs with a roadmap section and add a CHANGELOG entry under the next unreleased version. Open an issue to discuss items marked 0.4+ before large implementations.
+When picking up work:
+
+1. Check [ECOSYSTEM.md — Where to implement](ECOSYSTEM.md#where-to-implement-a-change) before opening a PR.
+2. Align with a roadmap section and add a CHANGELOG entry under the next unreleased version.
+3. Open an issue to discuss 0.5+ items before large implementations.
+4. If RDFModel already fixes a mapping bug, drop duplicate SparqlModel tests that only asserted the same behavior.

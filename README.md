@@ -2,7 +2,9 @@
 
 **SPARQL-native object graph mapper for RDF triple stores.**
 
-SparqlModel brings SQLModel-style ergonomics to RDF: typed Pydantic models, Pythonic queries that compile to SPARQL, in-memory persistence via RDFLib, and JSON-LD serialization.
+SparqlModel brings SQLModel-style ergonomics to RDF: typed Pydantic models, Pythonic queries that compile to SPARQL, in-memory persistence via RDFLib, and RDF export.
+
+SparqlModel is the **ORM and SPARQL layer** (session, queries, stores, cascade policy). Stateless Pydantic ↔ RDF mapping and file I/O live in **[RDFModel](https://github.com/eddiethedean/rdfmodel)**. The two packages share a stack: SparqlModel will depend on `rdfmodel` once upstream sync and multi-value milestones land (see [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md)).
 
 ## Install
 
@@ -95,19 +97,23 @@ print(export_model(odos, format="turtle"))
 
 For development, run tests from the project virtualenv: `.venv/bin/pytest`.
 
-## Roadmap (0.2)
+## Roadmap
 
-- HTTP SPARQL 1.1 endpoint store (`httpx`)
-- FastAPI optional integration
-- Identity map and session caching
-- Richer query compiler (OR, numeric/date comparisons)
+| Release | Focus |
+|---------|--------|
+| **0.2** | HTTP SPARQL store, richer query compiler (`OR`, comparisons), identity map, optional FastAPI — RDFModel dev pin only |
+| **0.3** | Integrate `rdfmodel` for mapping/sync; thin `graph.py`; multi-value via upstream |
+| **0.4+** | Delegate file parse/serialize to RDFModel; named graphs when upstream supports Dataset |
+
+Full checklist: [docs/ROADMAP.md](docs/ROADMAP.md). Ecosystem boundaries: [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md).
 
 ## Documentation
 
-- [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md)
-- [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md)
-- [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md)
-- [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md)
+- [Technical specification](docs/SPECS.md)
+- [Project plan](docs/PLAN.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Ecosystem guide (RDFModel alignment)](docs/ECOSYSTEM.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 

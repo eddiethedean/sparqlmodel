@@ -5,12 +5,51 @@
 SparqlModel is a SPARQL-native object graph mapper and typed persistence framework for RDF triple stores.
 
 It provides:
-- Pydantic-native semantic models
-- SPARQL query generation
-- RDF graph persistence
-- JSON-LD serialization
-- Graph hydration
-- FastAPI interoperability
+- Pydantic-native semantic models (`SPARQLModel`)
+- Stateful persistence and queries (`SPARQLSession`)
+- SPARQL query generation from Python expressions
+- Graph hydration with relationship depth
+- Store backends (in-memory today; HTTP SPARQL on roadmap)
+- FastAPI interoperability (optional extra)
+
+**Ecosystem:** Stateless Pydantic ↔ RDF mapping, term conversion, and canonical file I/O live in **[RDFModel](https://github.com/eddiethedean/rdfmodel)** (`rdfmodel`). SparqlModel integrates as a dependency once RDFModel reaches the milestones in [ECOSYSTEM.md](ECOSYSTEM.md). Maintainer boundaries: [PLAN.md](PLAN.md), [ROADMAP.md](ROADMAP.md).
+
+| Layer | SparqlModel | RDFModel |
+|-------|-------------|----------|
+| Session CRUD, cascade policy | Yes | No |
+| Query DSL + SPARQL compiler | Yes | No |
+| Stores (`MemoryStore`, `HttpStore`) | Yes | No |
+| `to_graph` / `from_graph`, terms, parse/serialize | Delegate (0.3+) | Yes |
+
+---
+
+# Ecosystem boundaries
+
+**Heuristic:** if the fix would help code that never creates a `SPARQLSession`, implement it in **RDFModel**.
+
+| Concern | Owner |
+|---------|--------|
+| Wrong XSD type on export, subject IRI prefix safety | RDFModel |
+| `put` orphan / cascade after relationship change | SparqlModel (`graph.py` policy + `session.py`) |
+| Stale triples on sync (declared predicates) | RDFModel sync + SparqlModel `put` orchestration |
+| `!=` / nested filter semantics | SparqlModel (`compiler.py`) |
+| Multi-valued predicate round-trip | RDFModel first; hydration consumes result |
+| Turtle/JSON-LD parsers and format registry | RDFModel (0.4+); SparqlModel thin wrapper |
+| Remote Fuseki / SPARQL endpoint | SparqlModel (`stores/`) |
+| SHACL validation on save | `rdfmodel[shacl]` optional; hook from `put` |
+
+**Anti-patterns:** new datatype registries or parsers only in `graph.py`; session/query code in RDFModel; `rdfmodel` dependency before sync/remove and nested models exist; circular imports.
+
+Public API convergence (user-facing names stable, implementation thins):
+
+| SparqlModel (keep) | RDFModel (target implementation) |
+|--------------------|----------------------------------|
+| `SPARQLModel`, `rdf_type`, `__prefixes__` | `RdfModel`, `Rdf.type_uri`, `Rdf.prefixes` |
+| `Field("schema:name")` | `rdf_field` / `Predicate` + CURIE expand |
+| `id: IRI` | Explicit IRI or `id_field` + namespace |
+| `session.put(model)` | RDFModel sync + SparqlModel cascade |
+| `session.get`, `query` | RDFModel load + compiler/hydration |
+| `export_model(...)` | `to_graph().serialize(...)` after 0.4 |
 
 ---
 
@@ -108,6 +147,8 @@ Filter semantics:
 
 Persistence uses **RDFLib graph add/remove** via `MemoryStore.update_graph`, not generated SPARQL Update strings. HTTP backends may use SPARQL Update in a future release.
 
+Serialization and load paths are implemented in `graph.py` today. **0.3+** routes model ↔ triple conversion through RDFModel while **cascade/orphan policy** remains SparqlModel-owned (`cascade_subjects_for_removal`, `owned_triples_for_subjects`, `session.put`/`delete` orchestration).
+
 ## Insert (`add`)
 
 Objects serialize to RDF triples and are added to the store. `add` does not remove existing triples for the same subject.
@@ -181,24 +222,17 @@ works_for: Organization | None = Relationship(
 
 # JSON-LD Support
 
-Features:
-- automatic @context generation
-- @id support
-- @type support
-- compact IRIs
-- graph serialization
+**0.1.x:** Custom `model_dump_jsonld` / `model_validate_jsonld` plus RDFLib-based `export_model(..., "json-ld")` — behaviors differ (see Known limitations).
+
+**0.4+ (planned):** Prefer RDFModel parse/serialize and graph helpers; SparqlModel keeps session-scoped export convenience wrappers only.
 
 ---
 
 # RDF Support
 
-Supported serializations:
-- Turtle
-- JSON-LD
-- RDF/XML
-- N-Triples
+**0.1.x:** Turtle, JSON-LD, RDF/XML, N-Triples via `serializers.py` (RDFLib).
 
-Implemented via RDFLib.
+**0.4+ (planned):** Delegate to RDFModel `parse` / `serialize`; do not add new format parsers in SparqlModel core.
 
 ---
 
@@ -214,13 +248,16 @@ Optional FastAPI support includes:
 
 # Planned Optional Features
 
-- SHACL generation
-- OWL export
-- Named graph support
-- SPARQL endpoint federation
-- Reasoning integration
-- Neo4j adapters
-- AI extraction pipelines
+| Feature | Primary owner |
+|---------|----------------|
+| SHACL shapes generation | RDFModel |
+| SHACL validate on `put` | SparqlModel hook + `rdfmodel[shacl]` |
+| Named graphs / Dataset | RDFModel 0.5; SparqlModel field metadata if needed |
+| OWL export | Low priority; either package |
+| SPARQL endpoint federation | SparqlModel |
+| Reasoning hooks | Optional; not a core reasoner |
+| Neo4j / Oxigraph store experiments | SparqlModel `stores/` |
+| AI extraction pipelines | Ecosystem; JSON-LD via RDFModel |
 
 ---
 
@@ -252,45 +289,51 @@ Unlike SQLModel:
 
 ```text
 sparqlmodel/
-  model.py
-  fields.py
+  model.py          # SPARQLModel; adapter to RdfModel (0.3+)
+  fields.py         # Field/Relationship UX; metadata → RDFModel
+  _rdf.py           # adapter (0.2 dev, 0.3 required)
   session.py
   query.py
-  compiler.py
-  hydration.py
-  graph.py
-  serializers.py
+  compiler.py       # SparqlModel-only
+  hydration.py      # depth + relationships; load via RDFModel
+  graph.py          # cascade/orphan policy; thin sync wrapper (0.3+)
+  serializers.py    # delegate to RDFModel (0.4+)
   fastapi/
   stores/
-  integrations/
 ```
 
 ---
 
 # Dependency Strategy
 
-Core dependencies:
-- pydantic
-- rdflib
-- httpx
-- typing-extensions
+**0.1.x (current):**
+- `pydantic`, `rdflib`, `typing-extensions`
 
-Optional extras:
-- fastapi
-- pyld
-- pyshacl
-- pyoxigraph
-- SPARQLWrapper
+**0.2:** optional `httpx` for `HttpStore` (extra or dev); RDFModel pinned locally for adapter work only.
+
+**0.3+:**
+- `rdfmodel` required (minimum version per [ECOSYSTEM.md](ECOSYSTEM.md#rdfmodel-releases-to-wait-for-dependency-gate))
+
+**SparqlModel optional extras:**
+- `fastapi` — `sparqlmodel[fastapi]`
+- `httpx` — `sparqlmodel[http]` or bundled with store extra
+
+**Do not add to SparqlModel core:**
+- `pyshacl` — use `rdfmodel[shacl]` for validation hooks
+- SQLAlchemy / BerkeleyDB — RDFModel store extras if needed
+
+**Testing:** SparqlModel owns session, cascade, compiler tests; RDFModel owns term/parse round-trip; optional CI job installs released `rdfmodel` against SparqlModel main.
 
 ---
 
 # Future Ecosystem Integration
 
-SparqlModel should integrate cleanly with:
-- semantic-sqlmodel
-- FastAPI
-- PydanticAI
-- Instructor
-- RDFLib
-- graph databases
-- AI extraction systems
+| Project | Relationship |
+|---------|----------------|
+| **RDFModel** | Required mapping layer (0.3+); primary upstream |
+| **semantic-sqlmodel** | Optional SparqlModel backend |
+| **FastAPI** | Optional extra |
+| **PydanticAI / Instructor** | Consumers of session + models |
+| **RDFLib** | Via RDFModel and stores |
+
+See [ECOSYSTEM.md](ECOSYSTEM.md) for the full two-package maintainer guide.
