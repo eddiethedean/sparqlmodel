@@ -1,0 +1,46 @@
+"""Tests for SPARQLSession CRUD."""
+
+from tests.models import Organization, Person
+
+
+def test_put_and_get(session, odos: Person) -> None:
+    session.put(odos)
+    loaded = session.get(Person, odos.id)
+    assert loaded is not None
+    assert loaded.name == "Odos"
+
+
+def test_add(session, acme: Organization) -> None:
+    session.add(acme)
+    loaded = session.get(Organization, acme.id)
+    assert loaded is not None
+    assert loaded.name == "Acme Corp"
+
+
+def test_delete(session, odos: Person) -> None:
+    session.put(odos)
+    session.delete(odos)
+    assert session.get(Person, odos.id) is None
+
+
+def test_execute_select(session, odos: Person) -> None:
+    session.put(odos)
+    results = session.execute("SELECT ?s WHERE { ?s a <https://schema.org/Person> . }")
+    assert len(results) >= 1
+
+
+def test_put_updates(session, odos: Person) -> None:
+    session.put(odos)
+    odos.name = "Odos M."
+    session.put(odos)
+    loaded = session.get(Person, odos.id)
+    assert loaded is not None
+    assert loaded.name == "Odos M."
+
+
+def test_auto_id(session) -> None:
+    person = Person(name="Anonymous")
+    session.put(person)
+    assert person.id is not None
+    loaded = session.get(Person, person.id)
+    assert loaded is not None
