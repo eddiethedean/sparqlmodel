@@ -1,18 +1,8 @@
 # SparqlModel
 
-**SparqlModel — the SQLModel of SPARQL:** typed models, a persistent session, and Python queries that compile to SPARQL.
+**SparqlModel — the SQLModel of SPARQL:** typed RDF models, a persistent session, and Python filters that compile to SPARQL.
 
-SparqlModel is a **session-first SPARQL ORM** built on **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`). TripleModel owns Pydantic ↔ RDF mapping, terms, and file I/O. SparqlModel owns everything application-shaped: **`SPARQLSession`**, the query DSL, stores, cascade policy, and hydration depth.
-
-You do not choose between them for the same job: **apps use SparqlModel**; **libraries and ETL use TripleModel** when there is no session.
-
-## Who this is for
-
-- FastAPI and backend developers building knowledge-graph APIs
-- Teams that want SQLModel-style ergonomics over SPARQL endpoints
-- Applications that need CRUD, filters, relationship loading, and unit-of-work semantics
-
-**Not for:** ontology editing, reasoning, or stateless Turtle round-trips without a session (use TripleModel directly).
+Define `SPARQLModel` classes, use `with SPARQLSession() as session:`, and work with graphs the way you would with a SQL ORM: `put` and `get`, nested relationships, a query builder, and optional remote stores.
 
 ## Install
 
@@ -20,14 +10,17 @@ You do not choose between them for the same job: **apps use SparqlModel**; **lib
 pip install sparqlmodel
 ```
 
-Pulls in **`triplemodel>=0.9`** automatically.
+Optional extras:
+
+```bash
+pip install "sparqlmodel[http]"      # HttpStore (httpx)
+pip install "sparqlmodel[fastapi]"   # RDF response helpers
+```
 
 Development:
 
 ```bash
-pip install -e ".[dev]"
-# optional: editable TripleModel while hacking both packages
-pip install -e ../triplemodel
+pip install -e ".[dev,http,fastapi]"
 ```
 
 ## Quickstart
@@ -55,93 +48,123 @@ class Person(SPARQLModel):
 acme = Organization(id=IRI("urn:org:acme"), name="Acme Corp")
 odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
 
-session = SPARQLSession()
-session.put(odos)
+with SPARQLSession() as session:
+    session.put(odos)
 
-found = session.query(Person).where(Person.name == "Odos").first()
-team = session.query(Person).where(Person.works_for.name == "Acme Corp").all()
-full = session.get(Person, odos.id, depth=1)
+    found = session.query(Person).where(Person.name == "Odos").first()
+    team = session.query(Person).where(Person.works_for.name == "Acme Corp").all()
+    full = session.get(Person, odos.id, depth=1)
 ```
 
-### Export (optional)
+## Session API
 
-The ORM does not require export helpers. Prefer TripleModel when the task is file I/O without a session. From a session model today:
+`SPARQLSession` is a context manager: on success it flushes any pending `put(..., flush=False)` writes; on error it rolls back the pending queue; it closes HTTP stores when the block ends.
+
+| Method | Purpose |
+|--------|---------|
+| `add(model)` | Insert triples; does not remove existing data for the subject |
+| `put(model)` | Upsert with cascade and orphan cleanup for embedded resources |
+| `delete(model)` | Remove owned triples for the root and composition tree |
+| `get(Model, iri, depth=0)` | Load one entity; `depth` eager-loads relationships (0–2) |
+| `query(Model).where(...)` | Find entities; filters compile to SPARQL |
+| `execute(sparql)` | Raw SPARQL SELECT |
+| `flush()` / `rollback_pending()` | Apply or discard pending `put(..., flush=False)` writes |
+| `close()` | Close the backing store when it supports `close()` |
+| `expire(iri)` | Evict cached instances for an IRI |
+
+`put` treats nested `SPARQLModel` values as **composition** (cascade delete and orphan cleanup). Use `Relationship(..., cascade=False)` or an `IRI` reference when the linked resource is owned elsewhere.
+
+## Query DSL
+
+Filters compile to SPARQL against your store:
+
+```python
+with SPARQLSession() as session:
+    session.query(Person).where(Person.name == "Odos").all()
+
+    session.query(Person).where(
+        (Person.name == "Odos") | (Person.name == "Ada")
+    ).all()
+
+    session.query(Person).where(
+        Person.works_for.located_in.name == "Boston"
+    ).all(depth=2)
+
+    session.query(Person).where(Person.name.in_(("Odos", "Ada"))).all()
+
+    session.query(Person).where(Person.name != "Other").use_not_exists_for_ne().all()
+```
+
+Supported operators include `==`, `!=`, `&`, `|`, ordering comparisons, `in_()`, and multi-hop paths through relationships.
+
+## Stores
+
+**In-memory** (default) — local `rdflib` graph, ideal for tests and prototypes:
+
+```python
+with SPARQLSession() as session:
+    session.put(model)
+```
+
+**HTTP** — SPARQL 1.1 endpoint with a local mirror for cascade reads (`sparqlmodel[http]`):
+
+```python
+from sparqlmodel import HttpStore, SPARQLSession
+
+with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
+    session.put(odos)
+```
+
+## FastAPI
+
+With `sparqlmodel[fastapi]`, session management mirrors SQLModel / SQLAlchemy: register a shared store on the app, inject a per-request session with `Depends`, and use `with SPARQLSession(...)` inside the dependency.
+
+```python
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
+from sparqlmodel import IRI
+from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app, negotiated_response
+from sparqlmodel.stores.memory import MemoryStore
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with http_store_lifespan(app, "http://localhost:3030/ds/sparql"):
+        yield
+    # Or for tests / in-process: init_app(app, MemoryStore()); yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.get("/person/{iri}")
+def person(iri: str, request: Request, session: SessionDep) -> object:
+    model = session.get(Person, IRI(iri))
+    if model is None:
+        raise HTTPException(status_code=404)
+    return negotiated_response(request, model)
+```
+
+`SessionDep` is `Annotated[SPARQLSession, Depends(get_session)]`. Each request opens `with SPARQLSession(store=...) as session`, flushes on success, and rolls back pending writes on error — the same lifecycle as using a session outside FastAPI.
+
+## Export
 
 ```python
 from sparqlmodel.serializers import export_model
+
 print(export_model(odos, format="turtle"))
 ```
 
-SparqlModel serializers are being replaced by thin wrappers over TripleModel `parse` / `serialize` — see [roadmap](docs/ROADMAP.md).
-
-## What SparqlModel owns
-
-| Area | Examples |
-|------|----------|
-| **Session** | `add`, `put`, `delete`, `get`, `query`, `execute` |
-| **Query DSL** | `session.query(Person).where(Person.name == "x")` |
-| **SPARQL compiler** | `==`, `!=`, `&`, nested hops → SPARQL |
-| **Hydration** | `get(..., depth=0\|1\|2)` |
-| **Persistence policy** | Composition cascade, orphan cleanup, `add` vs `put` |
-| **Stores** | `MemoryStore`; HTTP SPARQL (roadmap) |
-
-## What TripleModel owns (via dependency)
-
-| Area | Examples |
-|------|----------|
-| **Mapping** | Literals, XSD types, subject IRIs, nested embeds |
-| **Graph sync** | `to_graph`, `sync_to_graph`, `from_graph` |
-| **Files** | `parse`, `serialize`, Turtle, JSON-LD, N-Quads |
-| **Terms** | `python_to_term`, registries, language tags |
-
-SparqlModel **0.1.x** still contains interim code in `graph.py` and `serializers.py` that duplicates some TripleModel behavior. New mapping work lands in **TripleModel first**; SparqlModel wires it in — see [integration roadmap](docs/ROADMAP.md).
-
-## Persistence and queries
-
-- **`put`** — upsert with composition cascade and orphan cleanup; `IRI`-only links are not cascade-deleted
-- **`add`** — insert only; repeat `add` can leave stale literals
-- **`delete`** — same cascade rules as `put` for owned triples
-- **Filters** — `==` / `!=`; combine with `.where(a, b)` or `(a) & (b)`; see [SPECS.md](docs/SPECS.md)
-
-## SparqlModel vs TripleModel
-
-| I need… | Use |
-|---------|-----|
-| An app with CRUD, queries, cascade | **SparqlModel** |
-| `where(Model.field == x)` → SPARQL | **SparqlModel** |
-| Correct triples, parse, serialize, no session | **[TripleModel](https://github.com/eddiethedean/triplemodel)** |
-
-[ORM guide](docs/ORM.md) · [Ecosystem](docs/ECOSYSTEM.md) · [Roadmap](docs/ROADMAP.md)
-
-## Stack
-
-```text
-SPARQLSession · Query · Compiler · Stores   ← SparqlModel (ORM)
-        ↓
-triplemodel>=0.9 · terms · parse/serialize  ← TripleModel (required)
-        ↓
-rdflib · pydantic
-```
-
-## Roadmap (summary)
-
-| Release | SparqlModel (ORM) | TripleModel wiring |
-|---------|-------------------|-------------------|
-| **Now** | Session, query, cascade; `triplemodel>=0.9` required | Interim `graph.py` — retire through 0.3–0.4 |
-| **0.2** | `HttpStore`, identity map, FastAPI | `_triple` adapter; contract tests |
-| **0.3** | ORM API frozen | `put`/`get` via `sync_to_graph` / `from_graph` |
-| **0.4** | Session + SPARQL only | Delegated `parse` / `serialize` |
-
-Full detail: [docs/ROADMAP.md](docs/ROADMAP.md)
-
 ## Documentation
 
-- [ORM guide](docs/ORM.md) — start here
+- [ORM guide](docs/ORM.md) — lifecycle, cascade, hydration
 - [Technical specification](docs/SPECS.md)
-- [Project plan](docs/PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
-- [Ecosystem boundaries](docs/ECOSYSTEM.md)
 - [Changelog](CHANGELOG.md)
+
+## Ecosystem
+
+SparqlModel installs **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`) as its RDF mapping engine: literals, terms, and file parse/serialize. Application code normally uses only `sparqlmodel`; reach for TripleModel directly when you need stateless Turtle/JSON-LD round-trips or library-style `to_graph` / `sync_to_graph` without a session.
+
+See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for package boundaries and the integration roadmap (wiring session I/O through TripleModel in upcoming releases).
 
 ## License
 

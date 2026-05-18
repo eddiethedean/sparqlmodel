@@ -12,6 +12,7 @@ from sparqlmodel.exceptions import ConfigurationError, HydrationError, QueryErro
 from sparqlmodel.fields import Field, Relationship
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.session import SPARQLSession
+from sparqlmodel.stores.http import HttpStore
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI
 
@@ -19,6 +20,7 @@ __all__ = [
     "ConfigurationError",
     "Field",
     "HydrationError",
+    "HttpStore",
     "IRI",
     "MemoryStore",
     "QueryError",

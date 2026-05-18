@@ -16,11 +16,11 @@ Guides: [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP
 
 ## SparqlModel (ORM)
 
-- Entry point: `SPARQLSession()`
+- Entry point: `with SPARQLSession() as session:`
 - SQLModel-style models: `SPARQLModel`, `Field`, `Relationship`
 - Python queries → SPARQL: `session.query(Person).where(Person.name == x)`
 - Unit-of-work semantics: `add`, `put`, `delete`, cascade, orphans
-- Stores: in-memory today; HTTP SPARQL and identity map on the roadmap
+- Stores: `MemoryStore`, `HttpStore` (`sparqlmodel[http]`)
 
 **Not SparqlModel:** mapping correctness, XSD registries, Turtle parsers, or stateless ETL — **that is TripleModel**.
 

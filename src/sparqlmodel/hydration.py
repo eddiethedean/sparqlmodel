@@ -7,7 +7,7 @@ from typing import Any
 from sparqlmodel.exceptions import ConfigurationError, HydrationError
 from sparqlmodel.graph import graph_to_model, subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.stores.memory import MemoryStore
+from sparqlmodel.stores.base import Store
 from sparqlmodel.types import IRI
 
 
@@ -24,7 +24,7 @@ def validate_depth(depth: int) -> None:
 def hydrate_from_bindings(
     model_cls: type[SPARQLModel],
     bindings: list[dict[str, Any]],
-    store: MemoryStore,
+    store: Store,
     *,
     depth: int = 0,
 ) -> list[SPARQLModel]:
@@ -62,7 +62,7 @@ def hydrate_from_bindings(
 def hydrate_one(
     model_cls: type[SPARQLModel],
     iri: str | IRI,
-    store: MemoryStore,
+    store: Store,
     *,
     depth: int = 0,
 ) -> SPARQLModel | None:

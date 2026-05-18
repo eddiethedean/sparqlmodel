@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-18
+
+### Added
+
+- **`HttpStore`** — SPARQL 1.1 over HTTP (`httpx`), local graph mirror, optional `sparqlmodel[http]` extra
+- **Session identity map** and hydration cache; `flush()`, `rollback_pending()`, `expire()`, `put(..., flush=False)`, `autoflush`
+- **Query compiler:** `OR`, ordering (`<`, `>`, `<=`, `>=`), `IN` (`FieldRef.in_`), multi-hop paths, optional `Query.use_not_exists_for_ne()` for `!=`
+- **`sparqlmodel/_triple.py`** — dynamic `TripleModel` adapter and contract tests vs interim `put` graphs
+- **`Relationship(..., cascade=False)`** for non-owned embeds
+- **`StaleTripleWarning`** on overlapping `add()` for the same subject
+- **`sparqlmodel[fastapi]`** — `turtle_response`, `jsonld_response`, `negotiated_response`
+
+### Changed
+
+- `SPARQLSession` accepts any `Store` implementation (not only `MemoryStore`)
+- Pluggable `Store` protocol documented in [docs/SPECS.md](docs/SPECS.md)
+
+### Documentation
+
+- [docs/ROADMAP.md](docs/ROADMAP.md) — **Shipped (0.2.0)** section; 0.2 checkboxes completed
+- [docs/ORM.md](docs/ORM.md), [docs/SPECS.md](docs/SPECS.md), [README.md](README.md) — HttpStore, session flush/identity map, compiler ops, FastAPI extra
+
+## [0.1.4] - 2026-05-16
+
 ### Added
 
 - **`triplemodel>=0.9.0,<2`** as a required dependency (mapping substrate)
@@ -22,8 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reframe [docs/PLAN.md](docs/PLAN.md), [docs/SPECS.md](docs/SPECS.md), [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md), and [docs/ROADMAP.md](docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
 - Rewrite all docs for **`triplemodel>=0.9` as required mapping engine**; integration roadmap focuses on wiring, not adding the dependency
 - Update package metadata and module docstrings for ORM framing
-
-## [0.1.4] - 2026-05-16
 
 ### Fixed
 

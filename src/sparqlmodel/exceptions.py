@@ -15,3 +15,7 @@ class QueryError(SparqlModelError):
 
 class HydrationError(SparqlModelError):
     """Raised when query results cannot be hydrated into models."""
+
+
+class StaleTripleWarning(UserWarning):
+    """Warn when ``add()`` may leave stale triples on an existing subject."""

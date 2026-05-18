@@ -20,6 +20,7 @@ class SPARQLFieldMetadata:
     predicate: str
     is_relationship: bool = False
     related_model: type[Any] | None = None
+    cascade: bool = True
 
 
 def Field(predicate: str, **kwargs: Any) -> Any:
@@ -41,6 +42,7 @@ def Relationship(
     predicate: str,
     *,
     model: type[Any] | None = None,
+    cascade: bool = True,
     **kwargs: Any,
 ) -> Any:
     """Map a model attribute to an RDF object relationship.
@@ -48,12 +50,14 @@ def Relationship(
     Args:
         predicate: Compact or absolute IRI (e.g. ``schema:worksFor``).
         model: Related ``SPARQLModel`` class (inferred from annotation when omitted).
+        cascade: When ``False``, nested resources are not included in put/delete cascade.
         **kwargs: Additional arguments passed to ``pydantic.Field``.
     """
     metadata = SPARQLFieldMetadata(
         predicate=predicate,
         is_relationship=True,
         related_model=model,
+        cascade=cascade,
     )
     json_schema_extra = kwargs.pop("json_schema_extra", {}) or {}
     if not isinstance(json_schema_extra, dict):

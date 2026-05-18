@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 from sparqlmodel.compiler import compile_where
 from sparqlmodel.exceptions import QueryError
-from sparqlmodel.expressions import AndExpr, CompareExpr
-from sparqlmodel.hydration import hydrate_from_bindings, validate_depth
+from sparqlmodel.expressions import AndExpr, CompareExpr, OrExpr
+from sparqlmodel.hydration import validate_depth
 from sparqlmodel.model import SPARQLModel
 
 if TYPE_CHECKING:
@@ -24,12 +24,18 @@ class Query:
     ) -> None:
         self._session = session
         self._model_cls = model_cls
-        self._expressions: list[CompareExpr | AndExpr] = []
+        self._expressions: list[CompareExpr | AndExpr | OrExpr] = []
         self._limit: int | None = None
+        self._use_not_exists_for_ne = False
 
-    def where(self, *expressions: CompareExpr | AndExpr) -> Query:
+    def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> Query:
         """Add WHERE filter expressions."""
         self._expressions.extend(expressions)
+        return self
+
+    def use_not_exists_for_ne(self, enabled: bool = True) -> Query:
+        """Compile ``!=`` filters with ``FILTER NOT EXISTS`` instead of inequality."""
+        self._use_not_exists_for_ne = enabled
         return self
 
     def limit(self, n: int) -> Query:
@@ -50,6 +56,7 @@ class Query:
             tuple(self._expressions),
             reg,
             limit=self._limit,
+            use_not_exists_for_ne=self._use_not_exists_for_ne,
         )
 
     def all(self, *, depth: int = 0) -> list[SPARQLModel]:
@@ -57,10 +64,9 @@ class Query:
         validate_depth(depth)
         sparql = self._compile()
         bindings = self._session.execute(sparql)
-        return hydrate_from_bindings(
+        return self._session.hydrate_bindings(
             self._model_cls,
             bindings,
-            self._session.store,
             depth=depth,
         )
 
@@ -72,10 +78,9 @@ class Query:
         try:
             sparql = self._compile()
             bindings = self._session.execute(sparql)
-            results = hydrate_from_bindings(
+            results = self._session.hydrate_bindings(
                 self._model_cls,
                 bindings,
-                self._session.store,
                 depth=depth,
             )
         finally:

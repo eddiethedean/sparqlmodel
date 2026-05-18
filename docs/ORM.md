@@ -14,7 +14,7 @@ Related: [SPECS.md](SPECS.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](RO
 |---|-------------|-------------|
 | **Role** | ORM — run apps on graphs | Mapping — correct triples from Pydantic |
 | **Metaphor** | SQLModel / SQLAlchemy ORM | SQLAlchemy Core / serde |
-| **Entry point** | `SPARQLSession()` | `model.to_graph()` / `TripleModel.parse()` |
+| **Entry point** | `with SPARQLSession() as session:` | `model.to_graph()` / `TripleModel.parse()` |
 | **Dependency** | Requires `triplemodel>=0.9` | Standalone library |
 
 ```text
@@ -34,7 +34,7 @@ Your app
 |---------|-----|
 | CRUD, queries, cascade in a backend or API | **SparqlModel** |
 | Python filters → SPARQL (`Person.name == "x"`) | **SparqlModel** |
-| HTTP SPARQL store, identity map (roadmap) | **SparqlModel** |
+| HTTP SPARQL store (`HttpStore`), identity map, flush queue | **SparqlModel** |
 | Load a Turtle file into models without a session | **TripleModel** |
 | ETL, tests, libraries, one-off `to_graph()` | **TripleModel** |
 
@@ -49,6 +49,7 @@ from sparqlmodel import (
     Field,
     Relationship,
     IRI,
+    HttpStore,       # optional: sparqlmodel[http]
 )
 ```
 
@@ -70,12 +71,21 @@ You generally **do not** import `triplemodel` in application code unless you are
 | **`get(Model, iri, depth=0)`** | Load one entity; `depth` eager-loads relationships (0–2). |
 | **`query(Model).where(...)`** | Find entities; filters compile to SPARQL. |
 | **`execute(sparql)`** | Raw SPARQL SELECT. |
+| **`flush()`** / **`rollback_pending()`** | Apply or discard queued `put(..., flush=False)` writes. |
+| **`close()`** | Close the backing store when it implements `close()` (e.g. `HttpStore`). |
+| **`expire(iri)`** | Evict cached instances for an IRI. |
 
 ```python
-session = SPARQLSession()
-session.put(person)
-hits = session.query(Person).where(Person.name == "Alice").all()
+with SPARQLSession() as session:
+    session.put(person)
+    session.put(other, flush=False)
+    # pending queue flushed on clean exit
+
+with SPARQLSession(store=HttpStore("https://example.org/sparql")) as remote:
+    hits = remote.query(Person).where(Person.name == "Alice").all()
 ```
+
+On exception, the context manager calls `rollback_pending()` (discard the queue only — already-flushed writes stay). Set `rollback_on_error=False` to keep pending across errors, or `close_on_exit=False` when the store is managed elsewhere.
 
 ---
 
@@ -86,6 +96,7 @@ SparqlModel-only **persistence policy** (TripleModel does not define multi-resou
 | Value on a relationship | On `put` / `delete` |
 |---------------------------|---------------------|
 | Nested **`SPARQLModel`** | **Composition** — cascade owned triples; orphan cleanup when links change |
+| Nested with **`Relationship(..., cascade=False)`** | **Reference** — link only; nested triples not written or removed by root `put` |
 | **`IRI` only** | **Reference** — update link; do **not** delete the target resource |
 
 TripleModel’s `sync_to_graph` syncs **one resource’s** owned triples. SparqlModel’s `put` decides **which subjects** to remove across the composition tree before calling into the mapper.
@@ -95,14 +106,17 @@ TripleModel’s `sync_to_graph` syncs **one resource’s** owned triples. Sparql
 ## Query DSL
 
 ```python
-session.query(Person).where(Person.name == "Odos").all()
-session.query(Person).where(Person.works_for.name == "Acme Corp").all()
+with SPARQLSession() as session:
+    session.query(Person).where(Person.name == "Odos").all()
+    session.query(Person).where(Person.works_for.name == "Acme Corp").all()
 ```
 
 - **`==`** — triple pattern match
-- **`!=`** — value exists and differs (not SQL `NOT EXISTS` for missing values)
+- **`!=`** — inequality filter; optional `.use_not_exists_for_ne()` for `NOT EXISTS` semantics
+- **`&`** / **`|`** — `AndExpr` / `OrExpr`
+- **`<`, `>`, `<=`, `>=`**, **`.in_(tuple)`** — ordering and membership filters
 - **`None`** → `QueryError`
-- Nested hops require the related `rdf:type` in the graph
+- Multi-hop paths (`Person.works_for.located_in.name`) require related `rdf:type` in the graph
 
 Compiler detail: [SPECS.md](SPECS.md#sparql-compilation).
 
@@ -111,8 +125,9 @@ Compiler detail: [SPECS.md](SPECS.md#sparql-compilation).
 ## Hydration
 
 ```python
-session.get(Person, iri, depth=0)  # scalars
-session.get(Person, iri, depth=1)  # one relationship hop
+with SPARQLSession() as session:
+    session.get(Person, iri, depth=0)  # scalars
+    session.get(Person, iri, depth=1)  # one relationship hop
 ```
 
 ORM eager-load. Query `.all(depth=1)` and `.first(depth=1)` accept the same parameter.

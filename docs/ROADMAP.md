@@ -48,45 +48,60 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 ---
 
-## 0.2 — Operational ORM + adapter foundation
-
-Parallel tracks: **run on real endpoints** and **start TripleModel wiring**.
+## Shipped (0.2.0)
 
 ### Stores (ORM)
 
-- [ ] `HttpStore` — SPARQL 1.1 over HTTP (`httpx`)
-- [ ] `SELECT` / `UPDATE` against remote endpoints
-- [ ] Pluggable `Store` protocol; auth (basic, bearer)
+| Feature | Status |
+|---------|--------|
+| `HttpStore` — SPARQL 1.1 over HTTP (`httpx`), local mirror | Done |
+| `sparqlmodel[http]` optional extra | Done |
+| Pluggable `Store` protocol; basic / bearer auth | Done |
 
 ### Session (ORM)
 
-- [ ] Identity map (one Python instance per IRI per session)
-- [ ] Session cache for `get` / query hydration
-- [ ] Optional batched `flush` for multiple `put`s
+| Feature | Status |
+|---------|--------|
+| Identity map + hydration cache | Done |
+| `flush()`, `rollback_pending()`, `put(..., flush=False)`, `autoflush` | Done |
+| `expire(iri)` | Done |
 
 ### Query compiler (ORM)
 
-- [ ] `OR`, grouped expressions
-- [ ] Ordering comparisons on numeric / date literals
-- [ ] Multi-hop nested filters
-- [ ] Optional SQL-style `NOT EXISTS` for `!=`
-- [ ] `IN` / membership
+| Feature | Status |
+|---------|--------|
+| `OR`, `AndExpr` branches in OR | Done |
+| Ordering (`<`, `>`, `<=`, `>=`), `IN` | Done |
+| Multi-hop nested filters | Done |
+| `Query.use_not_exists_for_ne()` for `!=` | Done |
 
 ### FastAPI (ORM)
 
-- [ ] Optional `sparqlmodel[fastapi]`
-- [ ] RDF response types, content negotiation
+| Feature | Status |
+|---------|--------|
+| `sparqlmodel[fastapi]` extra | Done |
+| `turtle_response`, `jsonld_response`, `negotiated_response` | Done |
 
 ### TripleModel wiring (integration)
 
-- [ ] `sparqlmodel/_triple.py` — map `SPARQLModel` ↔ `TripleModel` for one model class
-- [ ] Contract tests: TripleModel `sync_to_graph` + SparqlModel cascade ≡ current `put` graphs
-- [ ] Stop adding features to interim `graph.py` except cascade orchestration
+| Feature | Status |
+|---------|--------|
+| `sparqlmodel/_triple.py` adapter | Done |
+| Contract tests vs interim `put` graphs | Done |
+| `put` still uses `graph.py` (0.3 switch) | Planned |
 
 ### Persistence polish
 
-- [ ] `add` vs `put` — warnings or merge mode for stale literals on re-`add`
-- [ ] `cascade=False` on `Relationship` for shared embeds
+| Feature | Status |
+|---------|--------|
+| `StaleTripleWarning` on overlapping `add()` | Done |
+| `Relationship(..., cascade=False)` | Done |
+
+---
+
+## 0.2 — Operational ORM + adapter foundation
+
+**Status:** shipped as **0.2.0** (see above).
 
 ---
 

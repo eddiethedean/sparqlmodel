@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 class CompareOp(str, Enum):
     EQ = "=="
     NE = "!="
+    LT = "<"
+    GT = ">"
+    LTE = "<="
+    GTE = ">="
+    IN = "in"
 
 
 @dataclass(frozen=True)
@@ -28,11 +33,29 @@ class FieldRef:
             raise AttributeError(name)
         return FieldRef(self.model_cls, name, self.path + (self.field_name,))
 
+    def _compare(self, op: CompareOp, other: object) -> CompareExpr:
+        return CompareExpr(self, op, other)
+
     def __eq__(self, other: object) -> CompareExpr:  # ty: ignore[invalid-method-override]
-        return CompareExpr(self, CompareOp.EQ, other)
+        return self._compare(CompareOp.EQ, other)
 
     def __ne__(self, other: object) -> CompareExpr:  # ty: ignore[invalid-method-override]
-        return CompareExpr(self, CompareOp.NE, other)
+        return self._compare(CompareOp.NE, other)
+
+    def __lt__(self, other: object) -> CompareExpr:
+        return self._compare(CompareOp.LT, other)
+
+    def __gt__(self, other: object) -> CompareExpr:
+        return self._compare(CompareOp.GT, other)
+
+    def __le__(self, other: object) -> CompareExpr:
+        return self._compare(CompareOp.LTE, other)
+
+    def __ge__(self, other: object) -> CompareExpr:
+        return self._compare(CompareOp.GTE, other)
+
+    def in_(self, values: tuple[object, ...]) -> CompareExpr:
+        return CompareExpr(self, CompareOp.IN, values)
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,11 @@ class CompareExpr:
             return AndExpr((self,) + other.expressions)
         return AndExpr((self, other))
 
+    def __or__(self, other: CompareExpr | OrExpr) -> OrExpr:
+        if isinstance(other, OrExpr):
+            return OrExpr((self,) + other.expressions)
+        return OrExpr((self, other))
+
 
 @dataclass(frozen=True)
 class AndExpr:
@@ -59,3 +87,20 @@ class AndExpr:
         if isinstance(other, AndExpr):
             return AndExpr(self.expressions + other.expressions)
         return AndExpr(self.expressions + (other,))
+
+    def __or__(self, other: CompareExpr | OrExpr) -> OrExpr:
+        if isinstance(other, OrExpr):
+            return OrExpr(self.expressions + other.expressions)
+        return OrExpr(self.expressions + (other,))
+
+
+@dataclass(frozen=True)
+class OrExpr:
+    """OR combination of comparison or AND expressions."""
+
+    expressions: tuple[CompareExpr | AndExpr, ...]
+
+    def __or__(self, other: CompareExpr | AndExpr | OrExpr) -> OrExpr:
+        if isinstance(other, OrExpr):
+            return OrExpr(self.expressions + other.expressions)
+        return OrExpr(self.expressions + (other,))

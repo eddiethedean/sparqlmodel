@@ -26,9 +26,9 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 ORM entry point. Binds a `Store` (default `MemoryStore`) and namespace registry.
 
 ```python
-session = SPARQLSession()
-session.put(person)
-found = session.query(Person).where(Person.name == "Odos").first()
+with SPARQLSession() as session:
+    session.put(person)
+    found = session.query(Person).where(Person.name == "Odos").first()
 ```
 
 ## Methods
@@ -36,11 +36,17 @@ found = session.query(Person).where(Person.name == "Odos").first()
 | Method | Behavior |
 |--------|----------|
 | `add(model)` | Append triples; no removal of existing subject triples |
-| `put(model)` | Remove owned subjects (cascade), then write via mapping layer |
+| `put(model, *, flush=True)` | Remove owned subjects (cascade), then write; queue when `flush=False` |
 | `delete(model)` | Remove owned triples for root + embedded composition |
 | `get(model_cls, iri, *, depth=0)` | Load one resource; optional relationship depth 0–2 |
 | `query(model_cls)` | Return `Query` builder |
 | `execute(sparql)` | Raw SELECT; auto-prefixes when configured |
+| `flush()` / `rollback_pending()` | Apply or discard pending `put` queue |
+| `close()` | Call `store.close()` when available |
+
+## Context manager
+
+On clean exit: `flush()` if the pending queue is non-empty. On exception: `rollback_pending()` when `rollback_on_error=True` (default). Always calls `close()` when `close_on_exit=True` (default). Does not undo already-flushed writes.
 
 ## Properties
 
@@ -53,8 +59,9 @@ found = session.query(Person).where(Person.name == "Odos").first()
 # Query builder
 
 ```python
-session.query(Person).where(Person.name == "Odos").all()
-session.query(Person).where(Person.works_for.name == "Acme").limit(10).first()
+with SPARQLSession() as session:
+    session.query(Person).where(Person.name == "Odos").all()
+    session.query(Person).where(Person.works_for.name == "Acme").limit(10).first()
 ```
 
 - `.where(*expr)` — `CompareExpr` or `AndExpr`
@@ -70,11 +77,14 @@ session.query(Person).where(Person.works_for.name == "Acme").limit(10).first()
 | Operator | Semantics |
 |----------|-----------|
 | `==` | Pattern match |
-| `!=` | Subject has some object for predicate ≠ RHS |
+| `!=` | Inequality filter (or `Query.use_not_exists_for_ne()` for `NOT EXISTS`) |
 | `&` | Conjoin patterns (`AndExpr` or multiple `.where`) |
+| `\|` | Disjunction via `FILTER` + `EXISTS` branches (`OrExpr`) |
+| `<`, `>`, `<=`, `>=` | Ordering on bound literal variables |
+| `.in_(tuple)` | `FILTER(?var IN (...))` |
 | `None` | Raises `QueryError` |
 
-Nested attribute paths (`Person.works_for.name`) generate join variables and related-type patterns.
+Nested attribute paths (`Person.works_for.located_in.name`) support arbitrary hop length via join variables and related-type patterns.
 
 Implementation: `compiler.py` — **SparqlModel only**; TripleModel does not compile Python filters.
 
@@ -83,8 +93,9 @@ Implementation: `compiler.py` — **SparqlModel only**; TripleModel does not com
 # Hydration
 
 ```python
-session.get(Person, iri, depth=2)
-session.query(Person).where(...).all(depth=1)
+with SPARQLSession() as session:
+    session.get(Person, iri, depth=2)
+    session.query(Person).where(...).all(depth=1)
 ```
 
 | `depth` | Loads |

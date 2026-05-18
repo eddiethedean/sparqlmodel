@@ -11,7 +11,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
 from sparqlmodel.compiler import (
-    _flatten_expressions,
+    _flatten_and_expressions,
     _format_iri,
     _format_literal,
     _format_object,
@@ -48,7 +48,7 @@ from sparqlmodel.serializers import (
 from sparqlmodel.stores.memory import MemoryStore, _term_value
 from sparqlmodel.types import IRI as IRIType
 from sparqlmodel.types import NamespaceRegistry, compact_iri, expand_iri
-from tests.models import Organization, Person
+from tests.models import Location, Organization, Person
 
 # --- compiler ---
 
@@ -85,18 +85,18 @@ def test_format_object_variants() -> None:
 def test_flatten_nested_and_expr() -> None:
     inner = AndExpr((Person.name == "A",))
     outer = AndExpr((inner,))
-    flat = _flatten_expressions((outer,))
+    flat = _flatten_and_expressions((outer,))
     assert len(flat) == 1
 
 
 def test_flatten_unsupported_and_child() -> None:
     with pytest.raises(QueryError, match="AND"):
-        _flatten_expressions((AndExpr((object(),)),))  # type: ignore[arg-type]
+        _flatten_and_expressions((AndExpr((object(),)),))  # type: ignore[arg-type]
 
 
 def test_flatten_unsupported_top_level() -> None:
     with pytest.raises(QueryError, match="WHERE"):
-        _flatten_expressions((42,))  # type: ignore[arg-type]
+        _flatten_and_expressions((42,))  # type: ignore[arg-type]
 
 
 def test_compile_unknown_relationship_path() -> None:
@@ -983,3 +983,290 @@ def test_iter_nested_walk_early_return() -> None:
     )
     nested = iter_nested_models(person)
     assert sum(1 for m in nested if isinstance(m, Organization)) == 1
+
+
+# --- 0.2 compiler / expressions / triple / fastapi ---
+
+
+def test_flatten_or_unsupported_child() -> None:
+    from sparqlmodel.compiler import _flatten_or_expressions
+    from sparqlmodel.expressions import OrExpr
+
+    with pytest.raises(QueryError, match="OR"):
+        _flatten_or_expressions(OrExpr((42,)))  # type: ignore[arg-type]
+
+    nested = OrExpr((OrExpr((Person.name == "A",)), Person.name == "B"))
+    flat = _flatten_or_expressions(nested)
+    assert len(flat) == 2
+
+
+def test_compile_or_single_branch() -> None:
+    from sparqlmodel.compiler import compile_or
+    from sparqlmodel.expressions import OrExpr
+    from sparqlmodel.types import NamespaceRegistry
+
+    registry = NamespaceRegistry(Person.get_prefixes())
+    filters = compile_or(
+        OrExpr((Person.name == "A",)),
+        Person,
+        "?person",
+        registry,
+        [0],
+    )
+    assert filters[0].startswith("FILTER(EXISTS")
+
+    and_branch = AndExpr((Person.name == "A", Person.name != "B"))
+    filters2 = compile_or(
+        OrExpr((and_branch,)),
+        Person,
+        "?person",
+        registry,
+        [0],
+    )
+    assert "EXISTS" in filters2[0]
+
+    with patch(
+        "sparqlmodel.compiler._flatten_or_expressions",
+        return_value=[42],  # type: ignore[list-item]
+    ):
+        with pytest.raises(QueryError, match="Unsupported OR branch"):
+            compile_or(OrExpr((Person.name == "A",)), Person, "?person", registry, [0])
+
+
+def test_flatten_and_nested_and() -> None:
+    inner = AndExpr((Person.name == "A",))
+    outer = AndExpr((inner, Person.name == "B"))
+    flat = _flatten_and_expressions((outer,))
+    assert len(flat) == 2
+
+    from sparqlmodel.expressions import OrExpr
+
+    with pytest.raises(QueryError, match="top-level"):
+        _flatten_and_expressions((OrExpr((Person.name == "A",)),))
+
+
+def test_resolve_compare_wrong_model() -> None:
+    from sparqlmodel.compiler import _resolve_compare_target, compile_compare
+    from sparqlmodel.types import NamespaceRegistry
+
+    registry = NamespaceRegistry(Person.get_prefixes())
+    ref = FieldRef(Organization, "name")
+    with pytest.raises(QueryError, match="does not match"):
+        _resolve_compare_target(ref, Person, "?person", registry, [0])
+    with pytest.raises(QueryError, match="does not match"):
+        compile_compare(
+            CompareExpr(ref, CompareOp.EQ, "x"),
+            Person,
+            "?person",
+            registry,
+            [0],
+        )
+    with pytest.raises(QueryError, match="FieldRef"):
+        _resolve_compare_target("not-a-ref", Person, "?person", registry, [0])  # type: ignore[arg-type]
+
+
+def test_compile_and_branch_exists() -> None:
+    from sparqlmodel.compiler import compile_and_branch
+    from sparqlmodel.types import NamespaceRegistry
+
+    registry = NamespaceRegistry(Person.get_prefixes())
+    block = compile_and_branch(
+        AndExpr((Person.name == "A", Person.name != "B")),
+        Person,
+        "?person",
+        registry,
+        [0],
+    )
+    assert block.startswith("EXISTS")
+
+
+def test_expression_or_and_in_ops() -> None:
+    from sparqlmodel.expressions import OrExpr
+
+    a = Person.name == "A"
+    b = Person.name == "B"
+    c = Person.name == "C"
+    or_ab = a | b
+    assert isinstance(or_ab, OrExpr)
+    or_abc = or_ab | c
+    assert len(or_abc.expressions) == 3
+    and_or = AndExpr((a,)) | b
+    assert isinstance(and_or, OrExpr)
+    existing = OrExpr((a,))
+    merged = b | existing
+    assert len(merged.expressions) == 2
+    or_merged = existing | OrExpr((c,))
+    assert len(or_merged.expressions) == 2
+    and_or = AndExpr((a,)) | OrExpr((b,))
+    assert isinstance(and_or, OrExpr)
+    and_merged = AndExpr((a,)) & AndExpr((b,))
+    assert len(and_merged.expressions) == 2
+    assert Person.name.in_(("x",)).op == CompareOp.IN
+    assert (Person.name < "z").op == CompareOp.LT
+    assert (Person.name > "a").op == CompareOp.GT
+    assert (Person.name <= "z").op == CompareOp.LTE
+
+
+def test_triple_adapter_coverage() -> None:
+    from sparqlmodel import _triple as triple_mod
+
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    from sparqlmodel._triple import (
+        _annotation_label,
+        _normalize_graph,
+        assert_put_graph_contract,
+        from_triplemodel,
+        to_triplemodel,
+        triple_model_class_for,
+    )
+    from sparqlmodel.graph import model_to_graph
+
+    assert _annotation_label(int) == "int"
+    assert _annotation_label(float) == "float"
+    assert _annotation_label(bool) == "bool"
+    assert _annotation_label(Person) == "_PersonTriple"
+    assert _annotation_label(object()) == "Any"
+    assert " | None" in _annotation_label(Person | None)
+    loc = Location(id=IRI("urn:loc:cov"), name="X")
+    org = Organization(id=IRI("urn:org:cov"), name="O", located_in=loc)
+    person = Person(id=IRI("urn:p:cov"), name="P", works_for=org)
+    tm = to_triplemodel(person)
+    g = model_to_graph(person)
+    restored = from_triplemodel(tm, g, sparql_cls=Person, depth=2)
+    assert restored.works_for is not None
+    assert restored.works_for.name == "O"
+    iri_only = Person(id=IRI("urn:p:iri"), name="I", works_for=IRI("urn:org:iri"))
+    to_triplemodel(iri_only)
+    shallow = from_triplemodel(tm, g, sparql_cls=Person, depth=0)
+    assert shallow.name == "P"
+
+    class _PersonStub:
+        def subject_uri(self) -> str:
+            return "urn:p:stub"
+
+        name = "Stub"
+        works_for = "urn:org:iri"
+
+    loaded = from_triplemodel(_PersonStub(), g, sparql_cls=Person, depth=1)  # type: ignore[arg-type]
+    assert isinstance(loaded.works_for, IRI)
+
+    class _OrgStubMinimal:
+        def subject_uri(self) -> str:
+            return str(org.id)
+
+        name = org.name
+
+    from_triplemodel(_OrgStubMinimal(), g, sparql_cls=Organization, depth=1)  # type: ignore[arg-type]
+
+    class _StubNullRel(_PersonStub):
+        works_for = None
+
+    from_triplemodel(_StubNullRel(), g, sparql_cls=Person, depth=1)  # type: ignore[arg-type]
+
+    class _BadRelPerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+        works_for: Organization | None = Relationship("schema:worksFor", model=Organization)
+
+    bad = _BadRelPerson(id=IRI("urn:p:bad"), name="B", works_for=org)
+    object.__setattr__(bad, "works_for", 42)
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        to_triplemodel(bad)
+
+    triple_model_class_for(Person)
+    norm = _normalize_graph(g)
+    assert norm.isomorphic(g) or len(norm) == len(g)
+
+    with patch("sparqlmodel._triple.adapter_graph", return_value=Graph()):
+        with pytest.raises(AssertionError, match="Triple set mismatch"):
+            assert_put_graph_contract(person)
+
+
+def test_triple_build_skips_fields_without_meta(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sparqlmodel import _triple as triple_mod
+
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    name_field = Person.model_fields["name"]
+
+    def fake_meta(fi: Any) -> Any:
+        if fi is name_field:
+            return None
+        return get_field_metadata(fi)
+
+    works_field = Person.model_fields["works_for"]
+
+    def fake_meta_rel(fi: Any) -> Any:
+        if fi is works_field:
+            return None
+        return get_field_metadata(fi)
+
+    monkeypatch.setattr("sparqlmodel._triple.get_field_metadata", fake_meta_rel)
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    triple_mod.triple_model_class_for(Person)
+
+    monkeypatch.setattr("sparqlmodel._triple.get_field_metadata", fake_meta)
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    triple_mod.triple_model_class_for(Person)
+
+
+def test_triple_to_triplemodel_type_error() -> None:
+    from sparqlmodel._triple import to_triplemodel
+
+    with pytest.raises(TypeError):
+        to_triplemodel("not a model")  # type: ignore[arg-type]
+
+
+def test_fastapi_import_and_graph_helpers() -> None:
+    from rdflib import Graph
+
+    from sparqlmodel.fastapi import jsonld_response, negotiated_response, turtle_response
+
+    person = Person(id=IRI("urn:p:fast"), name="Fast")
+    g = Graph()
+    g.add((URIRef("urn:p:fast"), URIRef("https://schema.org/name"), Literal("Fast")))
+    with patch.object(Graph, "serialize", return_value=b"@prefix x: <http://example/> ."):
+        t_resp = turtle_response(g)
+        assert t_resp.body == b"@prefix x: <http://example/> ."
+    j_resp = jsonld_response(person)
+    assert j_resp.media_type == "application/ld+json"
+    with patch.object(Graph, "serialize", return_value=b"{}") as mock_ser:
+        j_resp2 = jsonld_response(person)
+        mock_ser.assert_called()
+        assert j_resp2.body == b"{}"
+    req = MagicMock()
+    req.headers = {"accept": "text/plain"}
+    fallback = negotiated_response(req, person)
+    assert fallback.media_type == "text/turtle"
+
+    with patch.dict("sys.modules", {"fastapi": None}):
+        from sparqlmodel import fastapi as fastapi_mod
+
+        with pytest.raises(ImportError, match="sparqlmodel\\[fastapi\\]"):
+            fastapi_mod._require_fastapi()
+
+
+def test_model_to_triples_skips_non_cascade_embed() -> None:
+    class PersonNC(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+        works_for: Organization | None = Relationship(
+            "schema:worksFor",
+            model=Organization,
+            cascade=False,
+        )
+
+    org = Organization(id=IRI("urn:org:nc2"), name="NC")
+    person = PersonNC(id=IRI("urn:p:nc2"), name="P", works_for=org)
+    from sparqlmodel.graph import model_to_triples
+
+    triples = model_to_triples(person)
+    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    org_type = URIRef("https://schema.org/Organization")
+    assert not any(o == org_type for _s, p, o in triples if p == rdf_type)

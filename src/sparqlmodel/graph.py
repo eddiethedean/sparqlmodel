@@ -118,7 +118,8 @@ def model_to_triples(
             pred = _predicate_ref(meta.predicate, prefixes)
             obj = _subject_ref(value.ensure_id(), prefixes)
             triples.append((subject, pred, obj))
-            triples.extend(model_to_triples(value, visited=visited.copy()))
+            if meta.cascade:
+                triples.extend(model_to_triples(value, visited=visited.copy()))
         elif isinstance(value, IRI):
             pred = _predicate_ref(meta.predicate, prefixes)
             triples.append((subject, pred, _subject_ref(value, prefixes)))
@@ -158,7 +159,10 @@ def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
             return
         visited.add(iri)
         models.append(model)
-        for name, _field_info, _ in model.get_relationship_fields():
+        for name, field_info, _ in model.get_relationship_fields():
+            meta = get_field_metadata(field_info)
+            if meta is not None and not meta.cascade:
+                continue
             value = getattr(model, name, None)
             if isinstance(value, SPARQLModel):
                 walk(value)
@@ -185,7 +189,7 @@ def orphaned_embedded_targets(
 
     for name, field_info, related_cls in model.get_relationship_fields():
         meta = get_field_metadata(field_info)
-        if meta is None:
+        if meta is None or not meta.cascade:
             continue
         value = getattr(model, name, None)
         protected = set(nested_iris)
