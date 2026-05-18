@@ -17,7 +17,54 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 | Stores | Yes | No |
 | Model ↔ triples, terms, files | Integrates (retiring interim code) | Yes |
 
-[ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md)
+[ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md) · [PRODUCTION.md](PRODUCTION.md)
+
+---
+
+# Production ORM checklist (1.0 GA gate)
+
+Normative checklist for declaring SparqlModel **production-ready** (version **1.0**). See [ROADMAP.md](ROADMAP.md) for milestone versions.
+
+**Parity tiers:** **P0** = required for production HTTP/API apps; **P1** = SQLModel / [SPARQLMojo](https://pypi.org/project/sparqlmojo/) parity; **P2** = advanced RDF / ecosystem.
+
+### P0 — Production APIs
+
+- [x] `SPARQLModel`, `Field`, `Relationship`, `IRI`, Pydantic validation
+- [x] `SPARQLSession` — `add`, `put`, `delete`, `get`, `query`, `execute`, context manager
+- [x] Query filters: `==`, `!=`, `&`, `|`, ordering, `in_`, multi-hop paths; `(A & B) | C` precedence (0.2+)
+- [x] `limit`, `first`, `all` with hydration `depth` 0–2
+- [x] Identity map + `flush` / `rollback_pending` / `put(..., flush=False)`
+- [x] `MemoryStore` and `HttpStore` (documented mirror semantics)
+- [x] FastAPI `SessionDep`, `init_app`, `http_store_lifespan`
+- [ ] Session I/O via TripleModel only (`put` / `get` / hydrate) — **0.3**
+- [ ] `Query.offset(n)` — **0.5**
+- [ ] `Query.order_by(...)` — **0.5**
+- [ ] `Query.count()` — **0.5**
+- [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.5**
+- [ ] HttpStore mirror sync or remote-authoritative `get` contract — **0.7**
+- [ ] Scoped session pattern documented (FastAPI + scripts) — **0.6**
+- [ ] Threading / concurrency model documented — **0.6**
+
+### P1 — SQLModel / SPARQLMojo parity
+
+- [ ] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.6**
+- [ ] Multi-valued scalar and relationship fields — **0.8** (TripleModel + SparqlModel hydrate)
+- [ ] Language-tagged literals (`@lang`) — **0.8** (TripleModel)
+- [ ] Polymorphic queries (`rdf:type` subclasses) — **0.8**
+- [ ] HttpStore separate read/write endpoint URLs — **0.7**
+- [ ] Optional SHACL validation on `put` — **0.9**
+- [ ] Inverse / `back_populates` relationship navigation (where modeled) — **0.8**
+
+### P2 — Advanced
+
+- [ ] `session.ask(...)` or `Query.exists()` helper wrapping ASK — **1.0+**
+- [ ] CONSTRUCT / DESCRIBE helpers — **1.0+**
+- [ ] Named graph scope on session/store — **1.0+**
+- [ ] Optional async session extra — **1.0+**
+- [ ] Oxigraph or additional store backends — **1.0+**
+- [ ] SPARQL federation in query layer — future
+
+**Explicit non-goals:** OWL editor, built-in reasoner, duplicate TripleModel mapping in `graph.py`.
 
 ---
 
@@ -54,6 +101,30 @@ On clean exit: `flush()` if the pending queue is non-empty. On exception: `rollb
 - `graph` — rdflib `Graph` (`MemoryStore` graph, or `HttpStore` local mirror — not the remote dataset)
 - `namespaces` — `NamespaceRegistry` for compiler and serialization
 
+## Session lifecycle (target API)
+
+**Current (0.2):** Context manager flushes pending `put` queue on success; `rollback_pending` on error; `expire(model_cls, iri)` evicts identity and hydration cache. No `merge`, `refresh`, or `expunge`. Not thread-safe.
+
+**Target (1.0):**
+
+| Method | Behavior |
+|--------|----------|
+| `merge(model)` | Attach detached/transient instance to session; reconcile with identity map |
+| `refresh(model, *, depth=0)` | Reload from store; replace cached attributes |
+| `expunge(model)` | Remove one instance from identity map |
+| `expunge_all()` | Clear identity map and hydration cache |
+| `scoped_session(...)` | Factory for request-scoped sessions (FastAPI pattern) |
+
+**Object states (SQLAlchemy-aligned):**
+
+```text
+transient → (add|put) → pending (flush=False) → persistent (in store + identity map)
+persistent → delete → (removed from store; expunge clears session)
+persistent → expunge → detached (no session; may merge again)
+```
+
+**Threading:** One `SPARQLSession` per task/request unless documented otherwise; shared `HttpStore` requires external synchronization or single-writer discipline.
+
 ---
 
 # Query builder
@@ -64,9 +135,26 @@ with SPARQLSession() as session:
     session.query(Person).where(Person.works_for.name == "Acme").limit(10).first()
 ```
 
-- `.where(*expr)` — `CompareExpr` or `AndExpr`
+- `.where(*expr)` — `CompareExpr`, `AndExpr`, or top-level `OrExpr`
 - `.limit(n)` — non-negative integer
+- `.use_not_exists_for_ne()` — compile `!=` with `NOT EXISTS`
 - `.all(*, depth=0)` / `.first(*, depth=0)` — execute and hydrate
+
+## Query builder (target API)
+
+**Current (0.2):** As above. No `offset`, `order_by`, `count`, `distinct`, or field projection. Nested filters require related `rdf:type` in the graph.
+
+**Target (1.0):**
+
+| Method | SPARQL |
+|--------|--------|
+| `.offset(n)` | `OFFSET n` |
+| `.order_by(field, *, desc=False)` | `ORDER BY` on bound variable |
+| `.count()` | Subselect or `COUNT` pattern; returns `int` |
+| `.where(Relationship.is_(None))` / absence | `OPTIONAL` + `FILTER(!BOUND(?var))` or `NOT EXISTS` |
+| `.distinct()` | `DISTINCT` (if supported) |
+
+**Precedence:** Python `&` binds tighter than `|`; `(A & B) | C` is two disjuncts (fixed 0.2).
 
 ---
 
@@ -142,6 +230,18 @@ works_for: Organization | None = Relationship("schema:worksFor", model=Organizat
 | Embedded `SPARQLModel` | Composition — cascade on `put`/`delete` |
 | `IRI` | Reference — no cascade delete of target |
 
+## Relationships and hydration (target API)
+
+**Current (0.2):** Single object per predicate on load; `depth` 0–2 eager-loads `Relationship` fields; composition cascade on `put`/`delete`.
+
+**Target (1.0):**
+
+- `list[T]` / collection fields for multi-valued literals and IRIs (via TripleModel) — **0.8**
+- Language-tagged fields (`LangString`, multi-lang maps) — **0.8** (TripleModel)
+- Polymorphic `session.query(Base).where(...)` matching subclasses — **0.8**
+- Compiler emits `OPTIONAL` for nullable relationship paths in filters — **0.5**
+- Optional `Relationship(..., back_populates=...)` for inverse navigation — **0.8**
+
 ---
 
 # Persistence policy
@@ -197,21 +297,83 @@ SPARQL 1.1 over HTTP (`httpx`) with a **local mirror** ([`stores/http.py`](../sr
 
 External writers or SELECT-only visibility without a matching mirror update can make `get` return `None` while `execute` returns bindings. Single-writer per endpoint is assumed. If both `auth` and `bearer_token` are set, Basic auth wins.
 
+## Store protocol (target API)
+
+**Current (0.2):** [`Store`](../src/sparqlmodel/stores/base.py) — `graph`, `query(sparql)`, `update_graph(add=, remove=)`.
+
+**Target (1.0):**
+
+| Capability | Notes |
+|------------|--------|
+| `query` | SPARQL 1.1 SELECT (required) |
+| `update` | Atomic SPARQL Update sequences where endpoint supports — **0.7** |
+| `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **P2** |
+| HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **0.7** |
+| Mirror sync | GSP GET, post-query hydrate, or documented remote-authoritative mode — **0.7** |
+| Retries, timeouts, batch size limits | Production HttpStore — **0.7** |
+| `OxigraphStore` / embedded backends | Optional — **1.0+** |
+
+Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.1 Update](https://www.w3.org/TR/sparql11-update/), [Graph Store HTTP](https://www.w3.org/TR/sparql11-http-rdf-update/).
+
 ---
 
-# Known limitations (0.2.x)
+# Security (SPARQL generation)
+
+**Current (0.2):** Filter values serialized via RDFLib `Literal(...).n3()` and `URIRef(...).n3()`. IRIs with invalid characters raise `QueryError`. Predicates come from model metadata (trusted code).
+
+**Target (1.0):**
+
+- No public API that concatenates untrusted strings into SPARQL text
+- Predicates and class IRIs remain declaration-time only
+- `LIMIT` / `OFFSET` remain integer-typed at API boundary
+- Security review documented before 1.0 GA
+
+---
+
+# Known limitations
+
+### Until 0.5 (query)
 
 | Area | Behavior |
 |------|----------|
-| `HttpStore` mirror | `get` / cascade use mirror; `query` uses remote — see above |
-| Multi-valued predicates | First object per predicate on load; `add` can duplicate |
+| Pagination | `limit` only; no `offset` or `order_by` |
+| Absence / null filters | No `OPTIONAL` for nullable relationships in DSL |
+| Aggregates | No `count()` on `Query` |
+
+### Until 0.7 (HttpStore)
+
+| Area | Behavior |
+|------|----------|
+| Mirror vs remote | `get` / cascade use mirror; `query` uses remote |
+| Multi-writer endpoints | External updates invisible to mirror until sync |
+
+### Until 0.8 (mapping)
+
+| Area | Behavior |
+|------|----------|
+| Multi-valued predicates | First object per predicate on load |
+| Language tags | Not in public field API |
+| Polymorphic queries | Single `rdf_type` per model class |
+
+### Permanent constraints
+
+| Area | Behavior |
+|------|----------|
+| Composition vs reference | Embedded `SPARQLModel` cascades; `IRI` references do not |
+| Owned triples | Only declared predicates + `rdf:type` removed on `put`/`delete` |
+| `add` vs `put` | `add` does not remove stale triples |
 | `put(..., flush=False)` | Pending models not visible in `get` until flush |
-| `flush()` | Not transactional across multiple pending models; partial failure re-queues remainder |
-| Interim vs TripleModel paths | Some round-trips differ until integration completes |
+| `flush()` | Not a full remote transaction; partial failure re-queues remainder (0.2+) |
+| Sessions | Not thread-safe; one session per task unless scoped externally |
+| Interim mapping | Until 0.3, some paths use `graph.py` instead of TripleModel |
+
+### Other (current)
+
+| Area | Behavior |
+|------|----------|
 | Nested query filters | Related resource must have expected `rdf:type` |
 | JSON-LD | `model_dump_jsonld` vs `export_model(..., "json-ld")` differ |
 | Export without `id` | `ensure_id()` may assign `urn:uuid:…` |
-| Sessions | Not thread-safe; one session per task |
 
 ---
 
@@ -273,7 +435,7 @@ sparqlmodel/
   graph.py         # cascade; → sync_to_graph (retiring local convert)
   serializers.py   # → TripleModel parse/serialize (retiring)
   stores/
-  _triple.py       # adapter (planned)
+  _triple.py       # TripleModel adapter (shipped; session wiring 0.3)
 ```
 
 ---

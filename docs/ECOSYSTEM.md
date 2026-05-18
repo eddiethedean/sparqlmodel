@@ -7,7 +7,7 @@ SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** 
 TripleModel’s mirror of this contract:  
 [github.com/eddiethedean/triplemodel/docs/ECOSYSTEM.md](https://github.com/eddiethedean/triplemodel/blob/main/docs/ECOSYSTEM.md)
 
-Also: [PLAN.md](PLAN.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md)
+Also: [PLAN.md](PLAN.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md) · [PRODUCTION.md](PRODUCTION.md)
 
 ---
 
@@ -102,7 +102,8 @@ restored = Person.from_graph(g, person.subject_uri())
 | Stale literal after `put` | **TripleModel** `sync_to_graph` + **SparqlModel** cascade | `session.py`, `graph.py` |
 | Orphan embedded resource | **SparqlModel** | `cascade_subjects_for_removal` |
 | `!=` / nested filter | **SparqlModel** | `compiler.py` |
-| Multi-valued round-trip | **TripleModel** | `hydration.py` consumes |
+| Multi-valued round-trip | **TripleModel** (target **0.8**) | `hydration.py` + query compiler consume |
+| Language-tagged literals | **TripleModel** (target **0.8**) | `Field` / adapter; not SparqlModel-only |
 | New RDF format | **TripleModel** | thin wrapper in `serializers.py` |
 | Remote Fuseki | **SparqlModel** | `stores/` |
 | SHACL validation | **TripleModel** | optional `put` hook |

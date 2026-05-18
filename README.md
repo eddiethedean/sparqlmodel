@@ -165,8 +165,10 @@ print(export_model(odos, format="turtle"))
 ## Documentation
 
 - [ORM guide](docs/ORM.md) — lifecycle, cascade, hydration
-- [Technical specification](docs/SPECS.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Technical specification](docs/SPECS.md) — API spec and [production checklist](docs/SPECS.md#production-orm-checklist-10-ga-gate)
+- [Roadmap](docs/ROADMAP.md) — milestones and [SQLModel parity](docs/ROADMAP.md#sqlmodel-parity-checklist)
+- [Production guide](docs/PRODUCTION.md) — HttpStore, sessions, pagination (planned)
+- [Project plan](docs/PLAN.md) — vision and release strategy
 - [Changelog](CHANGELOG.md)
 
 ## Ecosystem

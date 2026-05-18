@@ -1,0 +1,106 @@
+# SparqlModel production guide
+
+Operator and architect guide for running SparqlModel in production. Normative API detail: [SPECS.md](SPECS.md). Feature schedule: [ROADMAP.md](ROADMAP.md).
+
+---
+
+## When to use which store
+
+| Store | Use case |
+|-------|----------|
+| **MemoryStore** | Unit tests, local prototypes, single-process tools |
+| **HttpStore** | Remote Fuseki/Jena/compatible SPARQL 1.1 endpoint |
+
+Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **0.7**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
+
+---
+
+## HttpStore mirror model (0.2)
+
+| Operation | Reads / writes |
+|-----------|----------------|
+| `put`, `delete`, `update_graph` | Remote + local mirror |
+| `query`, `execute` | **Remote only** |
+| `get`, `session.graph`, cascade | **Mirror only** |
+
+**Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation today:** `put` through the same session/store, or use `MemoryStore` for single-process apps.
+
+**Planned (0.7):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
+
+---
+
+## Session per request (FastAPI)
+
+Use one `SPARQLSession` per HTTP request — same pattern as SQLAlchemy:
+
+```python
+from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app
+
+# Lifespan registers shared HttpStore on app.state
+# Route handlers: def handler(session: SessionDep): ...
+```
+
+- Shared **store** on `app.state`; new **session** per request.
+- `close_on_exit=False` on shared stores (default via `init_app`).
+- Pending `put(..., flush=False)` is flushed on successful request end; rolled back on error.
+
+**Threading:** Do not share one `SPARQLSession` across threads. See [SPECS — Session lifecycle](SPECS.md#session-lifecycle-target-api).
+
+---
+
+## Pagination and sorting (planned 0.5)
+
+**Today:** Use `.limit(n)` only.
+
+**Target:**
+
+```python
+session.query(Person).where(...).order_by(Person.name).offset(20).limit(10).all()
+total = session.query(Person).where(...).count()
+```
+
+Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
+
+---
+
+## Identity map and caching
+
+- After `put`, `get(Model, iri, depth=0)` returns the same instance when relationships are not materialized on the in-memory object.
+- `expire(Model, iri)` clears cache for that resource.
+- `depth=0` vs `depth=1` may cache separate hydrated views.
+
+**Planned (0.6):** `refresh`, `merge`, `expunge` for explicit cache control.
+
+---
+
+## Validation and quality
+
+| Concern | Today | Planned |
+|---------|-------|---------|
+| Write validation | Pydantic on models | SHACL on `put` (**0.9**, TripleModel) |
+| Query logging | None | Structured SPARQL log (**0.9**) |
+| Bulk import | Repeated `put` | Bulk helpers (**0.9**) |
+
+---
+
+## Security
+
+- Use HTTPS for remote endpoints; configure `bearer_token` or `auth` on `HttpStore`.
+- Do not pass user-controlled strings into raw `execute()` without parameterization patterns supported by your endpoint.
+- Filter values in the query DSL are serialized via RDFLib (`Literal.n3()`, `URIRef.n3()`).
+
+---
+
+## Monitoring checklist
+
+- Log SPARQL execution time and HTTP status from `HttpStore` (custom middleware until **0.9**).
+- Alert on mirror divergence if you use both `execute` and `get` on the same dataset.
+- Track pending-queue failures after `flush()` (partial writes possible; see [SPECS limitations](SPECS.md#known-limitations)).
+
+---
+
+## Further reading
+
+- [ORM.md](ORM.md) — developer guide
+- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-10-ga-gate)
+- [ROADMAP.md — 0.5–1.0](ROADMAP.md)

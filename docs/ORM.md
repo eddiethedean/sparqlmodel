@@ -184,6 +184,21 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 
 ---
 
+## Production readiness
+
+**Today (0.2.0):** Suitable for prototypes, tests, single-process apps (`MemoryStore`), and early FastAPI services. Remote `HttpStore` requires understanding the [mirror model](SPECS.md#httpstore) (query vs `get`).
+
+**Target (1.0):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
+
+- [Production checklist](SPECS.md#production-orm-checklist-10-ga-gate) — normative P0 / P1 / P2 gates
+- [Roadmap](ROADMAP.md) — versions 0.3–1.0
+- [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
+- [Production guide](PRODUCTION.md) — deployment and HttpStore operations
+
+**Not yet available (planned):** `offset` / `order_by` / `count` on queries (0.5), `merge` / `refresh` / `expunge` (0.6), production HttpStore sync (0.7), multi-valued and language-tagged fields (0.8).
+
+---
+
 ## When not to use SparqlModel
 
 Use **TripleModel** alone when:
@@ -204,3 +219,5 @@ Use **SparqlModel** when:
 - [TripleModel docs](https://triplemodel.readthedocs.io/) — mapping, terms, files
 - [ECOSYSTEM.md](ECOSYSTEM.md) — maintainer boundaries and module retirement
 - [ROADMAP.md](ROADMAP.md) — ORM features and wiring schedule
+- [PRODUCTION.md](PRODUCTION.md) — deployment and HttpStore operations
+- [PLAN.md](PLAN.md) — product vision and parity tiers

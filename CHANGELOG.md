@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- [docs/SPECS.md](docs/SPECS.md) — production ORM checklist (P0/P1/P2), target APIs for query/session/store/relationships/security
+- [docs/ROADMAP.md](docs/ROADMAP.md) — milestones 0.5–1.0, SQLModel parity and SPARQLMojo comparison tables
+- [docs/PLAN.md](docs/PLAN.md) — production ORM definition, parity tiers, competitive positioning, release strategy
+- [docs/PRODUCTION.md](docs/PRODUCTION.md) — operator guide (HttpStore, sessions, deployment)
+- [docs/ORM.md](docs/ORM.md) — production readiness section; [README.md](README.md) doc links updated
+
 ### Fixed
 
 - **`AndExpr.__or__`** — `(A & B) | C` now compiles as (A AND B) OR C, not three disjuncts
