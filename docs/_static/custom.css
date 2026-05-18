@@ -1,0 +1,7 @@
+/* SparqlModel RTD tweaks */
+.wy-nav-content {
+  max-width: 900px;
+}
+.sd-card .sd-card-title {
+  font-size: 1.1rem;
+}

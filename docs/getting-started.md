@@ -1,21 +1,14 @@
 # Getting started
 
+A minimal path from install to your first query. For installation options and extras see {doc}`installation`.
+
 ## Install
 
 ```bash
 pip install sparqlmodel
 ```
 
-Optional extras:
-
-```bash
-pip install "sparqlmodel[http]"      # HttpStore (httpx)
-pip install "sparqlmodel[fastapi]"   # FastAPI session + RDF responses
-```
-
-Requires **Python 3.10+**.
-
-## Quickstart
+## Define models
 
 ```python
 from sparqlmodel import Field, IRI, Relationship, SPARQLModel, SPARQLSession
@@ -36,7 +29,11 @@ class Person(SPARQLModel):
     works_for: Organization | None = Relationship(
         "schema:worksFor", model=Organization
     )
+```
 
+## Persist and query
+
+```python
 acme = Organization(id=IRI("urn:org:acme"), name="Acme Corp")
 odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
 
@@ -48,30 +45,21 @@ with SPARQLSession() as session:
     full = session.get(Person, odos.id, depth=1)
 ```
 
-## Query example
-
-```python
-with SPARQLSession() as session:
-    session.query(Person).where(Person.name == "Odos").all()
-    session.query(Person).where(
-        (Person.name == "Odos") | (Person.name == "Ada")
-    ).all()
-    session.query(Person).where(Person.name.in_(("Odos", "Ada"))).limit(10).all()
+```{important}
+Use `put()` for upserts (cascade + orphan cleanup). Use `add()` only when you will not overwrite existing subject data.
 ```
 
-## Remote store
+## What's next
 
-```python
-from sparqlmodel import HttpStore, SPARQLSession
+| Guide | Topics |
+|-------|--------|
+| {doc}`guides/sessions` | Flush queue, stores, identity map, composition |
+| {doc}`guides/queries` | Boolean filters, `!=`, limits, raw SPARQL |
 
-with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
-    session.put(odos)
-```
-
-See {doc}`PRODUCTION` for HttpStore mirror semantics and deployment.
-
-## Next steps
-
-- {doc}`ORM` — session lifecycle, cascade, hydration
-- {doc}`SPECS` — technical specification
-- {doc}`api/index` — Python API reference
+| Topic | Document |
+|-------|----------|
+| Full ORM concepts | {doc}`ORM` |
+| HttpStore / deployment | {doc}`PRODUCTION` |
+| FastAPI | {doc}`guides/fastapi` |
+| Python API | {doc}`api/index` |
+| Problems | {doc}`troubleshooting` |

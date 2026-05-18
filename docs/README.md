@@ -14,22 +14,20 @@ make html
 open _build/html/index.html
 ```
 
-Or without make:
-
-```bash
-sphinx-build -W -b html docs docs/_build/html
-```
+Builds run with **warnings as errors** (`SPHINXOPTS=-W` in the Makefile).
 
 ## Read the Docs
 
-Configuration: [`.readthedocs.yaml`](../.readthedocs.yaml)
+- Config: [`.readthedocs.yaml`](../.readthedocs.yaml)
+- Import repo: `https://github.com/eddiethedean/sqarqlmodel` (note spelling: **sqarqlmodel**)
+- Default version: **latest** (tracks `main`)
+- `fail_on_warning: true` — must match local `make html`
 
-Import the project on [Read the Docs](https://readthedocs.org/) and point it at this repository. The default Sphinx config path `docs/conf.py` is detected automatically.
+## Site structure
 
-Suggested settings:
-
-- **Documentation type:** Sphinx HTML
-- **Python version:** 3.12
-- **Canonical URL:** `https://sparqlmodel.readthedocs.io/`
-
-After the first successful build, set the **Documentation** URL in `pyproject.toml` to your RTD site.
+| Section | Sources |
+|---------|---------|
+| Get started | `installation.md`, `getting-started.md` |
+| Guides | `guides/`, `ORM.md`, `PRODUCTION.md`, `ECOSYSTEM.md` |
+| Reference | `SPECS.md`, `api/`, `glossary.md`, `troubleshooting.md` |
+| Project | `ROADMAP.md`, `PLAN.md`, `changelog.md` |

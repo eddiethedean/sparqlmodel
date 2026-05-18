@@ -1,6 +1,6 @@
 # SparqlModel production guide
 
-Operator and architect guide for running SparqlModel in production. Normative API detail: [SPECS.md](SPECS.md). Feature schedule: [ROADMAP.md](ROADMAP.md).
+Operator and architect guide for running SparqlModel in production. Normative API detail: {doc}`SPECS`. Feature schedule: {doc}`ROADMAP`. Task guides: {doc}`guides/fastapi`, {doc}`guides/sessions`.
 
 ---
 

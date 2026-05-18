@@ -4,7 +4,7 @@
 
 This guide is for **application developers**. SparqlModel is the ORM; **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`, installed automatically) is the mapping engine underneath.
 
-Related: [SPECS.md](SPECS.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md)
+Related: {doc}`guides/index` · {doc}`SPECS` · {doc}`ECOSYSTEM` · {doc}`ROADMAP` · {doc}`troubleshooting`
 
 ---
 
