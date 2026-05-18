@@ -1,4 +1,8 @@
-"""SPARQL-native object graph mapper for RDF triple stores."""
+"""SparqlModel — SPARQL ORM for RDF triple stores.
+
+The SQLModel of SPARQL: typed models, :class:`~sparqlmodel.session.SPARQLSession`
+as the main entry point, and Python queries that compile to SPARQL.
+"""
 
 from sparqlmodel._version import __version__
 from sparqlmodel.exceptions import ConfigurationError, HydrationError, QueryError, SparqlModelError

@@ -1,11 +1,30 @@
-# SparqlModel + TripleModel ecosystem
+# SparqlModel (ORM) and TripleModel (mapping)
 
-How **SparqlModel** (`sparqlmodel`) and **TripleModel** (`triplemodel`) divide responsibility in the Python RDF stack.
+How **SparqlModel** (`sparqlmodel`) — the **SPARQL ORM** — and **TripleModel** (`triplemodel`) — the **mapping substrate** — divide responsibility in the Python RDF stack.
 
-Aligned docs in this repo: [PLAN.md](PLAN.md), [ROADMAP.md](ROADMAP.md), [SPECS.md](SPECS.md), [README.md](../README.md).
+User guide: [ORM.md](ORM.md) · Aligned docs: [PLAN.md](PLAN.md), [ROADMAP.md](ROADMAP.md), [SPECS.md](SPECS.md), [README.md](../README.md)
 
 The two-sided maintainer guide also lives in the TripleModel repo:  
 [docs/ECOSYSTEM.md](https://github.com/eddiethedean/triplemodel/blob/main/docs/ECOSYSTEM.md)
+
+---
+
+## Choose your package
+
+| I need… | Use |
+|---------|-----|
+| CRUD, queries, cascade in an app | **SparqlModel** (`SPARQLSession`) |
+| Python `where(Model.field == x)` → SPARQL | **SparqlModel** |
+| Remote SPARQL, identity map, FastAPI (roadmap) | **SparqlModel** |
+| Stateless `to_graph()` / `from_graph()` or file I/O | **[TripleModel](https://github.com/eddiethedean/triplemodel)** |
+| ETL, libraries, tests without a session | **TripleModel** |
+
+| | SparqlModel | TripleModel |
+|---|-------------|-------------|
+| **Metaphor** | SQLModel / SQLAlchemy ORM | SQLAlchemy Core / serde layer |
+| **Question** | “How do I run an app on a graph?” | “How do I turn objects into correct triples?” |
+| **Entry point** | `SPARQLSession()` | `model.to_graph()` / `parse()` |
+| **State** | Stateful session | Stateless |
 
 ---
 
@@ -13,13 +32,13 @@ The two-sided maintainer guide also lives in the TripleModel repo:
 
 ```text
 ┌──────────────────────────────────────────┐
-│  SparqlModel                             │
+│  SparqlModel (ORM)                       │
 │  Session · Query · Compiler · Stores       │
 └────────────────────┬─────────────────────┘
                      │  triplemodel (from SparqlModel 0.3)
 ┌────────────────────▼─────────────────────┐
-│  TripleModel                             │
-│  Mapping · terms · parse/serialize       │
+│  TripleModel (mapping substrate)         │
+│  Terms · sync · parse/serialize          │
 └────────────────────┬─────────────────────┘
                      │
 ┌────────────────────▼─────────────────────┐
@@ -35,9 +54,9 @@ The two-sided maintainer guide also lives in the TripleModel repo:
 
 ---
 
-## SparqlModel
+## SparqlModel (ORM)
 
-**Tagline:** SPARQL-native object graph mapper for RDF triple stores.
+**Tagline:** **SparqlModel — the SQLModel of SPARQL.**
 
 **Question it answers:** “How do I run an app with CRUD, filters, and updates over RDF?”
 
@@ -55,7 +74,7 @@ The two-sided maintainer guide also lives in the TripleModel repo:
 
 ---
 
-## TripleModel
+## TripleModel (mapping substrate)
 
 **Tagline:** Pydantic models ↔ RDF graphs (library-first, stateless).
 
@@ -67,13 +86,13 @@ The two-sided maintainer guide also lives in the TripleModel repo:
 | `RdfConfig` / `rdf_config()` | `namespace`, `type_uri`, `id_field` |
 | `to_graph`, `sync_to_graph`, `from_graph` | Stateless round-trip |
 | Terms | `python_to_term`, `term_to_python` |
-| Files | `parse` / `serialize` (roadmap 0.4) |
+| Files | `parse` / `serialize` |
 | rdflib matrix | Namespaces, Dataset, etc. ([ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md)) |
 
-**Users:** ETL, libraries, tests — and SparqlModel for all model ↔ triple conversion from 0.3 onward.
+**Users:** ETL, libraries, tests — and SparqlModel for model ↔ triple conversion from 0.3 onward.
 
 ```python
-# TripleModel (stateless) — use directly when you do not need a session
+# TripleModel — use directly when you do not need a session
 person = Person(slug="alice", name="Alice")
 g = person.to_graph()
 restored = Person.from_graph(g, person.subject_uri())
@@ -96,13 +115,15 @@ restored = Person.from_graph(g, person.subject_uri())
 | Remote Fuseki endpoint | **SparqlModel** | `stores/` |
 | SHACL on save | **TripleModel** optional extra | optional hook on `session.put` |
 
-**Heuristic:** if the fix would help code that never creates a `SPARQLSession`, it belongs in **TripleModel**.
+### Maintainer heuristic
+
+If the fix would help code that **never** creates a `SPARQLSession`, it belongs in **TripleModel**.
 
 ---
 
-## Interim 0.1.x mapping
+## Maintainer: interim 0.1.x mapper
 
-SparqlModel **0.1.x** ships before the declared `triplemodel` dependency. Model ↔ triple conversion lives in `graph.py`, `fields.py`, and related modules using the same boundaries TripleModel will own from 0.3 onward.
+SparqlModel **0.1.x** ships before the declared `triplemodel` dependency. Model ↔ triple conversion temporarily lives in `graph.py`, `fields.py`, and related modules. This is an **implementation detail** — SparqlModel is still an ORM; users start with `SPARQLSession`, not `model_to_graph`.
 
 | SparqlModel module | TripleModel responsibility (from 0.3) | 0.3+ plan |
 |--------------------|---------------------------------------|-----------|
@@ -110,7 +131,7 @@ SparqlModel **0.1.x** ships before the declared `triplemodel` dependency. Model 
 | `fields.py` | `rdf_field`, predicate metadata | Adapter; keep `Field("curie")` UX |
 | `types.py` (`IRI`, prefixes) | namespaces, subject IRIs | Keep `IRI`; expand via TripleModel |
 | `serializers.py` | `parse` / `serialize` | Delegate (0.4+) |
-| `hydration.py` | `from_graph` | Load via TripleModel; add depth here |
+| `hydration.py` | `from_graph` | Load via TripleModel; keep depth in ORM |
 | `compiler.py` | — | SparqlModel only |
 | `session.py`, `query.py`, `stores/*` | — | SparqlModel only |
 
@@ -120,10 +141,10 @@ Do **not** add new format parsers or datatype registries to `graph.py` — add t
 
 ## Public API mapping
 
-SparqlModel keeps a SQLModel-style surface. Internally, 0.3+ calls TripleModel.
+SparqlModel keeps a SQLModel-style ORM surface. Internally, 0.3+ calls TripleModel.
 
-| SparqlModel (public) | TripleModel (internal) |
-|----------------------|------------------------|
+| SparqlModel (public ORM) | TripleModel (internal) |
+|--------------------------|------------------------|
 | `SPARQLModel` | Compose or subclass `TripleModel` |
 | `rdf_type = "schema:Person"` | `type_uri` via `rdf_config()` |
 | `Field("schema:name")` | `rdf_field` / `Predicate` |
@@ -146,7 +167,7 @@ Declare `dependencies = ["triplemodel>=X"]` when TripleModel provides:
 | **0.4** | 0.4 — delegate `serializers.py`; parse/serialize in examples |
 | **0.5** | named graphs / `@graph` if models need Dataset |
 
-**Always SparqlModel:** `compiler.py`, `query.py`, cascade rules, `HttpStore`, FastAPI, identity map.
+**Always SparqlModel (ORM):** `compiler.py`, `query.py`, cascade rules, `HttpStore`, FastAPI, identity map.
 
 Track: [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md)
 
@@ -155,7 +176,7 @@ Track: [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/ma
 ## Integration path (0.2 → 0.3)
 
 1. **0.2 dev** — `pip install -e ../triplemodel`; prototype `sparqlmodel/_triple.py` (`SPARQLModel` ↔ `TripleModel`).
-2. **0.3** — wire `model_to_graph` / load through TripleModel; keep `put`/`delete` in `session.py`.
+2. **0.3** — wire `model_to_graph` / load through TripleModel; keep `put`/`delete` cascade in `session.py`; **public ORM API unchanged**.
 3. **Tests** — contract tests: TripleModel round-trip matches SparqlModel 0.1.x graph output for core models.
 4. **Release** — `sparqlmodel` depends on `triplemodel>=0.2,<0.3` (adjust to actual releases).
 5. **0.4** — thin `serializers.py`; delete interim term code from `graph.py`.
@@ -192,8 +213,9 @@ SQLAlchemy / BerkeleyDB stay in TripleModel store extras, not SparqlModel core.
 
 | Document | Audience |
 |----------|----------|
-| SparqlModel README | App developers (session, query) |
-| SparqlModel SPECS / ROADMAP / PLAN | SparqlModel releases |
+| [ORM.md](ORM.md) | App developers (ORM guide) |
+| SparqlModel README | Quickstart and install |
+| SparqlModel SPECS / ROADMAP / PLAN | Releases and architecture |
 | TripleModel README | Mapping and files |
 | TripleModel ECOSYSTEM | Both maintainers |
 | **This file** | SparqlModel maintainers |
@@ -207,6 +229,7 @@ SQLAlchemy / BerkeleyDB stay in TripleModel store extras, not SparqlModel core.
 - Session or query-compiler code in TripleModel
 - `triplemodel` dependency before TripleModel 0.2 sync/remove and nested models exist
 - `triplemodel` importing `sparqlmodel`
+- Positioning SparqlModel as “another mapper” instead of an ORM
 
 ---
 
@@ -214,7 +237,7 @@ SQLAlchemy / BerkeleyDB stay in TripleModel store extras, not SparqlModel core.
 
 | | TripleModel | SparqlModel |
 |---|-------------|-------------|
-| **Metaphor** | Schema + serialization | Session + query language |
+| **Metaphor** | SQLAlchemy Core / serde | SQLModel / SQLAlchemy ORM |
 | **State** | Stateless | Stateful |
 | **Killer feature** | Correct triples from Pydantic | `where(Model.field == x)` |
 | **Grow here** | Terms, files, Dataset | Compiler, stores, cascade, FastAPI |

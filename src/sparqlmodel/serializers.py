@@ -1,4 +1,4 @@
-"""RDF and JSON-LD serialization."""
+"""Optional RDF export helpers; not required for ORM usage (``SPARQLSession``)."""
 
 from __future__ import annotations
 

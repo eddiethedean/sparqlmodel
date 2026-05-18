@@ -1,44 +1,55 @@
 # SparqlModel Roadmap
 
-Shipped work, upcoming releases, and how they align with [TripleModel](https://github.com/eddiethedean/triplemodel).
+ORM-focused releases and TripleModel integration. SparqlModel is **the SQLModel of SPARQL** — sessions, queries, stores, and persistence policy. Mapping and file I/O delegate to [TripleModel](https://github.com/eddiethedean/triplemodel).
 
-- Implementation detail: [SPECS.md](SPECS.md)
-- Vision and architecture: [PLAN.md](PLAN.md)
-- Package boundaries: [ECOSYSTEM.md](ECOSYSTEM.md)
+- [ORM guide](ORM.md) — user-facing
+- [SPECS.md](SPECS.md) — technical spec
+- [PLAN.md](PLAN.md) — vision
+- [ECOSYSTEM.md](ECOSYSTEM.md) — package boundaries
 
 **Ecosystem rule:** mapping and file I/O live in TripleModel; session, SPARQL compilation, stores, and cascade policy live in SparqlModel.
 
 ---
 
+## ORM north star
+
+**Shipped (0.1.x):** session CRUD, query DSL, SPARQL compiler, hydration depth, cascade on `put`/`delete`, in-memory store.
+
+**Planned ORM (0.2+):** HTTP SPARQL store, identity map, session cache, richer query compiler, FastAPI extra.
+
+**Integration (0.3+):** delegate mapping to TripleModel; **public ORM API unchanged** (`SPARQLSession`, `Field`, `Relationship`, query DSL).
+
+---
+
 ## Shipped (0.1.x)
 
-| Area | Status |
-|------|--------|
+| ORM area | Status |
+|----------|--------|
+| `SPARQLSession` CRUD (`add`, `put`, `delete`, `get`, `query`) | Done |
 | `SPARQLModel`, `Field`, `Relationship`, `IRI` | Done |
-| `SPARQLSession` CRUD (`add`, `put`, `delete`, `get`) | Done |
 | In-memory `MemoryStore` (RDFLib) | Done |
 | Query builder (`where`, `all`, `first`, `limit`) | Done |
 | SPARQL compiler (`==`, `!=`, `&`, single-hop nested filters) | Done |
 | Hydration (`depth` 0–2) | Done |
-| RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) | Done (interim; delegate 0.4+) |
 | Cascade ownership on `put`/`delete` | Done (0.1.2) |
+| Optional RDF export (interim serializers) | Done (delegate 0.4+) |
 | CI (pytest, ruff, ty, coverage ≥85%) | Done |
-| Interim model ↔ triple mapping in `graph.py` | Done (replaced by TripleModel in 0.3) |
+| Interim mapper in `graph.py` | Done (delegate TripleModel 0.3) |
 
 ---
 
-## 0.2 — Operational persistence
+## 0.2 — Operational ORM
 
 Real triple stores and API workloads. **`triplemodel` not yet a declared dependency** — develop against `pip install -e ../triplemodel`.
 
-### Remote SPARQL store
+### Stores
 
 - [ ] `HttpStore` — SPARQL 1.1 over HTTP (`httpx`)
 - [ ] `SELECT` and `UPDATE` against remote endpoints
 - [ ] `SPARQLSession` accepts any `Store` implementation
 - [ ] Authentication (basic, bearer)
 
-### Session & performance
+### Session and performance
 
 - [ ] Identity map (one instance per IRI per session)
 - [ ] Session cache for `get` / query hydration
@@ -71,9 +82,9 @@ Real triple stores and API workloads. **`triplemodel` not yet a declared depende
 
 ---
 
-## 0.3 — TripleModel integration
+## 0.3 — Delegate mapping; ORM surface unchanged
 
-Single mapping path through TripleModel; public SparqlModel API unchanged.
+Single mapping path through TripleModel. **Public SparqlModel ORM API unchanged** — same `SPARQLSession`, `Field`, `Relationship`, query DSL.
 
 **Requires:** `triplemodel>=0.2` when upstream ships sync/remove, namespace bind, nested embeds, and multi-value.
 
@@ -84,36 +95,29 @@ Single mapping path through TripleModel; public SparqlModel API unchanged.
 - [ ] Field adapter: `Field("curie")` / `Relationship` over `rdf_field` / `Predicate`
 - [ ] Contract tests vs SparqlModel 0.1.x graph output
 - [ ] Remove interim term conversion from `graph.py`
-- [ ] README + CHANGELOG
+- [ ] README + CHANGELOG (ORM positioning)
 
-### In TripleModel (consume in SparqlModel)
+### Consume from TripleModel
 
-| Feature | TripleModel | SparqlModel |
-|---------|-------------|-------------|
+| Feature | TripleModel | SparqlModel ORM |
+|---------|-------------|-----------------|
 | Multi-valued `list[T]` | implements | hydration + query |
 | XSD / literals | implements | stop local converters |
 | Subject IRI safety | implements | — |
-| Duplicate predicate detection | implements | — |
 | Blank nodes / RDF lists | 0.3 | align cascade keys |
 
-### SparqlModel-only
+### SparqlModel-only (ORM)
 
 - [ ] `resolve_related_model` for unions / `ForwardRef`
 - [ ] Narrow `HydrationError` scope
 - [ ] Optional strict `IRI` validation
 - [ ] Optional `put` hook via `triplemodel[shacl]`
 
-### Later (TripleModel 0.4+)
-
-- [ ] Delegate `export_model` → `to_graph().serialize(...)`
-- [ ] Named graphs when TripleModel 0.5 has `Dataset`
-- [ ] SHACL shape generation in TripleModel; SparqlModel may validate on `put`
-
 ---
 
 ## 0.4 — File I/O via TripleModel
 
-Thin `serializers.py`; SparqlModel focuses on session and SPARQL.
+Delegate serializers; SparqlModel stays **session + SPARQL ORM**.
 
 **Requires:** `triplemodel>=0.4` for `parse` / `serialize`.
 
@@ -121,7 +125,7 @@ Thin `serializers.py`; SparqlModel focuses on session and SPARQL.
 - [ ] Named graphs on fields when TripleModel 0.5 supports Dataset
 - [ ] Blank node strategy aligned with TripleModel
 
-**Still SparqlModel:** compiler, query, stores, cascade, FastAPI polish.
+**Still SparqlModel:** compiler, query, stores, cascade, FastAPI.
 
 ---
 
@@ -155,9 +159,9 @@ Thin `serializers.py`; SparqlModel focuses on session and SPARQL.
 
 ## Priorities
 
-1. Operational features (HTTP store, FastAPI) before niche RDF tooling.
+1. ORM operational features (HTTP store, identity map, FastAPI) before niche RDF tooling.
 2. Mapping and files in TripleModel first.
-3. Explicit, documented semantics for cascade and filters.
+3. Explicit, documented ORM semantics for cascade and filters ([ORM.md](ORM.md)).
 4. Stable `SPARQLModel` / `Field` / `session.put` public API.
 5. Heavy deps as extras only.
 
@@ -165,7 +169,8 @@ Thin `serializers.py`; SparqlModel focuses on session and SPARQL.
 
 ## Contributing
 
-1. [ECOSYSTEM.md — Where to implement](ECOSYSTEM.md#where-to-implement-a-change)
-2. Match a roadmap section; add CHANGELOG under next release.
-3. Discuss 0.5+ large items in an issue first.
-4. Drop SparqlModel tests that only duplicate a TripleModel mapping fix.
+1. [ORM.md](ORM.md) — what belongs in the ORM
+2. [ECOSYSTEM.md — Where to implement](ECOSYSTEM.md#where-to-implement-a-change)
+3. Match a roadmap section; add CHANGELOG under next release.
+4. Discuss 0.5+ large items in an issue first.
+5. Drop SparqlModel tests that only duplicate a TripleModel mapping fix.

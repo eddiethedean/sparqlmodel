@@ -1,4 +1,4 @@
-"""Query builder for SPARQLModel."""
+"""ORM query builder; compiles Python filters to SPARQL."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class Query:
-    """Fluent query builder for a SPARQLModel class."""
+    """ORM query builder for a :class:`~sparqlmodel.model.SPARQLModel` class."""
 
     def __init__(
         self,

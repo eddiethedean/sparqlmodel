@@ -1,4 +1,4 @@
-"""Model ↔ RDF graph conversion."""
+"""ORM persistence policy (cascade, orphans); mapping delegates to TripleModel in 0.3+."""
 
 from __future__ import annotations
 

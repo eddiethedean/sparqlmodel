@@ -1,4 +1,4 @@
-"""Hydrate SPARQL query results into typed models."""
+"""ORM eager-load: hydrate query results and ``get`` by relationship depth."""
 
 from __future__ import annotations
 

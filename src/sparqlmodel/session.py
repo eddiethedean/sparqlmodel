@@ -1,4 +1,4 @@
-"""SPARQLSession persistence layer."""
+"""ORM unit of work over a graph store (:class:`SPARQLSession`)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from sparqlmodel.types import IRI, NamespaceRegistry
 
 
 class SPARQLSession:
-    """Primary persistence and query interface."""
+    """ORM session: CRUD, queries, and graph sync with the backing store."""
 
     def __init__(
         self,

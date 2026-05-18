@@ -1,4 +1,4 @@
-"""SPARQLModel base class."""
+"""ORM entity base class (:class:`SPARQLModel`); use with :class:`~sparqlmodel.session.SPARQLSession`."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class SPARQLModelMetaclass(ModelMetaclass):
 
 
 class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
-    """Base class for RDF-backed Pydantic models."""
+    """ORM entity mapped to RDF; persist and query via :class:`~sparqlmodel.session.SPARQLSession`."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 

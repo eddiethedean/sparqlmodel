@@ -1,4 +1,4 @@
-"""Python expression → SPARQL compiler."""
+"""ORM filter expressions → SPARQL WHERE clauses."""
 
 from __future__ import annotations
 

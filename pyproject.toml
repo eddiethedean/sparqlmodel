@@ -5,16 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "sparqlmodel"
 version = "0.1.4"
-description = "SPARQL-native object graph mapper for RDF triple stores"
+description = "SPARQL ORM for Python — sessions, queries, and graph persistence on RDF stores"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "SparqlModel Contributors" }]
-keywords = ["sparql", "rdf", "orm", "pydantic", "knowledge-graph"]
+keywords = ["sparql", "rdf", "orm", "sparql-orm", "session", "pydantic", "knowledge-graph"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Topic :: Database :: Front-Ends",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

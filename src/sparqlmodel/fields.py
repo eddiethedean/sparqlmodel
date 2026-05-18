@@ -1,4 +1,4 @@
-"""SPARQL field and relationship definitions."""
+"""ORM field and relationship definitions for :class:`~sparqlmodel.model.SPARQLModel`."""
 
 from __future__ import annotations
 
