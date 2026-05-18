@@ -44,11 +44,18 @@ dev = [
     "httpx>=0.27",
     "fastapi>=0.100",
 ]
+docs = [
+    "sphinx>=7.0,<9",
+    "sphinx-rtd-theme>=2.0,<4",
+    "myst-parser>=3.0,<5",
+    "httpx>=0.27",
+    "fastapi>=0.100",
+]
 
 [project.urls]
 Homepage = "https://github.com/eddiethedean/sqarqlmodel"
 Repository = "https://github.com/eddiethedean/sqarqlmodel"
-Documentation = "https://github.com/eddiethedean/sqarqlmodel#readme"
+Documentation = "https://sparqlmodel.readthedocs.io/en/latest/"
 Changelog = "https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]

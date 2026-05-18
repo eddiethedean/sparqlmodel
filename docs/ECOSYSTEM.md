@@ -2,7 +2,7 @@
 
 SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** (`triplemodel>=0.9.0,<2`). This document defines boundaries for contributors and maintainers of both packages.
 
-**Users:** start with [ORM.md](ORM.md) and the [README](../README.md).
+**Users:** start with [ORM.md](ORM.md) and the [README](https://github.com/eddiethedean/sqarqlmodel/blob/main/README.md).
 
 TripleModel’s mirror of this contract:  
 [github.com/eddiethedean/triplemodel/docs/ECOSYSTEM.md](https://github.com/eddiethedean/triplemodel/blob/main/docs/ECOSYSTEM.md)
@@ -146,11 +146,10 @@ SparqlModel keeps a stable SQLModel-style surface:
 
 ## Dependency pin
 
-```toml
+```text
 # pyproject.toml (SparqlModel)
 dependencies = [
     "triplemodel>=0.9.0,<2",
-    ...
 ]
 ```
 

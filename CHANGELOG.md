@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `SPARQLSession` accepts any `Store` implementation (not only `MemoryStore`)
-- Pluggable `Store` protocol documented in [docs/SPECS.md](docs/SPECS.md)
+- Pluggable `Store` protocol documented in [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md)
 
 ### Fixed
 
@@ -35,9 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- [docs/ROADMAP.md](docs/ROADMAP.md) — **Shipped (0.2.0)**; milestones 0.3–1.0 and SQLModel / SPARQLMojo parity tables
-- [docs/ORM.md](docs/ORM.md), [docs/SPECS.md](docs/SPECS.md), [README.md](README.md) — HttpStore mirror, session flush/identity map, compiler ops, FastAPI extra, known limitations
-- [docs/PLAN.md](docs/PLAN.md), [docs/PRODUCTION.md](docs/PRODUCTION.md) — production ORM vision, checklist (P0/P1/P2), operator guide
+- [ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) — **Shipped (0.2.0)**; milestones 0.3–1.0 and SQLModel / SPARQLMojo parity tables
+- [ORM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md), [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md), [README](https://github.com/eddiethedean/sqarqlmodel/blob/main/README.md) — HttpStore mirror, session flush/identity map, compiler ops, FastAPI extra, known limitations
+- [PLAN](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md), [PRODUCTION](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) — production ORM vision, checklist (P0/P1/P2), operator guide
 - `expire(Model, iri)` signature; repository URLs in `pyproject.toml`
 
 ## [0.1.4] - 2026-05-16
@@ -53,8 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - Reposition SparqlModel as a **session-first SPARQL ORM** (the SQLModel of SPARQL) across README and docs
-- Add [docs/ORM.md](docs/ORM.md) — ORM guide (lifecycle, cascade, query DSL, hydration, package choice)
-- Reframe [docs/PLAN.md](docs/PLAN.md), [docs/SPECS.md](docs/SPECS.md), [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md), and [docs/ROADMAP.md](docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
+- Add [ORM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) — ORM guide (lifecycle, cascade, query DSL, hydration, package choice)
+- Reframe [PLAN](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md), [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md), [ECOSYSTEM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ECOSYSTEM.md), and [ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
 - Rewrite all docs for **`triplemodel>=0.9` as required mapping engine**; integration roadmap focuses on wiring, not adding the dependency
 - Update package metadata and module docstrings for ORM framing
 

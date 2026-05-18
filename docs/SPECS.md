@@ -27,7 +27,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 
 **Parity tiers:** **P0** = required for production HTTP/API apps; **P1** = SQLModel / [SPARQLMojo](https://pypi.org/project/sparqlmojo/) parity; **P2** = advanced RDF / ecosystem.
 
-### P0 — Production APIs
+## P0 — Production APIs
 
 - [x] `SPARQLModel`, `Field`, `Relationship`, `IRI`, Pydantic validation
 - [x] `SPARQLSession` — `add`, `put`, `delete`, `get`, `query`, `execute`, context manager
@@ -45,7 +45,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [ ] Scoped session pattern documented (FastAPI + scripts) — **0.6**
 - [ ] Threading / concurrency model documented — **0.6**
 
-### P1 — SQLModel / SPARQLMojo parity
+## P1 — SQLModel / SPARQLMojo parity
 
 - [ ] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.6**
 - [ ] Multi-valued scalar and relationship fields — **0.8** (TripleModel + SparqlModel hydrate)
@@ -55,7 +55,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [ ] Optional SHACL validation on `put` — **0.9**
 - [ ] Inverse / `back_populates` relationship navigation (where modeled) — **0.8**
 
-### P2 — Advanced
+## P2 — Advanced
 
 - [ ] `session.ask(...)` or `Query.exists()` helper wrapping ASK — **1.0+**
 - [ ] CONSTRUCT / DESCRIBE helpers — **1.0+**
@@ -332,7 +332,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 # Known limitations
 
-### Until 0.5 (query)
+## Until 0.5 (query)
 
 | Area | Behavior |
 |------|----------|
@@ -340,14 +340,14 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 | Absence / null filters | No `OPTIONAL` for nullable relationships in DSL |
 | Aggregates | No `count()` on `Query` |
 
-### Until 0.7 (HttpStore)
+## Until 0.7 (HttpStore)
 
 | Area | Behavior |
 |------|----------|
 | Mirror vs remote | `get` / cascade use mirror; `query` uses remote |
 | Multi-writer endpoints | External updates invisible to mirror until sync |
 
-### Until 0.8 (mapping)
+## Until 0.8 (mapping)
 
 | Area | Behavior |
 |------|----------|
@@ -355,7 +355,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 | Language tags | Not in public field API |
 | Polymorphic queries | Single `rdf_type` per model class |
 
-### Permanent constraints
+## Permanent constraints
 
 | Area | Behavior |
 |------|----------|
@@ -367,7 +367,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 | Sessions | Not thread-safe; one session per task unless scoped externally |
 | Interim mapping | Until 0.3, some paths use `graph.py` instead of TripleModel |
 
-### Other (current)
+## Other (current)
 
 | Area | Behavior |
 |------|----------|

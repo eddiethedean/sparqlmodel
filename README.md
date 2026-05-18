@@ -1,10 +1,30 @@
 # SparqlModel
 
-**SparqlModel — the SQLModel of SPARQL:** typed RDF models, a persistent session, and Python filters that compile to SPARQL.
+[![PyPI version](https://img.shields.io/pypi/v/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
+[![Python](https://img.shields.io/pypi/pyversions/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
+[![Documentation](https://readthedocs.org/projects/sparqlmodel/badge/?version=latest)](https://sparqlmodel.readthedocs.io/en/latest/?badge=latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE)
 
-**Release:** [0.2.0](CHANGELOG.md#020---2026-05-18) · [Changelog](CHANGELOG.md)
+**The SQLModel of SPARQL** — typed RDF models, a persistent session, and Python filters that compile to SPARQL.
 
-Define `SPARQLModel` classes, use `with SPARQLSession() as session:`, and work with graphs the way you would with a SQL ORM: `put` and `get`, nested relationships, a query builder, and optional remote stores.
+Build knowledge-graph and metadata apps with Pydantic models, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints.
+
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) for RDF mapping · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#020---2026-05-18) (0.2.0)
+
+---
+
+## Features
+
+| Area | What you get |
+|------|----------------|
+| **Models** | `SPARQLModel`, `Field`, `Relationship`, `IRI` — Pydantic validation + `rdf_type` |
+| **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue |
+| **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, ordering, multi-hop) |
+| **Stores** | `MemoryStore` (default), `HttpStore` for Fuseki/Jena-style endpoints |
+| **FastAPI** | `SessionDep`, `http_store_lifespan`, Turtle/JSON-LD responses |
+| **Cascade** | Composition on `put`/`delete`; `Relationship(..., cascade=False)` for references |
+
+---
 
 ## Install
 
@@ -12,18 +32,13 @@ Define `SPARQLModel` classes, use `with SPARQLSession() as session:`, and work w
 pip install sparqlmodel
 ```
 
-Optional extras:
-
 ```bash
 pip install "sparqlmodel[http]"      # HttpStore (httpx)
-pip install "sparqlmodel[fastapi]"   # RDF response helpers
+pip install "sparqlmodel[fastapi]"   # FastAPI session + RDF responses
+pip install -e ".[dev,http,fastapi]" # development
 ```
 
-Development:
-
-```bash
-pip install -e ".[dev,http,fastapi]"
-```
+---
 
 ## Quickstart
 
@@ -58,27 +73,28 @@ with SPARQLSession() as session:
     full = session.get(Person, odos.id, depth=1)
 ```
 
-## Session API
+---
 
-`SPARQLSession` is a context manager: on success it flushes any pending `put(..., flush=False)` writes; on error it rolls back the pending queue; it closes HTTP stores when the block ends.
+## Session
+
+`SPARQLSession` is the unit of work. Use it as a context manager: flush pending writes on success, roll back the pending queue on error, close HTTP stores when done.
 
 | Method | Purpose |
 |--------|---------|
-| `add(model)` | Insert triples; does not remove existing data for the subject |
-| `put(model)` | Upsert with cascade and orphan cleanup for embedded resources |
-| `delete(model)` | Remove owned triples for the root and composition tree |
-| `get(Model, iri, depth=0)` | Load one entity; `depth` eager-loads relationships (0–2) |
-| `query(Model).where(...)` | Find entities; filters compile to SPARQL |
-| `execute(sparql)` | Raw SPARQL SELECT |
-| `flush()` / `rollback_pending()` | Apply or discard pending `put(..., flush=False)` writes |
-| `close()` | Close the backing store when it supports `close()` |
-| `expire(Model, iri)` | Evict cached instances for an IRI |
+| `add(model)` | Append triples (no delete of existing subject data) |
+| `put(model)` | Upsert with cascade and orphan cleanup |
+| `delete(model)` | Remove owned triples for root + composition tree |
+| `get(Model, iri, depth=0)` | Load one resource; `depth` 0–2 eager-loads relationships |
+| `query(Model).where(...)` | Fluent query; filters compile to SPARQL |
+| `execute(sparql)` | Raw SPARQL SELECT (auto-prefixes when configured) |
+| `flush()` / `rollback_pending()` | Apply or discard `put(..., flush=False)` queue |
+| `expire(Model, iri)` | Evict identity map and hydration cache |
 
-`put` treats nested `SPARQLModel` values as **composition** (cascade delete and orphan cleanup). Use `Relationship(..., cascade=False)` or an `IRI` reference when the linked resource is owned elsewhere.
+Nested `SPARQLModel` values are **composition** (cascade on `put`/`delete`). Use `Relationship(..., cascade=False)` or an `IRI` when the target is owned elsewhere.
+
+---
 
 ## Query DSL
-
-Filters compile to SPARQL against your store:
 
 ```python
 with SPARQLSession() as session:
@@ -97,18 +113,20 @@ with SPARQLSession() as session:
     session.query(Person).where(Person.name != "Other").use_not_exists_for_ne().all()
 ```
 
-Supported operators include `==`, `!=`, `&`, `|`, ordering comparisons, `in_()`, and multi-hop paths through relationships.
+Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)`, multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.use_not_exists_for_ne()`.
+
+---
 
 ## Stores
 
-**In-memory** (default) — local `rdflib` graph, ideal for tests and prototypes:
+**MemoryStore** (default) — local `rdflib` graph; tests and single-process apps:
 
 ```python
 with SPARQLSession() as session:
     session.put(model)
 ```
 
-**HTTP** — SPARQL 1.1 endpoint with a local mirror for cascade reads (`sparqlmodel[http]`):
+**HttpStore** — SPARQL 1.1 over HTTP with a local mirror for `get` and cascade (`sparqlmodel[http]`):
 
 ```python
 from sparqlmodel import HttpStore, SPARQLSession
@@ -117,32 +135,25 @@ with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as sessio
     session.put(odos)
 ```
 
-`query` / `execute` hit the remote endpoint; `get` and cascade logic use the mirror updated by this store’s writes. External changes visible only via SELECT are not visible to `get` until the mirror is updated.
+`query` / `execute` use the remote endpoint; `get` and cascade read the mirror updated by this store’s writes. See the [production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) for mirror semantics and deployment notes.
 
-## Known limitations
-
-- **Multi-valued predicates** — first value per predicate on load; `add` can duplicate literals
-- **`add` vs `put`** — `add` does not remove stale triples; prefer `put` for upserts
-- **`HttpStore`** — mirror can lag behind the remote dataset (see above)
-- **Shared embedded resources** — same nested object linked from multiple roots is not deduplicated in memory on load
+---
 
 ## FastAPI
 
-With `sparqlmodel[fastapi]`, session management mirrors SQLModel / SQLAlchemy: register a shared store on the app, inject a per-request session with `Depends`, and use `with SPARQLSession(...)` inside the dependency.
+Per-request sessions with a shared store — same pattern as SQLModel + SQLAlchemy:
 
 ```python
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from sparqlmodel import IRI
-from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app, negotiated_response
-from sparqlmodel.stores.memory import MemoryStore
+from sparqlmodel.fastapi import SessionDep, http_store_lifespan, negotiated_response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with http_store_lifespan(app, "http://localhost:3030/ds/sparql"):
         yield
-    # Or for tests / in-process: init_app(app, MemoryStore()); yield
 
 app = FastAPI(lifespan=lifespan)
 
@@ -154,7 +165,7 @@ def person(iri: str, request: Request, session: SessionDep) -> object:
     return negotiated_response(request, model)
 ```
 
-`SessionDep` is `Annotated[SPARQLSession, Depends(get_session)]`. Each request opens `with SPARQLSession(store=...) as session`, flushes on success, and rolls back pending writes on error — the same lifecycle as using a session outside FastAPI.
+---
 
 ## Export
 
@@ -164,21 +175,33 @@ from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
+Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/triplemodel) `parse` / `serialize`; see the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md).
+
+---
+
 ## Documentation
 
-- [ORM guide](docs/ORM.md) — lifecycle, cascade, hydration
-- [Technical specification](docs/SPECS.md) — API spec and [production checklist](docs/SPECS.md#production-orm-checklist-10-ga-gate)
-- [Roadmap](docs/ROADMAP.md) — milestones and [SQLModel parity](docs/ROADMAP.md#sqlmodel-parity-checklist)
-- [Production guide](docs/PRODUCTION.md) — HttpStore, sessions, pagination (planned)
-- [Project plan](docs/PLAN.md) — vision and release strategy
-- [Changelog](CHANGELOG.md)
+| Guide | Description |
+|-------|-------------|
+| **[Read the Docs](https://sparqlmodel.readthedocs.io/en/latest/)** | Full documentation site (guides + API reference) |
+| [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
+| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-10-ga-gate) |
+| [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
+| [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.3–1.0 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
+| [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
+| [Ecosystem](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ECOSYSTEM.md) | SparqlModel vs TripleModel boundaries |
 
-## Ecosystem
+---
 
-SparqlModel installs **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`) as its RDF mapping engine: literals, terms, and file parse/serialize. Application code normally uses only `sparqlmodel`; reach for TripleModel directly when you need stateless Turtle/JSON-LD round-trips or library-style `to_graph` / `sync_to_graph` without a session.
+## Known limitations (0.2)
 
-See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for package boundaries and the integration roadmap (wiring session I/O through TripleModel in upcoming releases).
+- Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
+- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade
+- Query: `limit` only — `offset` / `order_by` / `count` planned ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) 0.5)
+- Sessions are not thread-safe; one session per request/task
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE).
