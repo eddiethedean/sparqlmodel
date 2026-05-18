@@ -2,13 +2,17 @@
 
 **SparqlModel — the SQLModel of SPARQL:** typed models, a persistent session, and Python queries that compile to SPARQL.
 
-SparqlModel is a **session-first SPARQL ORM** for RDF triple stores — not a stateless mapping library. Use it when you want `session.put`, `session.query(Model).where(...)`, and graph persistence policy in application code. For Pydantic ↔ RDF mapping and file I/O without a session, use **[TripleModel](https://github.com/eddiethedean/triplemodel)**.
+SparqlModel is a **session-first SPARQL ORM** built on **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`). TripleModel owns Pydantic ↔ RDF mapping, terms, and file I/O. SparqlModel owns everything application-shaped: **`SPARQLSession`**, the query DSL, stores, cascade policy, and hydration depth.
+
+You do not choose between them for the same job: **apps use SparqlModel**; **libraries and ETL use TripleModel** when there is no session.
 
 ## Who this is for
 
 - FastAPI and backend developers building knowledge-graph APIs
 - Teams that want SQLModel-style ergonomics over SPARQL endpoints
-- Applications that need CRUD, filters, and relationship loading — not ontology editing or reasoning
+- Applications that need CRUD, filters, relationship loading, and unit-of-work semantics
+
+**Not for:** ontology editing, reasoning, or stateless Turtle round-trips without a session (use TripleModel directly).
 
 ## Install
 
@@ -16,11 +20,13 @@ SparqlModel is a **session-first SPARQL ORM** for RDF triple stores — not a st
 pip install sparqlmodel
 ```
 
+Pulls in **`triplemodel>=0.9`** automatically.
+
 Development:
 
 ```bash
 pip install -e ".[dev]"
-# optional, when working on TripleModel integration:
+# optional: editable TripleModel while hacking both packages
 pip install -e ../triplemodel
 ```
 
@@ -59,94 +65,83 @@ full = session.get(Person, odos.id, depth=1)
 
 ### Export (optional)
 
-ORM workflows do not require export. To serialize a model to Turtle or other formats:
+The ORM does not require export helpers. Prefer TripleModel when the task is file I/O without a session. From a session model today:
 
 ```python
 from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
-Interim in 0.1.x; delegates to TripleModel from 0.4+.
+SparqlModel serializers are being replaced by thin wrappers over TripleModel `parse` / `serialize` — see [roadmap](docs/ROADMAP.md).
 
-## ORM features (0.1.x)
+## What SparqlModel owns
 
-### Session and CRUD
+| Area | Examples |
+|------|----------|
+| **Session** | `add`, `put`, `delete`, `get`, `query`, `execute` |
+| **Query DSL** | `session.query(Person).where(Person.name == "x")` |
+| **SPARQL compiler** | `==`, `!=`, `&`, nested hops → SPARQL |
+| **Hydration** | `get(..., depth=0\|1\|2)` |
+| **Persistence policy** | Composition cascade, orphan cleanup, `add` vs `put` |
+| **Stores** | `MemoryStore`; HTTP SPARQL (roadmap) |
 
-- `SPARQLSession` — in-memory store today; HTTP SPARQL on the roadmap
-- `add`, `put`, `delete`, `get`, `query`, `execute`
+## What TripleModel owns (via dependency)
 
-### Query language
+| Area | Examples |
+|------|----------|
+| **Mapping** | Literals, XSD types, subject IRIs, nested embeds |
+| **Graph sync** | `to_graph`, `sync_to_graph`, `from_graph` |
+| **Files** | `parse`, `serialize`, Turtle, JSON-LD, N-Quads |
+| **Terms** | `python_to_term`, registries, language tags |
 
-- `session.query(Model).where(Model.field == value)`
-- SPARQL compiler — `==`, `!=`, `&`, single-hop nested filters
+SparqlModel **0.1.x** still contains interim code in `graph.py` and `serializers.py` that duplicates some TripleModel behavior. New mapping work lands in **TripleModel first**; SparqlModel wires it in — see [integration roadmap](docs/ROADMAP.md).
 
-### Graph navigation
+## Persistence and queries
 
-- Hydration — `session.get(Model, iri, depth=0|1|2)` (eager-load relationships)
-
-### Persistence policy
-
-- **`put`** — upsert with composition cascade and orphan cleanup for embedded models; `IRI`-only links are not cascade-deleted
-- **`add`** — insert only; can leave stale literals on repeat `add`
+- **`put`** — upsert with composition cascade and orphan cleanup; `IRI`-only links are not cascade-deleted
+- **`add`** — insert only; repeat `add` can leave stale literals
 - **`delete`** — same cascade rules as `put` for owned triples
-
-### Serialization
-
-- Turtle, N-Triples, RDF/XML, JSON-LD via `export_model` (interim; TripleModel from 0.4+)
-
-### Query filters
-
-- **`==`** / **`!=`** — see [SPECS.md](docs/SPECS.md)
-- Combine with `.where(a, b)` or `(a) & (b)`
-- `None` values raise `QueryError`
-- Nested filters require the related `rdf:type` in the graph
-
-### Known limitations
-
-See [SPECS.md](docs/SPECS.md) (shared embeds, multi-valued predicates, JSON-LD paths, `ensure_id()` on export).
-
-Tests: `.venv/bin/pytest`
+- **Filters** — `==` / `!=`; combine with `.where(a, b)` or `(a) & (b)`; see [SPECS.md](docs/SPECS.md)
 
 ## SparqlModel vs TripleModel
 
 | I need… | Use |
 |---------|-----|
-| CRUD, queries, cascade in an app | **SparqlModel** |
-| Python `where(Model.field == x)` → SPARQL | **SparqlModel** |
-| Load Turtle / ETL without a session | **[TripleModel](https://github.com/eddiethedean/triplemodel)** |
-| Stateless `to_graph()` / `from_graph()` | **TripleModel** |
+| An app with CRUD, queries, cascade | **SparqlModel** |
+| `where(Model.field == x)` → SPARQL | **SparqlModel** |
+| Correct triples, parse, serialize, no session | **[TripleModel](https://github.com/eddiethedean/triplemodel)** |
 
-Full guide: [docs/ORM.md](docs/ORM.md) · Maintainer boundaries: [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md)
+[ORM guide](docs/ORM.md) · [Ecosystem](docs/ECOSYSTEM.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Stack
 
-| Package | Role |
-|---------|------|
-| **SparqlModel** (this repo) | **ORM** — `SPARQLSession`, query DSL, stores, cascade on `put`/`delete` |
-| **[TripleModel](https://github.com/eddiethedean/triplemodel)** | **Mapping substrate** — Pydantic ↔ RDF, terms, parse/serialize (required from SparqlModel 0.3) |
+```text
+SPARQLSession · Query · Compiler · Stores   ← SparqlModel (ORM)
+        ↓
+triplemodel>=0.9 · terms · parse/serialize  ← TripleModel (required)
+        ↓
+rdflib · pydantic
+```
 
-SparqlModel **0.1.x** includes an interim local mapper until 0.3 delegates conversion to TripleModel. The ORM API stays the same.
+## Roadmap (summary)
 
-## Roadmap
+| Release | SparqlModel (ORM) | TripleModel wiring |
+|---------|-------------------|-------------------|
+| **Now** | Session, query, cascade; `triplemodel>=0.9` required | Interim `graph.py` — retire through 0.3–0.4 |
+| **0.2** | `HttpStore`, identity map, FastAPI | `_triple` adapter; contract tests |
+| **0.3** | ORM API frozen | `put`/`get` via `sync_to_graph` / `from_graph` |
+| **0.4** | Session + SPARQL only | Delegated `parse` / `serialize` |
 
-| Release | ORM (SparqlModel) | TripleModel integration |
-|---------|-------------------|-------------------------|
-| **0.2** | HTTP SPARQL store, identity map, richer compiler, FastAPI | dev dependency + adapter |
-| **0.3** | Public ORM API unchanged; delegate mapping | `triplemodel` required |
-| **0.4+** | Session + SPARQL focus | delegate file I/O |
-
-[docs/ROADMAP.md](docs/ROADMAP.md) · [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md)
+Full detail: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## Documentation
 
-- [ORM guide](docs/ORM.md)
+- [ORM guide](docs/ORM.md) — start here
 - [Technical specification](docs/SPECS.md)
 - [Project plan](docs/PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
-- [Ecosystem (SparqlModel + TripleModel)](docs/ECOSYSTEM.md)
+- [Ecosystem boundaries](docs/ECOSYSTEM.md)
 - [Changelog](CHANGELOG.md)
-
-Built on [TripleModel](https://github.com/eddiethedean/triplemodel).
 
 ## License
 

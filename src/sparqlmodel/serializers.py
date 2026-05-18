@@ -1,4 +1,4 @@
-"""Optional RDF export helpers; not required for ORM usage (``SPARQLSession``)."""
+"""Optional RDF export (interim); prefer TripleModel parse/serialize. Not required for the ORM."""
 
 from __future__ import annotations
 

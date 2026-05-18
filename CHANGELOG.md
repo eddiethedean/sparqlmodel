@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`triplemodel>=0.9.0,<2`** as a required dependency (mapping substrate)
+
+### Changed
+
+- Align `pydantic` and `rdflib` pins with TripleModel (`>=2.5,<3`, `>=7.0,<8`)
+
 ### Documentation
 
 - Reposition SparqlModel as a **session-first SPARQL ORM** (the SQLModel of SPARQL) across README and docs
 - Add [docs/ORM.md](docs/ORM.md) — ORM guide (lifecycle, cascade, query DSL, hydration, package choice)
 - Reframe [docs/PLAN.md](docs/PLAN.md), [docs/SPECS.md](docs/SPECS.md), [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md), and [docs/ROADMAP.md](docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
+- Rewrite all docs for **`triplemodel>=0.9` as required mapping engine**; integration roadmap focuses on wiring, not adding the dependency
 - Update package metadata and module docstrings for ORM framing
 
 ## [0.1.4] - 2026-05-16

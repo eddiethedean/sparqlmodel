@@ -2,198 +2,155 @@
 
 ## Vision
 
-**SparqlModel — the SQLModel of SPARQL:** typed models, a persistent session, and Python queries that compile to SPARQL.
+**SparqlModel — the SQLModel of SPARQL.**
 
-SparqlModel is a Python-native **SPARQL ORM** inspired by SQLModel, Pydantic, and FastAPI ergonomics. It sits on **[TripleModel](https://github.com/eddiethedean/triplemodel)** as a stateless mapping substrate (from 0.3 onward) and adds what application developers need: **stateful sessions**, a query compiler, store backends, and cascade persistence policy.
+SparqlModel is a **SPARQL ORM** for application developers. It requires **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9` and focuses exclusively on what TripleModel does not provide: **sessions**, a **query compiler**, **store backends**, **cascade persistence policy**, and **hydration depth**.
 
-User guide: [ORM.md](ORM.md) · Package boundaries: [ECOSYSTEM.md](ECOSYSTEM.md)
+TripleModel is the **mapping substrate** — literals, terms, `sync_to_graph`, `from_graph`, and file parse/serialize. SparqlModel does not compete with it; it **consumes** it.
+
+Guides: [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md)
 
 ---
 
-# Product Positioning
+# Product positioning
 
 ## SparqlModel (ORM)
 
-- Session-first: `SPARQLSession` is the main entry point
-- SQLModel-like query DSL: `session.query(Model).where(Model.field == x)`
-- Graph-native persistence: `put`, `delete`, cascade, hydration depth
-- Store backends (in-memory today; HTTP SPARQL on roadmap)
+- Entry point: `SPARQLSession()`
+- SQLModel-style models: `SPARQLModel`, `Field`, `Relationship`
+- Python queries → SPARQL: `session.query(Person).where(Person.name == x)`
+- Unit-of-work semantics: `add`, `put`, `delete`, cascade, orphans
+- Stores: in-memory today; HTTP SPARQL and identity map on the roadmap
 
-**Not:** an ontology editor, reasoner, Protégé replacement, or stateless mapping library — **that is [TripleModel](https://github.com/eddiethedean/triplemodel)**.
+**Not SparqlModel:** mapping correctness, XSD registries, Turtle parsers, or stateless ETL — **that is TripleModel**.
 
-## TripleModel (mapping substrate)
+## TripleModel (required dependency)
 
-- Pydantic ↔ RDF graphs, stateless
-- Terms, sync, parse/serialize (see TripleModel roadmap)
+- PyPI: `triplemodel` · pinned in SparqlModel as `>=0.9.0,<2`
+- Stateless Pydantic ↔ RDF; API frozen from TripleModel 0.9 until 1.0
+- SparqlModel routes new mapping features through TripleModel first
 
 | | TripleModel | SparqlModel |
 |---|-------------|-------------|
-| **Metaphor** | SQLAlchemy Core / serde layer | SQLModel / SQLAlchemy ORM |
-| **Role** | Correct triples from Pydantic | Session + query language |
-| **State** | Stateless | Stateful (`SPARQLSession`) |
-| **Killer feature** | `to_graph()` / `from_graph()` | `where(Model.field == x)` |
-
-Developers who only need model ↔ graph or files **without a session** use **TripleModel** directly.
+| **Question** | “Are these triples correct?” | “How do I run my app on a graph?” |
+| **State** | Stateless | Stateful session |
+| **Grow here** | Terms, files, Dataset, SHACL | Compiler, stores, cascade, FastAPI |
 
 ---
 
 # ORM thesis
 
-SparqlModel exists to answer: **“How do I run an application on a graph?”**
+SparqlModel exists to answer: **“How do I build and operate an application on RDF?”**
 
-Core ORM capabilities (now and planned):
+**Owned by SparqlModel (now and always):**
 
-- **`SPARQLSession`** — unit of work over a store (`add`, `put`, `delete`, `get`, `query`)
-- **Query compiler** — Python expressions → SPARQL WHERE
-- **Persistence policy** — composition cascade, orphan cleanup, `add` vs `put` semantics
-- **Hydration** — relationship depth on `get` and query results
-- **Stores** — `MemoryStore`; `HttpStore`, identity map, session cache (roadmap 0.2)
-- **FastAPI** — optional extra for RDF APIs (roadmap)
+1. `SPARQLSession` — CRUD and graph sync with a store
+2. Query DSL and SPARQL compiler
+3. Cascade and orphan policy on `put` / `delete`
+4. Hydration depth on `get` and query results
+5. Pluggable stores (`MemoryStore`, `HttpStore`, …)
+6. Optional FastAPI integration
 
-Mapping and file formats delegate to TripleModel from 0.3 / 0.4; the **public ORM surface stays stable**.
+**Owned by TripleModel (SparqlModel delegates):**
 
----
+1. Model ↔ triple conversion
+2. Literal and IRI term handling
+3. `sync_to_graph` / `from_graph` / `parse` / `serialize`
+4. Multi-valued fields, nested embeds, blank nodes (per TripleModel roadmap)
 
-# Core Thesis
-
-Traditional semantic web tooling is RDF-centric, ontology-centric, and hard to operationalize.
-
-This stack provides:
-
-- **TripleModel** — correct, stateless mapping from typed models to triples
-- **SparqlModel** — sessions, Pythonic queries, stores, and graph persistence policy
-
-Together they hide low-level triple manipulation behind familiar Python APIs — with SparqlModel as the application ORM layer.
-
----
-
-# Primary Goals
-
-- Typed SPARQL persistence (`add`, `put`, `delete`, `get`, `query`)
-- Pythonic graph traversal and nested filters
-- SPARQL generation from Python expressions
-- Store backends (in-memory today; HTTP SPARQL 1.1 on roadmap)
-- Graph hydration with relationship depth
-- FastAPI integration (optional extra)
-- Delegation of mapping and file I/O to TripleModel per [ROADMAP.md](ROADMAP.md)
-
----
-
-# Target Users
-
-- FastAPI and backend developers
-- Knowledge graph engineers building operational systems
-- AI infrastructure and enterprise metadata teams
-- RDF/SPARQL platform teams
-- Research and government interoperability systems
-
----
-
-# Ecosystem
-
-## TripleModel
-
-**Repo:** [github.com/eddiethedean/triplemodel](https://github.com/eddiethedean/triplemodel) · PyPI: `triplemodel`
-
-Owns: `TripleModel`, `rdf_field`, term conversion, `to_graph` / `sync_to_graph` / `from_graph`, parse/serialize, Dataset/named graphs, optional SHACL.
-
-## SparqlModel
-
-Owns: `SPARQLSession`, stores, query DSL, SPARQL compiler, hydration depth, cascade/orphan on `put`/`delete`, FastAPI, remote endpoints.
-
-**Rules:**
-
-1. SparqlModel depends on `triplemodel` from 0.3; mapping logic stays upstream.
-2. TripleModel does not import SparqlModel.
-3. Mapping bugs → TripleModel; session/compiler/cascade → SparqlModel.
-
-Maintainer guide: [ECOSYSTEM.md](ECOSYSTEM.md)
-
-## semantic-sqlmodel
-
-Optional RDF/SPARQL backend for semantic-sqlmodel once both stacks are stable.
+**Public ORM API stays stable** while interim `graph.py` / `serializers.py` are retired in favor of TripleModel calls.
 
 ---
 
 # Architecture
 
 ```text
-Application code
+Application
     ↓
-SPARQLSession · Query · Compiler · Stores     ← SparqlModel (ORM)
+SPARQLSession · Query · Compiler · Stores     ← SparqlModel
     ↓
-TripleModel · terms · parse/serialize         ← triplemodel (substrate)
+triplemodel>=0.9 (sync, load, terms, files)   ← TripleModel
     ↓
 rdflib · pydantic
 ```
 
-**SparqlModel only:** `compiler.py`, `query.py`, `session.py`, cascade/orphan, `stores/*`, identity map, FastAPI.
+**Never in SparqlModel:** duplicate `python_to_term`, new RDF format parsers, or session-free mapping APIs.
 
-**TripleModel (from 0.3):** model ↔ triple conversion, terms, file formats (0.4+).
-
-**0.1.x interim:** local `graph.py` / `fields.py` until 0.3 wires in `triplemodel` (implementation detail; ORM API unchanged).
+**Never in TripleModel:** `SPARQLSession`, query compiler, cascade `put`, or HTTP store plugins.
 
 ---
 
-# Technology Stack
+# Integration strategy
 
-**SparqlModel core (0.1.x):** Pydantic v2, RDFLib, typing-extensions
+SparqlModel **already depends** on `triplemodel>=0.9`. The remaining work is **wiring**, not packaging:
 
-**From SparqlModel 0.3:** `triplemodel` (pin per [ECOSYSTEM.md](ECOSYSTEM.md#triplemodel-version-gates))
-
-**SparqlModel extras:** `httpx` (HTTP store), `fastapi`
-
-**Not in SparqlModel core:** `pyshacl` — use `triplemodel[shacl]` for validation hooks
-
-**Development:** `pip install -e ../triplemodel` alongside SparqlModel when working on the adapter.
+| Phase | SparqlModel | TripleModel usage |
+|-------|-------------|-------------------|
+| **Now (0.1.x)** | ORM shipped; interim `graph.py` | Dependency declared; selective API adoption starting |
+| **0.2** | `HttpStore`, identity map, `_triple` adapter | Contract tests against released TripleModel |
+| **0.3** | `put`/`get` through `sync_to_graph` / `from_graph` | Delete interim term conversion in `graph.py` |
+| **0.4** | Thin `serializers.py` | `parse` / `serialize` only in TripleModel |
 
 ---
 
-# Releases
+# Primary goals
 
-| SparqlModel | ORM focus | TripleModel integration |
-|-------------|-----------|-------------------------|
-| **0.1.x** | Session, compiler, cascade | interim local mapper |
-| **0.2** | `HttpStore`, identity map, FastAPI | dev pin + adapter prototype |
-| **0.3** | Public ORM API unchanged | `triplemodel` required |
-| **0.4** | Session + SPARQL | delegate serializers |
+- Typed SPARQL persistence with explicit `add` / `put` / `delete` semantics
+- Pythonic filters compiled to SPARQL
+- Relationship hydration with `depth`
+- Operational stores (memory + remote SPARQL)
+- **Lean on TripleModel** for all mapping and file I/O
+- Stable `SPARQLModel` / `Field` / `session.put` developer experience
+
+---
+
+# Target users
+
+- FastAPI and backend teams
+- Knowledge-graph product engineers
+- Enterprise metadata and AI infrastructure
+- Anyone who would reach for SQLModel if the database were RDF
+
+---
+
+# Technology stack
+
+**Required:** `pydantic>=2.5,<3`, `rdflib>=7.0,<8`, **`triplemodel>=0.9.0,<2`**, `typing-extensions`
+
+**Optional extras:** `httpx` (HTTP store), `fastapi`
+
+**SHACL:** `triplemodel[shacl]` — optional hook on `session.put`, not in SparqlModel core
+
+**Development:** `pip install -e ".[dev]"` and optionally `pip install -e ../triplemodel`
+
+---
+
+# Releases (summary)
+
+| SparqlModel | ORM | TripleModel wiring |
+|-------------|-----|-------------------|
+| **0.1.x** | Session, query, cascade | `triplemodel>=0.9` required; interim `graph.py` |
+| **0.2** | Remote store, identity map | Adapter + contract tests |
+| **0.3** | Frozen ORM surface | Session I/O via TripleModel sync/load |
+| **0.4** | ORM + SPARQL only | Delegated file I/O |
 
 Detail: [ROADMAP.md](ROADMAP.md)
 
 ---
 
-# MVP (0.1.x, shipped)
-
-- `SPARQLModel`, `Field`, `Relationship`, `IRI`
-- `SPARQLSession` CRUD and in-memory store
-- Query builder and SPARQL compiler
-- Hydration (`depth` 0–2)
-- Optional RDF export via interim serializers
-
----
-
-# Long-Term Vision
-
-- **SparqlModel** — the SQLModel of SPARQL: sessions, queries, store backends
-- **TripleModel** — the canonical mapping substrate underneath
-- Together — practical knowledge-graph apps with FastAPI and AI tooling
-
----
-
 # Risks
 
-- Over-academic or RDF-first APIs for app developers
-- Reimplementing TripleModel inside SparqlModel (weakens ORM vs mapper positioning)
-- Declaring `triplemodel` before TripleModel 0.2 sync/remove and nested models
-- Performance without identity map / caching on large graphs
-- Scope creep into reasoning or ontology editing
+- Reimplementing TripleModel in `graph.py` instead of deleting it
+- ORM scope creep (reasoning, ontology editing)
+- Performance without identity map on large graphs
+- Diverging `Field` UX from TripleModel predicate metadata during adapter work
 
 ---
 
 # Strategy
 
-- Preserve `SPARQLModel`, `Field`, and `session.put` UX
-- Route mapping and formats to TripleModel; keep cascade and SPARQL in SparqlModel
-- Document ORM behavior explicitly ([ORM.md](ORM.md), `put`, `!=`, `add`)
-- Optional heavy deps as extras only
-- FastAPI and operational RDF first
+1. **TripleModel first** for any mapping, literal, or format bug
+2. **SparqlModel first** for session, compiler, cascade, stores
+3. Preserve ORM public API; change internals via adapter layer
+4. Document semantics in [ORM.md](ORM.md) and [SPECS.md](SPECS.md)
+5. Contract tests: SparqlModel `put` triple sets align with TripleModel `sync_to_graph` + cascade rules

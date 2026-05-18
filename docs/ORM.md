@@ -2,11 +2,29 @@
 
 **SparqlModel — the SQLModel of SPARQL:** typed models, a persistent session, and Python queries that compile to SPARQL.
 
-SparqlModel is a **session-first SPARQL ORM** for building applications on RDF triple stores. If you think in terms of SQLModel or SQLAlchemy ORM — `session.add`, `session.query(Model).where(...)`, and unit-of-work semantics — you are in the right place.
+This guide is for **application developers**. SparqlModel is the ORM; **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`, installed automatically) is the mapping engine underneath.
 
-For stateless Pydantic ↔ RDF mapping, file parse/serialize, and ETL, use **[TripleModel](https://github.com/eddiethedean/triplemodel)** directly. SparqlModel depends on TripleModel from 0.3 onward as an internal mapping substrate; you keep the SparqlModel public API (`SPARQLSession`, `Field`, `Relationship`).
+Related: [SPECS.md](SPECS.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md)
 
-Related docs: [SPECS.md](SPECS.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md)
+---
+
+## Two packages, one stack
+
+| | SparqlModel | TripleModel |
+|---|-------------|-------------|
+| **Role** | ORM — run apps on graphs | Mapping — correct triples from Pydantic |
+| **Metaphor** | SQLModel / SQLAlchemy ORM | SQLAlchemy Core / serde |
+| **Entry point** | `SPARQLSession()` | `model.to_graph()` / `TripleModel.parse()` |
+| **Dependency** | Requires `triplemodel>=0.9` | Standalone library |
+
+```text
+Your app
+  → SPARQLSession.put / .query / .get
+  → (today: interim graph.py; tomorrow: TripleModel sync/load APIs)
+  → rdflib Graph in a Store
+```
+
+**Rule of thumb:** if your code never constructs a `SPARQLSession`, you probably want TripleModel only.
 
 ---
 
@@ -14,47 +32,31 @@ Related docs: [SPECS.md](SPECS.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.m
 
 | I need… | Use |
 |---------|-----|
-| CRUD, queries, and persistence policy in an app | **SparqlModel** (`SPARQLSession`) |
-| Python filters that compile to SPARQL (`Model.field == value`) | **SparqlModel** |
-| Remote SPARQL endpoints, identity map, FastAPI (roadmap) | **SparqlModel** |
-| Convert models to triples or load a Turtle file without a session | **[TripleModel](https://github.com/eddiethedean/triplemodel)** |
-| ETL, libraries, tests, one-off serialization | **TripleModel** |
-
-| | SparqlModel | TripleModel |
-|---|-------------|-------------|
-| **Metaphor** | SQLModel / SQLAlchemy ORM | SQLAlchemy Core / serde layer |
-| **Entry point** | `SPARQLSession()` | `model.to_graph()` / `parse()` |
-| **State** | Stateful session | Stateless |
+| CRUD, queries, cascade in a backend or API | **SparqlModel** |
+| Python filters → SPARQL (`Person.name == "x"`) | **SparqlModel** |
+| HTTP SPARQL store, identity map (roadmap) | **SparqlModel** |
+| Load a Turtle file into models without a session | **TripleModel** |
+| ETL, tests, libraries, one-off `to_graph()` | **TripleModel** |
 
 ---
 
-## Stack
+## What you import from SparqlModel
 
-```text
-Application code
-    ↓
-SPARQLSession · Query · Compiler · Stores     ← SparqlModel (ORM)
-    ↓
-TripleModel · terms · parse/serialize         ← triplemodel (mapping substrate, 0.3+)
-    ↓
-rdflib · pydantic
+```python
+from sparqlmodel import (
+    SPARQLSession,   # start here
+    SPARQLModel,
+    Field,
+    Relationship,
+    IRI,
+)
 ```
 
-SparqlModel **0.1.x** still ships an interim local mapper in `graph.py` until 0.3 wires in `triplemodel`. The ORM surface (`SPARQLSession`, query DSL, cascade) is unchanged.
+- **`SPARQLSession`** — unit of work over a store
+- **`SPARQLModel`** — entity class (SQLModel-style); not a standalone mapper
+- **`Field` / `Relationship`** — ORM field API (backed by TripleModel predicate metadata as integration completes)
 
----
-
-## What SparqlModel provides
-
-- **`SPARQLSession`** — unit of work over a graph store (`add`, `put`, `delete`, `get`, `query`, `execute`)
-- **`SPARQLModel`** — entity classes mapped to RDF (SQLModel-style `Field` / `Relationship`)
-- **Query DSL** — `session.query(Person).where(Person.name == "Alice").all()`
-- **SPARQL compiler** — Python comparisons and nested hops → SPARQL WHERE
-- **Hydration** — `session.get(Person, iri, depth=1)` (eager-load relationships)
-- **Persistence policy** — composition cascade and orphan cleanup on `put` / `delete`
-- **Stores** — `MemoryStore` today; HTTP SPARQL store on the [roadmap](ROADMAP.md)
-
-**Not SparqlModel:** ontology editing, built-in reasoning, or stateless file-only workflows (use TripleModel).
+You generally **do not** import `triplemodel` in application code unless you are mixing stateless file I/O with session usage — e.g. bulk `TripleModel.parse()` then `session.put()` per row.
 
 ---
 
@@ -62,105 +64,114 @@ SparqlModel **0.1.x** still ships an interim local mapper in `graph.py` until 0.
 
 | Method | Semantics |
 |--------|-----------|
-| **`add(model)`** | Insert triples only; does not remove existing triples for the subject. Re-`add` can leave stale literals. |
-| **`put(model)`** | Upsert: remove owned triples (root, embedded tree, orphans), then write current state. |
-| **`delete(model)`** | Remove owned triples for the root and embedded composition targets. |
-| **`get(Model, iri, depth=0)`** | Load one entity by IRI; optional relationship depth (0–2). |
-| **`query(Model).where(...).all()`** | Find entities matching Python filter expressions (compiled to SPARQL). |
-| **`execute(sparql)`** | Raw SPARQL SELECT; returns variable bindings. |
-
-Always start application code with a session:
+| **`add(model)`** | Insert triples only; does not remove existing triples for the subject. |
+| **`put(model)`** | Upsert: remove owned triples (root, embedded tree, orphans), then write current state. Uses mapping layer + SparqlModel cascade policy. |
+| **`delete(model)`** | Remove owned triples for root and embedded composition targets. |
+| **`get(Model, iri, depth=0)`** | Load one entity; `depth` eager-loads relationships (0–2). |
+| **`query(Model).where(...)`** | Find entities; filters compile to SPARQL. |
+| **`execute(sparql)`** | Raw SPARQL SELECT. |
 
 ```python
 session = SPARQLSession()
 session.put(person)
-found = session.query(Person).where(Person.name == "Odos").first()
+hits = session.query(Person).where(Person.name == "Alice").all()
 ```
 
 ---
 
-## Composition and cascade (unit-of-work policy)
+## Composition and cascade
 
-Relationships behave like ORM composition vs reference:
+SparqlModel-only **persistence policy** (TripleModel does not define multi-resource cascade):
 
-| Relationship value | On `put` / `delete` |
-|--------------------|---------------------|
-| Nested **`SPARQLModel`** (embedded object) | **Composition** — serialized recursively; owned triples removed on update/delete; orphans cleaned when a link changes |
-| **`IRI` only** | **Reference** — link updated; target resource **not** cascade-deleted |
+| Value on a relationship | On `put` / `delete` |
+|---------------------------|---------------------|
+| Nested **`SPARQLModel`** | **Composition** — cascade owned triples; orphan cleanup when links change |
+| **`IRI` only** | **Reference** — update link; do **not** delete the target resource |
 
-Shared entities referenced from multiple parents should use **`IRI` references**, not duplicate embeds.
-
-This policy lives in SparqlModel (`session.py`, `graph.py`), not in TripleModel. TripleModel syncs owned triples for a single resource; SparqlModel orchestrates multi-resource cascade across a session graph.
+TripleModel’s `sync_to_graph` syncs **one resource’s** owned triples. SparqlModel’s `put` decides **which subjects** to remove across the composition tree before calling into the mapper.
 
 ---
 
 ## Query DSL
 
-SQLModel-style filters over RDF:
-
 ```python
 session.query(Person).where(Person.name == "Odos").all()
 session.query(Person).where(Person.works_for.name == "Acme Corp").all()
-session.query(Person).where(
-    (Person.name == "Odos") & (Person.works_for.name == "Acme Corp")
-).all()
 ```
 
 - **`==`** — triple pattern match
-- **`!=`** — subject has some value for the predicate that differs from the RHS (not SQL `NOT EXISTS` for absent values)
-- **`None`** in filters raises `QueryError`
-- Nested filters require the related resource’s `rdf:type` in the graph
+- **`!=`** — value exists and differs (not SQL `NOT EXISTS` for missing values)
+- **`None`** → `QueryError`
+- Nested hops require the related `rdf:type` in the graph
 
-Full compiler rules: [SPECS.md](SPECS.md#sparql-compilation).
+Compiler detail: [SPECS.md](SPECS.md#sparql-compilation).
 
 ---
 
-## Hydration (eager load)
+## Hydration
 
 ```python
-person = session.get(Person, iri, depth=0)   # scalars only
-person = session.get(Person, iri, depth=1)   # one hop of relationships
-person = session.get(Person, iri, depth=2)   # two hops
+session.get(Person, iri, depth=0)  # scalars
+session.get(Person, iri, depth=1)  # one relationship hop
 ```
 
-`depth` is the ORM analogue of eager-loading related objects after a primary fetch. Query results support the same `depth` on `.all()` and `.first()`.
+ORM eager-load. Query `.all(depth=1)` and `.first(depth=1)` accept the same parameter.
+
+Loading scalars and objects ultimately uses TripleModel `from_graph` (or equivalent) as integration replaces interim loaders in `hydration.py` / `graph.py`.
 
 ---
 
-## Export (optional)
+## Export and file I/O
 
-ORM usage does **not** require export helpers. For Turtle, JSON-LD, and other formats:
+**Preferred for files without a session:**
+
+```python
+from triplemodel import TripleModel  # example — use your TripleModel classes
+# persons = Person.parse("data.ttl")
+```
+
+**From SparqlModel today (interim):**
 
 ```python
 from sparqlmodel.serializers import export_model
-print(export_model(person, format="turtle"))
+export_model(person, format="turtle")
 ```
 
-**0.1.x:** interim serializers in SparqlModel. **0.4+:** delegates to TripleModel `parse` / `serialize`.
+Roadmap: SparqlModel export becomes a thin wrapper over TripleModel `serialize`; new formats are added in TripleModel only.
+
+---
+
+## Current integration status
+
+| Capability | Owner today | Direction |
+|------------|-------------|-----------|
+| Literals, XSD, subject IRIs | TripleModel (package dep) | SparqlModel stops reimplementing in `graph.py` |
+| `session.put` graph writes | SparqlModel + interim `graph.py` | `sync_to_graph` + cascade orchestration |
+| `session.get` / query hydrate | SparqlModel + interim loaders | `from_graph` + depth walker |
+| Turtle / JSON-LD export | Interim `serializers.py` | TripleModel `serialize` |
+| Query compiler | SparqlModel only | Stays in SparqlModel |
+
+See [ROADMAP.md](ROADMAP.md) for milestones.
 
 ---
 
 ## When not to use SparqlModel
 
-Use **TripleModel** directly when:
+Use **TripleModel** alone when:
 
-- You have no `SPARQLSession` — scripts, ETL, libraries, tests
-- You only need `to_graph()` / `from_graph()` or file parse/serialize
-- You hand-write SPARQL and do not need the Python query compiler
+- There is no long-lived session
+- You only need correct triples or file round-trip
+- You are building a library that should not depend on ORM semantics
 
 Use **SparqlModel** when:
 
-- You build a backend, API, or long-lived app over a triple store
-- You want `put` / `delete` cascade semantics and Pythonic `where()` filters
+- You are building an application or API over a triple store
+- You need `put` / `delete` cascade and Pythonic `where()` filters
 
 ---
 
-## Roadmap (ORM features)
+## Further reading
 
-Planned ORM capabilities (see [ROADMAP.md](ROADMAP.md)):
-
-- **0.2** — `HttpStore`, identity map, session cache, richer query compiler, optional FastAPI
-- **0.3** — delegate mapping to TripleModel; **public ORM API unchanged**
-- **0.4+** — delegate file I/O; SparqlModel stays session + SPARQL focused
-
-Built on [TripleModel](https://github.com/eddiethedean/triplemodel).
+- [TripleModel docs](https://triplemodel.readthedocs.io/) — mapping, terms, files
+- [ECOSYSTEM.md](ECOSYSTEM.md) — maintainer boundaries and module retirement
+- [ROADMAP.md](ROADMAP.md) — ORM features and wiring schedule

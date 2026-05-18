@@ -1,4 +1,4 @@
-"""ORM persistence policy (cascade, orphans); mapping delegates to TripleModel in 0.3+."""
+"""ORM persistence policy (cascade, orphans); mapping via triplemodel>=0.9 (retiring interim convert)."""
 
 from __future__ import annotations
 
