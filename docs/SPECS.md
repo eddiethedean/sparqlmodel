@@ -297,6 +297,8 @@ SPARQL 1.1 over HTTP (`httpx`) with a **local mirror** ([`stores/http.py`](../sr
 
 External writers or SELECT-only visibility without a matching mirror update can make `get` return `None` while `execute` returns bindings. Single-writer per endpoint is assumed. If both `auth` and `bearer_token` are set, Basic auth wins.
 
+`put` may send `DELETE DATA` followed by `INSERT DATA` in one SPARQL Update request; whether that is atomic depends on the endpoint (not guaranteed in 0.2). After `HttpStore.close()`, `query` and `update_graph` raise `RuntimeError`.
+
 ## Store protocol (target API)
 
 **Current (0.2):** [`Store`](../src/sparqlmodel/stores/base.py) — `graph`, `query(sparql)`, `update_graph(add=, remove=)`.
@@ -365,6 +367,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 | `put(..., flush=False)` | Pending models not visible in `get` until flush |
 | `flush()` | Not a full remote transaction; partial failure re-queues remainder (0.2+) |
 | Sessions | Not thread-safe; one session per task unless scoped externally |
+| Closed session | After `close()`, all CRUD/query methods raise `RuntimeError`; share the store via a new session |
 | Interim mapping | Until 0.3, some paths use `graph.py` instead of TripleModel |
 
 ## Other (current)

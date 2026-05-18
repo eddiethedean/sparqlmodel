@@ -9,6 +9,8 @@ import pytest
 from sparqlmodel import SPARQLSession
 from tests.models import Person
 
+_CLOSED_MSG = "Cannot use a closed SPARQLSession"
+
 
 def test_session_context_manager_flushes_pending(odos: Person) -> None:
     with SPARQLSession(autoflush=False) as session:
@@ -70,5 +72,28 @@ def test_session_context_manager_closes_store_on_exit() -> None:
 def test_session_enter_after_close_raises() -> None:
     session = SPARQLSession()
     session.close()
-    with pytest.raises(RuntimeError, match="closed"), session:
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG), session:
         pass
+
+
+def test_session_operations_after_close_raise(odos: Person) -> None:
+    session = SPARQLSession()
+    session.close()
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.put(odos)
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.add(odos)
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.get(Person, odos.id)
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.query(Person).all()
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.execute("SELECT * WHERE { ?s ?p ?o }")
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.flush()
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.delete(odos)
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.expire(Person, odos.id)
+    with pytest.raises(RuntimeError, match=_CLOSED_MSG):
+        session.rollback_pending()

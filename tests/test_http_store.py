@@ -195,6 +195,22 @@ def test_http_store_query_non_select() -> None:
     store.close()
 
 
+def test_http_store_operations_after_close_raise() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    store.close()
+    with pytest.raises(RuntimeError, match="closed HttpStore"):
+        store.query("SELECT * WHERE { ?s ?p ?o }")
+    g = Graph()
+    g.add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
+    with pytest.raises(RuntimeError, match="closed HttpStore"):
+        store.update_graph(add=g)
+    store.close()
+
+
 def test_http_store_endpoint_and_owned_close() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})

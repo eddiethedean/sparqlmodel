@@ -13,6 +13,7 @@ from starlette.testclient import TestClient  # noqa: E402
 from sparqlmodel import IRI  # noqa: E402
 from sparqlmodel.fastapi import (  # noqa: E402
     SessionDep,
+    _negotiate_format_kind,
     init_app,
     jsonld_response,
     negotiated_response,
@@ -48,6 +49,34 @@ def test_negotiated_response_jsonld() -> None:
     request = httpx.Request("GET", "http://test/", headers={"accept": "application/ld+json"})
     response = negotiated_response(request, person)
     assert response.media_type == "application/ld+json"
+
+
+def test_negotiate_format_kind_edge_cases() -> None:
+    mapping = {"text/turtle": "turtle", "application/ld+json": "jsonld"}
+    assert _negotiate_format_kind("", mapping) == "turtle"
+    assert _negotiate_format_kind("*/*", mapping) == "turtle"
+    assert _negotiate_format_kind("  , text/turtle", mapping) == "turtle"
+    assert _negotiate_format_kind("application/ld+json;q=not-a-number", mapping) == "jsonld"
+    assert _negotiate_format_kind("*/*;q=0.5", mapping) == "turtle"
+
+
+def test_negotiated_response_respects_q_values() -> None:
+    person = Person(id=IRI("urn:p:q"), name="Q")
+    request = httpx.Request(
+        "GET",
+        "http://test/",
+        headers={"accept": "application/ld+json;q=1.0, text/turtle;q=0.5"},
+    )
+    response = negotiated_response(request, person)
+    assert response.media_type == "application/ld+json"
+
+    request_turtle = httpx.Request(
+        "GET",
+        "http://test/",
+        headers={"accept": "text/turtle;q=1.0, application/ld+json;q=0.1"},
+    )
+    response_turtle = negotiated_response(request_turtle, person)
+    assert response_turtle.media_type == "text/turtle"
 
 
 def test_fastapi_app_with_session() -> None:

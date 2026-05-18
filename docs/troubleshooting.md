@@ -57,6 +57,19 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Fix:** Use a `str` field for literal URLs (0.2+ compiles URL-shaped strings on `str` fields as literals).
 
+## `RuntimeError: Cannot use a closed SPARQLSession`
+
+**Symptom:** CRUD or `query` / `execute` fails after the session was closed.
+
+**Cause:** `SPARQLSession.close()` (or exiting a `with` block when `close_on_exit=True`) marks the session closed. Further use of that session object is invalid.
+
+**Fix:** Open a new session for the same store::
+
+    with SPARQLSession(store=shared_store) as session:
+        session.put(model)
+
+Do not keep a session reference past request teardown when using FastAPI `SessionDep`.
+
 ## Thread safety / corrupted session state
 
 **Symptom:** Intermittent wrong cache or flush behavior under concurrency.

@@ -490,6 +490,32 @@ def test_execute_with_prefix_in_query(session, odos: Person) -> None:
     assert len(results) >= 1
 
 
+def test_execute_injects_prefixes_when_prologue_missing(session, odos: Person) -> None:
+    session.put(odos)
+    captured: list[str] = []
+
+    def capture(sparql: str) -> list[dict[str, object]]:
+        captured.append(sparql)
+        return []
+
+    with patch.object(session.store, "query", side_effect=capture):
+        session.execute("SELECT ?person WHERE { ?person a <https://schema.org/Person> . }")
+    assert captured
+    assert "PREFIX schema:" in captured[0]
+
+
+def test_execute_prefix_in_string_literal_still_injects(session) -> None:
+    captured: list[str] = []
+
+    def capture(sparql: str) -> list[dict[str, object]]:
+        captured.append(sparql)
+        return []
+
+    with patch.object(session.store, "query", side_effect=capture):
+        session.execute('SELECT ?x WHERE { ?x ?p "mentions PREFIX not a decl" }')
+    assert "PREFIX schema:" in captured[0]
+
+
 # --- store ---
 
 

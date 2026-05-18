@@ -16,6 +16,8 @@ from rdflib.query import ResultRow
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.types import NamespaceRegistry
 
+_CLOSED_STORE_MSG = "Cannot use a closed HttpStore"
+
 
 def _graph_to_insert_data(graph: Graph) -> str:
     if len(graph) == 0:
@@ -94,6 +96,11 @@ class HttpStore:
                 timeout=timeout,
                 follow_redirects=True,
             )
+        self._closed = False
+
+    def _check_open(self) -> None:
+        if self._closed:
+            raise RuntimeError(_CLOSED_STORE_MSG)
 
     @property
     def graph(self) -> Graph:
@@ -108,6 +115,9 @@ class HttpStore:
         return self._endpoint
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         if self._owns_client:
             self._client.close()
 
@@ -118,6 +128,7 @@ class HttpStore:
         self.close()
 
     def _post_update(self, update: str) -> None:
+        self._check_open()
         if not update.strip():
             return
         url = self._sparql_url()
@@ -141,6 +152,7 @@ class HttpStore:
 
     def query(self, sparql: str) -> list[dict[str, Any]]:
         """Execute SPARQL SELECT against the remote endpoint."""
+        self._check_open()
         url = self._sparql_url()
         try:
             response = self._client.post(
@@ -172,6 +184,7 @@ class HttpStore:
 
     def update_graph(self, add: Graph | None = None, remove: Graph | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""
+        self._check_open()
         parts: list[str] = []
         if remove is not None and len(remove):
             parts.append(_graph_to_delete_data(remove))

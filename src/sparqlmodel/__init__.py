@@ -8,7 +8,13 @@ session, query compiler, stores, and cascade policy.
 """
 
 from sparqlmodel._version import __version__
-from sparqlmodel.exceptions import ConfigurationError, HydrationError, QueryError, SparqlModelError
+from sparqlmodel.exceptions import (
+    ConfigurationError,
+    HydrationError,
+    QueryError,
+    SparqlModelError,
+    StaleTripleWarning,
+)
 from sparqlmodel.fields import Field, Relationship
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.session import SPARQLSession
@@ -28,5 +34,6 @@ __all__ = [
     "SPARQLModel",
     "SPARQLSession",
     "SparqlModelError",
+    "StaleTripleWarning",
     "__version__",
 ]

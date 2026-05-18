@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from types import TracebackType
 from typing import Any, cast
 
@@ -25,6 +26,14 @@ from sparqlmodel.session_state import (
 from sparqlmodel.stores.base import Store
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI, NamespaceRegistry
+
+_CLOSED_SESSION_MSG = "Cannot use a closed SPARQLSession"
+_PREFIX_DECL_RE = re.compile(r"^\s*PREFIX\b", re.IGNORECASE | re.MULTILINE)
+
+
+def _sparql_has_prefix_declarations(sparql: str) -> bool:
+    """Return True if ``sparql`` already declares at least one PREFIX."""
+    return _PREFIX_DECL_RE.search(sparql) is not None
 
 
 class SPARQLSession:
@@ -75,8 +84,13 @@ class SPARQLSession:
     def graph(self) -> Graph:
         return self._store.graph
 
+    def _check_open(self) -> None:
+        if self._closed:
+            raise RuntimeError(_CLOSED_SESSION_MSG)
+
     def flush(self) -> None:
         """Write all pending models queued with ``put(..., flush=False)``."""
+        self._check_open()
         pending = list(self._state.pending)
         index = 0
         try:
@@ -92,6 +106,7 @@ class SPARQLSession:
 
     def rollback_pending(self) -> None:
         """Discard pending models without writing to the store."""
+        self._check_open()
         self._state.clear_pending()
 
     def close(self) -> None:
@@ -104,8 +119,7 @@ class SPARQLSession:
             close()
 
     def __enter__(self) -> Self:
-        if self._closed:
-            raise RuntimeError("Cannot use a closed SPARQLSession as a context manager")
+        self._check_open()
         return self
 
     def __exit__(
@@ -126,6 +140,7 @@ class SPARQLSession:
 
     def expire(self, model_cls: type[SPARQLModel], iri: str | IRI) -> None:
         """Remove a resource from the identity map and hydration cache."""
+        self._check_open()
         key = identity_key_for_iri(model_cls, iri)
         self._state.evict_identity_prefix(key[0], key[1])
         self._state.invalidate_hydration_for(key[0], key[1])
@@ -158,6 +173,7 @@ class SPARQLSession:
 
     def add(self, model: SPARQLModel) -> SPARQLModel:
         """Insert model triples into the store (no delete)."""
+        self._check_open()
         self._maybe_autoflush()
         model.ensure_id()
         self._check_stale_add(model)
@@ -169,6 +185,7 @@ class SPARQLSession:
 
     def put(self, model: SPARQLModel, *, flush: bool = True) -> SPARQLModel:
         """Upsert model and cascaded embedded resources."""
+        self._check_open()
         if flush:
             self._maybe_autoflush()
             return self._put_impl(model)
@@ -181,6 +198,7 @@ class SPARQLSession:
 
     def delete(self, model: SPARQLModel) -> None:
         """Remove owned triples for the model and cascaded embedded resources."""
+        self._check_open()
         self._maybe_autoflush()
         model.ensure_id()
         self._invalidate_cascade_keys(model, for_put=False)
@@ -198,6 +216,7 @@ class SPARQLSession:
         depth: int = 0,
     ) -> SPARQLModel | None:
         """Load a model by IRI with optional relationship depth."""
+        self._check_open()
         self._maybe_autoflush()
         validate_depth(depth)
         id_key = identity_key_for_iri(model_cls, iri)
@@ -224,6 +243,7 @@ class SPARQLSession:
         depth: int = 0,
     ) -> list[SPARQLModel]:
         """Hydrate query results with identity map and session cache."""
+        self._check_open()
         validate_depth(depth)
         results: list[SPARQLModel] = []
         seen: set[str] = set()
@@ -249,12 +269,14 @@ class SPARQLSession:
 
     def query(self, model_cls: type[SPARQLModel]) -> Query:
         """Start a fluent query for the given model class."""
+        self._check_open()
         return Query(self, model_cls)
 
     def execute(self, sparql: str) -> list[dict[str, Any]]:
         """Execute raw SPARQL SELECT."""
+        self._check_open()
         self._maybe_autoflush()
-        if "PREFIX" not in sparql.upper():
+        if not _sparql_has_prefix_declarations(sparql):
             prefix_block = self._namespaces.sparql_prefixes()
             if prefix_block:
                 sparql = f"{prefix_block}\n\n{sparql}"

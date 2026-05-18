@@ -19,7 +19,7 @@ Build knowledge-graph and metadata apps with Pydantic models, `with SPARQLSessio
 |------|----------------|
 | **Models** | `SPARQLModel`, `Field`, `Relationship`, `IRI` — Pydantic validation + `rdf_type` |
 | **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue |
-| **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, ordering, multi-hop) |
+| **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, comparisons, multi-hop) |
 | **Stores** | `MemoryStore` (default), `HttpStore` for Fuseki/Jena-style endpoints |
 | **FastAPI** | `SessionDep`, `http_store_lifespan`, Turtle/JSON-LD responses |
 | **Cascade** | Composition on `put`/`delete`; `Relationship(..., cascade=False)` for references |

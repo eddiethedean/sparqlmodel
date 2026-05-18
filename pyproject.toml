@@ -69,6 +69,9 @@ include = ["src/sparqlmodel", "README.md", "LICENSE", "CHANGELOG.md"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers -p no:green-light"
+filterwarnings = [
+    "ignore:.*async fixture 'ensure_greenlet_context'.*:pytest.PytestRemovedIn9Warning",
+]
 
 [tool.coverage.run]
 source = ["sparqlmodel"]

@@ -53,6 +53,39 @@ def _body_bytes(body: str | bytes) -> bytes:
     return body if isinstance(body, bytes) else body.encode("utf-8")
 
 
+def _negotiate_format_kind(accept: str, mapping: dict[str, str]) -> str:
+    """Pick the highest-q format kind from an Accept header (defaults to Turtle)."""
+    if not accept.strip() or accept.strip() == "*/*":
+        return "turtle"
+
+    best_q = -1.0
+    best_kind = "turtle"
+    for part in accept.split(","):
+        piece = part.strip()
+        if not piece:
+            continue
+        if ";q=" in piece:
+            media, _, q_part = piece.partition(";q=")
+            media = media.strip()
+            try:
+                q = float(q_part.strip())
+            except ValueError:
+                q = 0.0
+        else:
+            media = piece
+            q = 1.0
+        if media == "*/*":
+            if q > best_q:
+                best_q = q
+                best_kind = "turtle"
+            continue
+        for media_type, kind in mapping.items():
+            if media == media_type and q > best_q:
+                best_q = q
+                best_kind = kind
+    return best_kind
+
+
 def turtle_response(
     model: SPARQLModel | Graph,
     *,
@@ -94,9 +127,6 @@ def negotiated_response(
         "text/turtle": "turtle",
         "application/ld+json": "jsonld",
     }
-    for media_type, kind in mapping.items():
-        if media_type in accept:
-            if kind == "jsonld":
-                return jsonld_response(model)
-            return turtle_response(model)
+    if _negotiate_format_kind(accept, mapping) == "jsonld":
+        return jsonld_response(model)
     return turtle_response(model)

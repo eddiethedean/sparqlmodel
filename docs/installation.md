@@ -44,6 +44,8 @@ pip install -e ".[dev,http,fastapi,docs]"
 pytest
 ```
 
+If you see many `PytestRemovedIn9Warning` messages about `ensure_greenlet_context`, uninstall the unrelated `pytest-green-light` plugin from your environment (this repo already disables it via `-p no:green-light` in `pyproject.toml`).
+
 Build documentation locally:
 
 ```bash

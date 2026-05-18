@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`SPARQLSession`** — raise `RuntimeError` on use after `close()` (CRUD, `query`, `execute`, `flush`, `expire`, `rollback_pending`)
+- **`HttpStore`** — raise `RuntimeError` on `query` / `update_graph` after `close()`
+- **`execute()`** — inject session `PREFIX` declarations only when the query prologue has no `PREFIX` line (not when the word appears in a string literal)
+- **`negotiated_response`** — respect `Accept` quality values (`;q=`) when choosing Turtle vs JSON-LD
+
+### Changed
+
+- Export `StaleTripleWarning` from `sparqlmodel` package root
+
+### Documentation
+
+- SPECS / troubleshooting — closed-session behavior; README clarifies comparison operators vs SQL `ORDER BY`
+
 ## [0.2.0] - 2026-05-18
 
 ### Added
