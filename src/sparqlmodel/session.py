@@ -78,9 +78,17 @@ class SPARQLSession:
     def flush(self) -> None:
         """Write all pending models queued with ``put(..., flush=False)``."""
         pending = list(self._state.pending)
+        index = 0
+        try:
+            while index < len(pending):
+                self._put_impl(pending[index])
+                index += 1
+        except Exception:
+            self._state.clear_pending()
+            for model in pending[index:]:
+                self._state.add_pending(model)
+            raise
         self._state.clear_pending()
-        for model in pending:
-            self._put_impl(model)
 
     def rollback_pending(self) -> None:
         """Discard pending models without writing to the store."""
@@ -122,6 +130,13 @@ class SPARQLSession:
         self._state.evict_identity_prefix(key[0], key[1])
         self._state.invalidate_hydration_for(key[0], key[1])
 
+    @staticmethod
+    def _relationships_materialized(model: SPARQLModel) -> bool:
+        for name, _field_info, _related in model.get_relationship_fields():
+            if isinstance(getattr(model, name, None), SPARQLModel):
+                return True
+        return False
+
     def _maybe_autoflush(self) -> None:
         if self.autoflush and self._state.pending:
             self.flush()
@@ -157,8 +172,11 @@ class SPARQLSession:
         if flush:
             self._maybe_autoflush()
             return self._put_impl(model)
+        model.ensure_id()
+        assert model.id is not None
+        key = identity_key_for_iri(type(model), model.id)
         self._state.add_pending(model)
-        self._state.set_identity(model)
+        self._state.invalidate_hydration_for(key[0], key[1])
         return model
 
     def delete(self, model: SPARQLModel) -> None:
@@ -186,6 +204,11 @@ class SPARQLSession:
         hkey = (model_cls, id_key[1], depth)
         hydrated = self._state.get_hydration(hkey)
         if hydrated is _HYDRATION_MISS:
+            if depth == 0:
+                identity = self._state.get_identity(id_key)
+                if identity is not None and not self._relationships_materialized(identity):
+                    self._state.set_hydration(hkey, identity)
+                    return identity
             model = hydrate_one(model_cls, iri, self._store, depth=depth)
             if model is not None:
                 self._state.set_identity(model)

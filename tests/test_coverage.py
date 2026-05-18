@@ -73,7 +73,7 @@ def test_format_object_variants() -> None:
 
     reg = NamespaceRegistry(Person.get_prefixes())
     assert _format_object(IRI("urn:x"), reg).startswith("<")
-    assert _format_object("https://example.org/x", reg).startswith("<")
+    assert '"https://example.org/x"' in _format_object("https://example.org/x", reg)
     assert '"schema:Person"' in _format_object("schema:Person", reg)
     assert _format_object("schema:Person", reg, field_annotation=IRI).startswith("<")
     assert _annotation_expects_iri(str | IRI | None) is True

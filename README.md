@@ -70,7 +70,7 @@ with SPARQLSession() as session:
 | `execute(sparql)` | Raw SPARQL SELECT |
 | `flush()` / `rollback_pending()` | Apply or discard pending `put(..., flush=False)` writes |
 | `close()` | Close the backing store when it supports `close()` |
-| `expire(iri)` | Evict cached instances for an IRI |
+| `expire(Model, iri)` | Evict cached instances for an IRI |
 
 `put` treats nested `SPARQLModel` values as **composition** (cascade delete and orphan cleanup). Use `Relationship(..., cascade=False)` or an `IRI` reference when the linked resource is owned elsewhere.
 
@@ -114,6 +114,15 @@ from sparqlmodel import HttpStore, SPARQLSession
 with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
     session.put(odos)
 ```
+
+`query` / `execute` hit the remote endpoint; `get` and cascade logic use the mirror updated by this store’s writes. External changes visible only via SELECT are not visible to `get` until the mirror is updated.
+
+## Known limitations
+
+- **Multi-valued predicates** — first value per predicate on load; `add` can duplicate literals
+- **`add` vs `put`** — `add` does not remove stale triples; prefer `put` for upserts
+- **`HttpStore`** — mirror can lag behind the remote dataset (see above)
+- **Shared embedded resources** — same nested object linked from multiple roots is not deduplicated in memory on load
 
 ## FastAPI
 

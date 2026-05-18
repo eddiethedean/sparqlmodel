@@ -51,7 +51,7 @@ On clean exit: `flush()` if the pending queue is non-empty. On exception: `rollb
 ## Properties
 
 - `store` — backing store
-- `graph` — rdflib `Graph` (in-memory store)
+- `graph` — rdflib `Graph` (`MemoryStore` graph, or `HttpStore` local mirror — not the remote dataset)
 - `namespaces` — `NamespaceRegistry` for compiler and serialization
 
 ---
@@ -185,15 +185,33 @@ Cascade orchestration **remains in SparqlModel** after wiring.
 
 ---
 
-# Known limitations (0.1.x)
+# HttpStore
+
+SPARQL 1.1 over HTTP (`httpx`) with a **local mirror** ([`stores/http.py`](../src/sparqlmodel/stores/http.py)).
+
+| Method | Target |
+|--------|--------|
+| `update_graph` | Remote `INSERT DATA` / `DELETE DATA`, then mirror delta on success |
+| `query` / `execute` (via session) | Remote SELECT |
+| `graph`, `get`, cascade/orphan | Mirror only |
+
+External writers or SELECT-only visibility without a matching mirror update can make `get` return `None` while `execute` returns bindings. Single-writer per endpoint is assumed. If both `auth` and `bearer_token` are set, Basic auth wins.
+
+---
+
+# Known limitations (0.2.x)
 
 | Area | Behavior |
 |------|----------|
+| `HttpStore` mirror | `get` / cascade use mirror; `query` uses remote — see above |
 | Multi-valued predicates | First object per predicate on load; `add` can duplicate |
+| `put(..., flush=False)` | Pending models not visible in `get` until flush |
+| `flush()` | Not transactional across multiple pending models; partial failure re-queues remainder |
 | Interim vs TripleModel paths | Some round-trips differ until integration completes |
 | Nested query filters | Related resource must have expected `rdf:type` |
 | JSON-LD | `model_dump_jsonld` vs `export_model(..., "json-ld")` differ |
 | Export without `id` | `ensure_id()` may assign `urn:uuid:…` |
+| Sessions | Not thread-safe; one session per task |
 
 ---
 
@@ -205,9 +223,9 @@ Long term: all formats via TripleModel; SparqlModel may expose session-scoped he
 
 ---
 
-# FastAPI (planned)
+# FastAPI (optional extra)
 
-Optional `sparqlmodel[fastapi]`: RDF response types, content negotiation.
+Install `sparqlmodel[fastapi]`. [`fastapi/deps.py`](../src/sparqlmodel/fastapi/deps.py) provides `init_app`, `get_session`, `SessionDep`, `http_store_lifespan`. [`fastapi/__init__.py`](../src/sparqlmodel/fastapi/__init__.py) provides `turtle_response`, `jsonld_response`, `negotiated_response`.
 
 ---
 

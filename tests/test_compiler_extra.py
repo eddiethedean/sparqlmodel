@@ -9,6 +9,17 @@ from sparqlmodel.types import NamespaceRegistry, is_compact_iri
 from tests.models import Person
 
 
+def test_format_object_url_string_on_str_field_is_literal() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(
+        Person,
+        (Person.name == "https://example.com/label",),
+        registry,
+    )
+    assert '"https://example.com/label"' in sparql
+    assert "<https://example.com/label>" not in sparql
+
+
 def test_format_object_colon_literal() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     sparql = compile_where(Person, (Person.name == "12:30",), registry)

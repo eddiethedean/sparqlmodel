@@ -8,12 +8,54 @@ from sparqlmodel import IRI, SPARQLSession
 from tests.models import Person
 
 
-def test_identity_map_same_instance_on_get(session: SPARQLSession, odos: Person) -> None:
-    session.put(odos)
-    a = session.get(Person, odos.id)
-    b = session.get(Person, odos.id)
+def test_identity_map_same_instance_on_get(session: SPARQLSession) -> None:
+    from sparqlmodel import IRI
+
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    assert session.get(Person, plain.id) is plain
+    a = session.get(Person, plain.id)
+    b = session.get(Person, plain.id)
     assert a is not None
     assert a is b
+
+
+def test_put_flush_false_get_before_flush_not_pending_instance(
+    session: SPARQLSession,
+) -> None:
+    from sparqlmodel import IRI
+
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.autoflush = False
+    session.put(plain, flush=False)
+    found = session.get(Person, plain.id)
+    assert found is None or found is not plain
+    session.flush()
+    assert session.get(Person, plain.id) is plain
+
+
+def test_flush_requeues_on_failure(
+    session: SPARQLSession, odos: Person, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sparqlmodel import IRI
+
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session.autoflush = False
+    session.put(odos, flush=False)
+    session.put(other, flush=False)
+    calls = {"n": 0}
+
+    def failing_put(model: Person) -> Person:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("put failed")
+        return SPARQLSession._put_impl(session, model)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session, "_put_impl", failing_put)
+    with pytest.raises(RuntimeError, match="put failed"):
+        session.flush()
+    assert len(session._state.pending) == 1
+    assert session._state.pending[0] is other
 
 
 def test_put_flush_false_queues_until_flush(session: SPARQLSession, odos: Person) -> None:

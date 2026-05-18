@@ -46,7 +46,17 @@ class HttpStore:
 
     ``update_graph`` pushes ``INSERT DATA`` / ``DELETE DATA`` to the remote endpoint
     and applies the same delta to the mirror on success. ``graph`` reads the mirror
-    (for cascade / orphan logic). ``query`` executes SELECT against the remote endpoint.
+    (for cascade / orphan logic and ``session.get``). ``query`` executes SELECT against
+    the remote endpoint only.
+
+    **Mirror limitations:** Data written outside this store instance (another app,
+    admin UI, or raw SPARQL UPDATE) is visible to ``query`` / ``execute`` but not to
+    ``graph``, ``get``, or cascade/orphan logic until the mirror is updated. Prefer
+    :class:`~sparqlmodel.stores.memory.MemoryStore` for single-process apps and tests.
+    Assume a single writer per endpoint when using ``HttpStore``.
+
+    If both ``auth`` and ``bearer_token`` are set, Basic ``auth`` wins for
+    ``Authorization``.
     """
 
     def __init__(

@@ -90,8 +90,8 @@ class AndExpr:
 
     def __or__(self, other: CompareExpr | OrExpr) -> OrExpr:
         if isinstance(other, OrExpr):
-            return OrExpr(self.expressions + other.expressions)
-        return OrExpr(self.expressions + (other,))
+            return OrExpr((self,) + other.expressions)
+        return OrExpr((self, other))
 
 
 @dataclass(frozen=True)

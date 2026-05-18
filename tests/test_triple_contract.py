@@ -92,6 +92,26 @@ class PersonNoCascade(SPARQLModel):
     )
 
 
+def test_put_graph_contract_typed_literals() -> None:
+    class FlagModel(SPARQLModel):
+        rdf_type = "schema:Thing"
+        __prefixes__ = {"schema": "https://schema.org/"}
+
+        id: IRI
+        active: bool = Field("schema:value")
+
+    class NumModel(SPARQLModel):
+        rdf_type = "schema:Thing"
+        __prefixes__ = {"schema": "https://schema.org/"}
+
+        id: IRI
+        count: int = Field("schema:value")
+        score: float = Field("schema:value")
+
+    assert_put_graph_contract(FlagModel(id=IRI("urn:flag"), active=True))
+    assert_put_graph_contract(NumModel(id=IRI("urn:n"), count=3, score=1.5))
+
+
 def test_relationship_cascade_false_skips_nested_put() -> None:
     org = Organization(id=IRI("urn:org:nc"), name="Detached", located_in=None)
     person = PersonNoCascade(id=IRI("urn:p:nc"), name="Solo", works_for=org)

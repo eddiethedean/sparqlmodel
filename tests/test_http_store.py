@@ -239,6 +239,37 @@ def test_http_store_update_remove_only() -> None:
     store.close()
 
 
+def test_http_store_get_uses_mirror_not_remote_select() -> None:
+    """SELECT can see remote data that get() cannot until the mirror is updated."""
+    state: dict[str, object] = {"select_count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") == "application/sparql-query":
+            state["select_count"] = int(state["select_count"]) + 1
+            return httpx.Response(
+                200,
+                json={
+                    "head": {"vars": ["person"]},
+                    "results": {
+                        "bindings": [
+                            {"person": {"type": "uri", "value": "urn:person:remote"}},
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=transport)
+    store = HttpStore("http://example.org/sparql", client=client)
+    session = SPARQLSession(store=store)
+    bindings = session.execute("SELECT ?person WHERE { ?person ?p ?o }")
+    assert bindings[0]["person"] == "urn:person:remote"
+    assert session.get(Person, IRI("urn:person:remote")) is None
+    assert len(store.graph) == 0
+    store.close()
+
+
 def test_session_with_http_store_put_and_query() -> None:
     state: dict[str, object] = {"updates": [], "select_count": 0}
 

@@ -73,7 +73,7 @@ You generally **do not** import `triplemodel` in application code unless you are
 | **`execute(sparql)`** | Raw SPARQL SELECT. |
 | **`flush()`** / **`rollback_pending()`** | Apply or discard queued `put(..., flush=False)` writes. |
 | **`close()`** | Close the backing store when it implements `close()` (e.g. `HttpStore`). |
-| **`expire(iri)`** | Evict cached instances for an IRI. |
+| **`expire(Model, iri)`** | Evict cached instances for an IRI. |
 
 ```python
 with SPARQLSession() as session:
@@ -133,6 +133,20 @@ with SPARQLSession() as session:
 ORM eager-load. Query `.all(depth=1)` and `.first(depth=1)` accept the same parameter.
 
 Loading scalars and objects ultimately uses TripleModel `from_graph` (or equivalent) as integration replaces interim loaders in `hydration.py` / `graph.py`.
+
+---
+
+## HttpStore and the local mirror
+
+`HttpStore` (`sparqlmodel[http]`) sends updates to a SPARQL 1.1 endpoint and keeps a **local rdflib mirror** for `session.graph`, `get`, cascade, and orphan logic.
+
+| Operation | Reads / writes |
+|-----------|----------------|
+| `put` / `delete` / `update_graph` | Remote + mirror |
+| `query` / `execute` | Remote only |
+| `get` | Mirror only |
+
+If another process changes the remote dataset, `execute` may return IRIs that `get` cannot load until this store instance has applied the same triples to its mirror. Use `MemoryStore` for single-process apps; treat each `HttpStore` as the single writer for its endpoint.
 
 ---
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`AndExpr.__or__`** — `(A & B) | C` now compiles as (A AND B) OR C, not three disjuncts
+- **`use_not_exists_for_ne`** — unique variables per `!=` inside AND branches of OR
+- **Compiler** — URL-shaped strings on `str` fields compile as literals, not IRIs
+- **`SPARQLSession.get`** — identity map used at `depth=0` when relationships are not materialized
+- **`put(..., flush=False)`** — no longer registers identity before flush; hydration invalidated on queue
+- **`flush()`** — re-queues pending models if a mid-flush `put` fails
+
+### Documentation
+
+- HttpStore mirror model in ORM guide, SPECS, README known limitations
+- `expire(Model, iri)` signature; FastAPI extra marked shipped in SPECS
+- Repository URLs in `pyproject.toml`
+
 ## [0.2.0] - 2026-05-18
 
 ### Added

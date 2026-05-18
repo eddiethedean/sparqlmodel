@@ -30,6 +30,40 @@ def test_compile_or_with_and_branch() -> None:
     assert sparql.count("EXISTS") >= 2
 
 
+def test_and_or_operator_precedence() -> None:
+    """(A & B) | C must be two disjuncts, not three."""
+    registry = NamespaceRegistry(Person.get_prefixes())
+    expr = (Person.name == "Odos") & (Person.name != "Other") | (Person.name == "Ada")
+    sparql = compile_where(Person, (expr,), registry)
+    assert sparql.count("EXISTS") == 2
+    assert sparql.count("||") == 1
+
+
+def test_and_or_precedence_query_integration() -> None:
+    from sparqlmodel import IRI, SPARQLSession
+
+    session = SPARQLSession()
+    session.put(Person(id=IRI("urn:p:1"), name="Odos"))
+    session.put(Person(id=IRI("urn:p:2"), name="Ada"))
+    session.put(Person(id=IRI("urn:p:3"), name="Other"))
+    results = (
+        session.query(Person)
+        .where((Person.name == "Odos") & (Person.name != "Other") | (Person.name == "Ada"))
+        .all()
+    )
+    names = {p.name for p in results}
+    assert names == {"Odos", "Ada"}
+
+
+def test_use_not_exists_for_ne_multiple_in_and_branch() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    branch = AndExpr((Person.name != "A", Person.name != "B"))
+    expr = branch | (Person.name == "C")
+    sparql = compile_where(Person, (expr,), registry, use_not_exists_for_ne=True)
+    assert sparql.count("?__ne_") >= 2
+    assert "?__ne_o" not in sparql
+
+
 def test_or_inside_and_raises() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     bad = AndExpr((OrExpr((Person.name == "A", Person.name == "B")), Person.name == "C"))
@@ -146,6 +180,19 @@ def test_query_use_not_exists_for_ne() -> None:
     results = session.query(Person).where(Person.name != "Drop").use_not_exists_for_ne().all()
     assert len(results) == 1
     assert results[0].name == "Keep"
+
+
+def test_compile_in_non_tuple_raises_type_error() -> None:
+    from dataclasses import replace
+
+    from sparqlmodel.expressions import CompareExpr, CompareOp
+
+    registry = NamespaceRegistry(Person.get_prefixes())
+    expr = replace(Person.name.in_(("a",)), right="not-a-tuple")  # type: ignore[arg-type]
+    assert isinstance(expr, CompareExpr)
+    assert expr.op == CompareOp.IN
+    with pytest.raises(TypeError, match="tuple"):
+        compile_compare(expr, Person, "?person", registry, [0])
 
 
 def test_compare_unsupported_op() -> None:

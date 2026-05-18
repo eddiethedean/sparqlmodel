@@ -51,8 +51,6 @@ def _format_object(
     if isinstance(value, IRI):
         expanded = registry.expand(str(value))
         return _format_iri(expanded)
-    if isinstance(value, str) and value.startswith(("http://", "https://", "urn:")):
-        return _format_iri(value)
     if (
         isinstance(value, str)
         and is_compact_iri(value)
@@ -196,8 +194,8 @@ def compile_compare(
     if expr.right is None and expr.op != CompareOp.IN:
         raise QueryError("Filter value cannot be None; use explicit existence checks")
 
-    if expr.op == CompareOp.IN:
-        if not isinstance(expr.right, tuple) or len(expr.right) == 0:
+    if expr.op == CompareOp.IN and isinstance(expr.right, tuple):
+        if len(expr.right) == 0:
             raise QueryError("IN filter requires a non-empty tuple of values")
         for item in expr.right:
             if item is None:
@@ -231,7 +229,8 @@ def compile_compare(
         patterns.append(f"{subject_var} <{pred_expanded}> {obj} .")
     elif expr.op == CompareOp.NE:
         if use_not_exists_for_ne:
-            inner = f"{subject_var} <{pred_expanded}> ?__ne_o .\n        FILTER(?__ne_o = {obj})"
+            ne_var = f"?__ne_{id(expr)}"
+            inner = f"{subject_var} <{pred_expanded}> {ne_var} .\n        FILTER({ne_var} = {obj})"
             filters.append(f"NOT EXISTS {{ {inner} }}")
         else:
             neq_var = f"?__neq_{field_name}_{id(expr)}"
