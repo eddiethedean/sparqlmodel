@@ -7,17 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Documentation
+## [0.2.0] - 2026-05-18
 
-- [docs/SPECS.md](docs/SPECS.md) — production ORM checklist (P0/P1/P2), target APIs for query/session/store/relationships/security
-- [docs/ROADMAP.md](docs/ROADMAP.md) — milestones 0.5–1.0, SQLModel parity and SPARQLMojo comparison tables
-- [docs/PLAN.md](docs/PLAN.md) — production ORM definition, parity tiers, competitive positioning, release strategy
-- [docs/PRODUCTION.md](docs/PRODUCTION.md) — operator guide (HttpStore, sessions, deployment)
-- [docs/ORM.md](docs/ORM.md) — production readiness section; [README.md](README.md) doc links updated
+### Added
+
+- **`HttpStore`** — SPARQL 1.1 over HTTP (`httpx`), local graph mirror, optional `sparqlmodel[http]` extra
+- **Session identity map** and hydration cache; `flush()`, `rollback_pending()`, `expire(model_cls, iri)`, `put(..., flush=False)`, `autoflush`
+- **Query compiler:** `OR`, ordering (`<`, `>`, `<=`, `>=`), `IN` (`FieldRef.in_`), multi-hop paths, optional `Query.use_not_exists_for_ne()` for `!=`
+- **`sparqlmodel/_triple.py`** — dynamic `TripleModel` adapter and contract tests vs interim `put` graphs
+- **`Relationship(..., cascade=False)`** for non-owned embeds
+- **`StaleTripleWarning`** on overlapping `add()` for the same subject
+- **`sparqlmodel[fastapi]`** — `init_app`, `SessionDep`, `http_store_lifespan`, `turtle_response`, `jsonld_response`, `negotiated_response`
+
+### Changed
+
+- `SPARQLSession` accepts any `Store` implementation (not only `MemoryStore`)
+- Pluggable `Store` protocol documented in [docs/SPECS.md](docs/SPECS.md)
 
 ### Fixed
 
-- **`AndExpr.__or__`** — `(A & B) | C` now compiles as (A AND B) OR C, not three disjuncts
+- **`AndExpr.__or__`** — `(A & B) | C` compiles as (A AND B) OR C, not three flat disjuncts
 - **`use_not_exists_for_ne`** — unique variables per `!=` inside AND branches of OR
 - **Compiler** — URL-shaped strings on `str` fields compile as literals, not IRIs
 - **`SPARQLSession.get`** — identity map used at `depth=0` when relationships are not materialized
@@ -26,31 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- HttpStore mirror model in ORM guide, SPECS, README known limitations
-- `expire(Model, iri)` signature; FastAPI extra marked shipped in SPECS
-- Repository URLs in `pyproject.toml`
-
-## [0.2.0] - 2026-05-18
-
-### Added
-
-- **`HttpStore`** — SPARQL 1.1 over HTTP (`httpx`), local graph mirror, optional `sparqlmodel[http]` extra
-- **Session identity map** and hydration cache; `flush()`, `rollback_pending()`, `expire()`, `put(..., flush=False)`, `autoflush`
-- **Query compiler:** `OR`, ordering (`<`, `>`, `<=`, `>=`), `IN` (`FieldRef.in_`), multi-hop paths, optional `Query.use_not_exists_for_ne()` for `!=`
-- **`sparqlmodel/_triple.py`** — dynamic `TripleModel` adapter and contract tests vs interim `put` graphs
-- **`Relationship(..., cascade=False)`** for non-owned embeds
-- **`StaleTripleWarning`** on overlapping `add()` for the same subject
-- **`sparqlmodel[fastapi]`** — `turtle_response`, `jsonld_response`, `negotiated_response`
-
-### Changed
-
-- `SPARQLSession` accepts any `Store` implementation (not only `MemoryStore`)
-- Pluggable `Store` protocol documented in [docs/SPECS.md](docs/SPECS.md)
-
-### Documentation
-
-- [docs/ROADMAP.md](docs/ROADMAP.md) — **Shipped (0.2.0)** section; 0.2 checkboxes completed
-- [docs/ORM.md](docs/ORM.md), [docs/SPECS.md](docs/SPECS.md), [README.md](README.md) — HttpStore, session flush/identity map, compiler ops, FastAPI extra
+- [docs/ROADMAP.md](docs/ROADMAP.md) — **Shipped (0.2.0)**; milestones 0.3–1.0 and SQLModel / SPARQLMojo parity tables
+- [docs/ORM.md](docs/ORM.md), [docs/SPECS.md](docs/SPECS.md), [README.md](README.md) — HttpStore mirror, session flush/identity map, compiler ops, FastAPI extra, known limitations
+- [docs/PLAN.md](docs/PLAN.md), [docs/PRODUCTION.md](docs/PRODUCTION.md) — production ORM vision, checklist (P0/P1/P2), operator guide
+- `expire(Model, iri)` signature; repository URLs in `pyproject.toml`
 
 ## [0.1.4] - 2026-05-16
 
@@ -138,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) and `model_dump_jsonld()`
 - Test suite with pytest and CI (ruff, ty, coverage ≥85%)
 
+[0.2.0]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.2.0
 [0.1.4]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.4
 [0.1.3]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.3
 [0.1.2]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.2

@@ -2,6 +2,8 @@
 
 **SparqlModel — the SQLModel of SPARQL:** typed RDF models, a persistent session, and Python filters that compile to SPARQL.
 
+**Release:** [0.2.0](CHANGELOG.md#020---2026-05-18) · [Changelog](CHANGELOG.md)
+
 Define `SPARQLModel` classes, use `with SPARQLSession() as session:`, and work with graphs the way you would with a SQL ORM: `put` and `get`, nested relationships, a query builder, and optional remote stores.
 
 ## Install
