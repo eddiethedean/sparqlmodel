@@ -28,6 +28,27 @@ Your app
 
 ---
 
+## Pydantic integration
+
+`SPARQLModel` is a **Pydantic v2** model (`pydantic.BaseModel` with a custom metaclass for the query DSL). That is the same positioning as SQLModel relative to SQLAlchemy: the ORM session layer plus validated data classes.
+
+| Layer | Validation |
+|-------|------------|
+| **Construct** | `Person(...)` and `Person.model_validate({...})` run Pydantic field validators |
+| **Persist** | `session.put` serializes validated instances via `_triple.to_triplemodel` → `model_validate` on the adapter |
+| **Load** | `session.get` / hydration call `sparql_from_graph` → `SPARQLModel.model_validate` |
+| **Config** | `extra="forbid"` rejects unknown fields on models |
+
+`Field("schema:name", ...)` and `Relationship(...)` wrap `pydantic.Field` and forward keyword arguments (`min_length`, `ge`, `description`, defaults, and so on) for scalar and relationship annotations.
+
+**FastAPI:** use the same `SPARQLModel` classes as request/response models; OpenAPI schema comes from Pydantic. See {doc}`guides/fastapi`.
+
+**Errors:** Pydantic `ValidationError` on load is wrapped as `HydrationError` for a single ORM-facing exception; configuration problems (for example hydration cycles) stay as `ConfigurationError`.
+
+Task-oriented examples: {doc}`guides/models`. Normative detail: {doc}`SPECS` (validation architecture).
+
+---
+
 ## Choose your package
 
 | I need… | Use |

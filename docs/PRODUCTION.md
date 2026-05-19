@@ -77,7 +77,8 @@ Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 
 | Concern | Today | Planned |
 |---------|-------|---------|
-| Write validation | Pydantic on models | SHACL on `put` (**0.9**, TripleModel) |
+| Write validation | Pydantic on `SPARQLModel` at construct / `put` | SHACL on `put` (**0.9**, TripleModel) — complements Pydantic |
+| Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.8** |
 | Query logging | None | Structured SPARQL log (**0.9**) |
 | Bulk import | Repeated `put` | Bulk helpers (**0.9**) |
 

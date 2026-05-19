@@ -5,11 +5,11 @@
 [![Documentation](https://readthedocs.org/projects/sparqlmodel/badge/?version=latest)](https://sparqlmodel.readthedocs.io/en/latest/?badge=latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE)
 
-**The SQLModel of SPARQL** — typed RDF models, a persistent session, and Python filters that compile to SPARQL.
+**The SQLModel of SPARQL** — **Pydantic v2** entity models mapped to RDF, a persistent session, and Python filters that compile to SPARQL.
 
-Build knowledge-graph and metadata apps with Pydantic models, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints.
+Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) for RDF mapping · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#020---2026-05-18) (0.2.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) (Pydantic ↔ RDF) · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#030---2026-05-18) (0.3.0)
 
 ---
 
@@ -17,7 +17,8 @@ Build knowledge-graph and metadata apps with Pydantic models, `with SPARQLSessio
 
 | Area | What you get |
 |------|----------------|
-| **Models** | `SPARQLModel`, `Field`, `Relationship`, `IRI` — Pydantic validation + `rdf_type` |
+| **Models** | `SPARQLModel`, `Field`, `Relationship`, `IRI` — **Pydantic v2** validation (`model_validate`, constraints, `extra="forbid"`) |
+| **RDF mapping** | `rdf_type`, compact predicates, TripleModel `sync_to_graph` / `from_graph` under the hood |
 | **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue |
 | **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, comparisons, multi-hop) |
 | **Stores** | `MemoryStore` (default), `HttpStore` for Fuseki/Jena-style endpoints |
@@ -72,6 +73,33 @@ with SPARQLSession() as session:
     team = session.query(Person).where(Person.works_for.name == "Acme Corp").all()
     full = session.get(Person, odos.id, depth=1)
 ```
+
+---
+
+## Pydantic models
+
+`SPARQLModel` subclasses [`pydantic.BaseModel`](https://docs.pydantic.dev/latest/). You get the same advantages as in FastAPI or SQLModel: typed fields, IDE support, and validation on create and on load.
+
+| When | What runs |
+|------|-----------|
+| `Person(...)` / API body | Pydantic validates types and `Field` constraints |
+| `session.put(model)` | Validated instance → TripleModel adapter → graph |
+| `session.get` / query hydration | Graph → `model_validate` → `SPARQLModel` instance |
+
+```python
+# Field forwards pydantic.Field kwargs (min_length, ge, description, …)
+class Person(SPARQLModel):
+    rdf_type = "schema:Person"
+    __prefixes__ = {"schema": "https://schema.org/"}
+    id: IRI
+    name: str = Field("schema:name", min_length=1)
+```
+
+- **`extra="forbid"`** — unknown fields on a model raise at validation time (safer for APIs).
+- **FastAPI** — reuse the same `SPARQLModel` classes for request/response bodies (see [FastAPI](#fastapi) below).
+- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers are thin wrappers until 0.4; prefer TripleModel for file I/O long term).
+
+Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md#pydantic-integration)
 
 ---
 
@@ -185,7 +213,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 |-------|-------------|
 | **[Read the Docs](https://sparqlmodel.readthedocs.io/en/latest/)** | Full site: install, guides, API reference, troubleshooting |
 | [Getting started](https://sparqlmodel.readthedocs.io/en/latest/getting-started.html) | Quickstart and first session |
-| [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Sessions, queries, FastAPI (task-oriented) |
+| [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Models (Pydantic), sessions, queries, FastAPI |
 | [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
 | [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-10-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
@@ -195,7 +223,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 ---
 
-## Known limitations (0.2)
+## Known limitations (0.3)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade

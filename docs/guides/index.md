@@ -6,6 +6,7 @@ Task-oriented guides for building applications with SparqlModel. For normative A
 :maxdepth: 1
 :hidden:
 
+models
 sessions
 queries
 fastapi
@@ -13,6 +14,7 @@ fastapi
 
 | Guide | Description |
 |-------|-------------|
+| {doc}`models` | Pydantic validation, `Field` constraints, read/write validation stack |
 | {doc}`sessions` | Lifecycle, flush queue, identity map, MemoryStore vs HttpStore |
 | {doc}`queries` | Filters, boolean logic, multi-hop paths, limits, compiler behavior |
 | {doc}`fastapi` | Per-request sessions, lifespan, content negotiation, testing |

@@ -2,9 +2,9 @@
 
 **The SQLModel of SPARQL** — version **{{ version }}**
 
-SparqlModel is a session-first ORM for RDF triple stores: typed `SPARQLModel` classes, `SPARQLSession` as the unit of work, and Python filters that compile to SPARQL. Run on in-memory graphs or remote SPARQL 1.1 endpoints.
+SparqlModel is a session-first ORM for RDF triple stores: **Pydantic v2** `SPARQLModel` classes, `SPARQLSession` as the unit of work, and Python filters that compile to SPARQL. Run on in-memory graphs or remote SPARQL 1.1 endpoints.
 
-Mapping (literals, terms, file I/O) is provided by the required dependency [TripleModel](https://github.com/eddiethedean/triplemodel).
+Mapping (literals, terms, file I/O) is provided by the required dependency [TripleModel](https://github.com/eddiethedean/triplemodel) — also Pydantic-based.
 
 ## Start here
 
@@ -12,7 +12,7 @@ Mapping (literals, terms, file I/O) is provided by the required dependency [Trip
 |---|---|
 | {doc}`installation` | Python versions, extras (`http`, `fastapi`), dev setup |
 | {doc}`getting-started` | First models, session, and query in minutes |
-| {doc}`guides/index` | Sessions, query DSL, FastAPI — task-oriented how-tos |
+| {doc}`guides/index` | Pydantic models, sessions, query DSL, FastAPI — task-oriented how-tos |
 
 ## By role
 
@@ -27,7 +27,8 @@ Mapping (literals, terms, file I/O) is provided by the required dependency [Trip
 
 | Area | Capabilities ({{ version }}) |
 |------|------------------------------|
-| Models | `SPARQLModel`, `Field`, `Relationship`, `IRI`, Pydantic validation |
+| Pydantic | `BaseModel` subclasses; validation on construct, `put`, and `get`; `Field` constraints; JSON Schema for APIs |
+| Models | `SPARQLModel`, `Field`, `Relationship`, `IRI`, `rdf_type`, RDF predicates |
 | Session | `add`, `put`, `delete`, `get`, identity map, flush queue |
 | Queries | `==`, `!=`, `&`, `\|`, ordering, `in_`, multi-hop paths, `limit` |
 | Stores | `MemoryStore`, `HttpStore` (mirror documented) |

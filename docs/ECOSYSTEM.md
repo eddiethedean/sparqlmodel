@@ -30,14 +30,16 @@ Also: [PLAN.md](PLAN.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md) · 
 
 ## Stack (required dependency)
 
+Both SparqlModel and TripleModel are **Pydantic v2** stacks: validated Python objects in app code, RDF terms in graphs. SparqlModel adds session lifecycle, SPARQL compilation, stores, and cascade policy; TripleModel adds term mapping and file I/O.
+
 ```text
 ┌──────────────────────────────────────────┐
 │  SparqlModel                             │
-│  Session · Query · Compiler · Stores     │
+│  SPARQLModel (Pydantic) · Session · …    │
 └────────────────────┬─────────────────────┘
                      │  triplemodel>=0.9.0,<2  (required)
 ┌────────────────────▼─────────────────────┐
-│  TripleModel                             │
+│  TripleModel (Pydantic)                  │
 │  sync_to_graph · from_graph · parse · …  │
 └────────────────────┬─────────────────────┘
                      │

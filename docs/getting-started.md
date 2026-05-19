@@ -31,6 +31,10 @@ class Person(SPARQLModel):
     )
 ```
 
+```{note}
+`SPARQLModel` subclasses **Pydantic v2** `BaseModel`. Invalid field types fail at construction (`ValidationError`) before `session.put`. See {doc}`guides/models` for constraints, load-time validation, and the validation stack.
+```
+
 ## Persist and query
 
 ```python
@@ -53,6 +57,7 @@ Use `put()` for upserts (cascade + orphan cleanup). Use `add()` only when you wi
 
 | Guide | Topics |
 |-------|--------|
+| {doc}`guides/models` | Pydantic validation, `Field` kwargs, read vs write |
 | {doc}`guides/sessions` | Flush queue, stores, identity map, composition |
 | {doc}`guides/queries` | Boolean filters, `!=`, limits, raw SPARQL |
 

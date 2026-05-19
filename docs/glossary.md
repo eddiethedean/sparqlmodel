@@ -2,7 +2,8 @@
 
 | Term | Definition |
 |------|------------|
-| **SPARQLModel** | Pydantic-based entity class with `rdf_type`, `Field`, and `Relationship` metadata. |
+| **SPARQLModel** | Subclass of `pydantic.BaseModel` with `rdf_type`, `Field`, and `Relationship` metadata; validated on construct and on load (`extra="forbid"`). |
+| **HydrationError** | ORM error when graph data cannot be coerced into a `SPARQLModel` (wraps Pydantic `ValidationError`). |
 | **SPARQLSession** | Unit of work over a `Store`; entry point for `put`, `get`, `query`. |
 | **Store** | Backend abstraction (`MemoryStore`, `HttpStore`) holding or proxying an RDF graph. |
 | **Composition** | Nested `SPARQLModel` owned by a root; cascade delete and orphan cleanup on `put`. |

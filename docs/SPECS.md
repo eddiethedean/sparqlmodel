@@ -6,7 +6,7 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 
 **SparqlModel — the SQLModel of SPARQL.**
 
-**Mapping** (literals, terms, `to_graph`, `sync_to_graph`, `from_graph`, `parse`, `serialize`) is specified and implemented by **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9`, a **required dependency**. SparqlModel integrates TripleModel internally; application code uses `SPARQLSession` and `SPARQLModel` unless doing stateless file I/O.
+**Mapping** (literals, terms, `to_graph`, `sync_to_graph`, `from_graph`, `parse`, `serialize`) is specified and implemented by **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9`, a **required dependency** (Pydantic `TripleModel` classes). SparqlModel integrates TripleModel internally; application code uses `SPARQLSession` and **Pydantic v2** `SPARQLModel` unless doing stateless file I/O.
 
 | Concern | SparqlModel | TripleModel |
 |---------|-------------|-------------|
@@ -15,7 +15,7 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 | Cascade / orphans on `put` | Yes | No |
 | Hydration `depth` | Yes | No |
 | Stores | Yes | No |
-| Model ↔ triples, terms, files | Integrates (retiring interim code) | Yes |
+| Model ↔ triples, terms, files | `_triple.py` adapter (0.3.0); serializers interim until 0.4 | Yes |
 
 [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md) · [PRODUCTION.md](PRODUCTION.md)
 
@@ -214,8 +214,28 @@ class Person(SPARQLModel):
 - Metaclass enables `Person.name == "x"` in queries (`FieldRef`)
 - `ensure_id()` assigns `urn:uuid:…` when `id` is unset
 - JSON-LD helpers: `model_dump_jsonld` / `model_validate_jsonld` (interim; prefer TripleModel JSON-LD long term)
+- Inherits `pydantic.BaseModel`; `model_config` uses `extra="forbid"`
+- `Field` / `Relationship` delegate to `pydantic.Field` with RDF metadata in `json_schema_extra`
 
-**Adapter target (internal):** map to `TripleModel` + `RdfConfig` / `rdf_field` without changing public field syntax.
+**Adapter (internal, 0.3.0):** dynamic `TripleModel` subclasses via `sparqlmodel._triple`; public `Field` / `Relationship` syntax unchanged.
+
+See also {doc}`guides/models` for application patterns.
+
+### Validation architecture
+
+Three layers; all are complementary, not interchangeable.
+
+| Layer | When | Mechanism |
+|-------|------|-----------|
+| **Application (Pydantic)** | `SPARQLModel(...)` / `model_validate` | Field types, `Field` constraints, `extra="forbid"` |
+| **Mapping (TripleModel)** | `from_graph(..., validate_type=True)` | Expected `rdf:type` on subject; literal coercion per field |
+| **Graph shapes (optional)** | `put` — **0.9** | SHACL via `triplemodel[shacl]`; after Pydantic passes |
+
+**Write path:** validated `SPARQLModel` → `to_triplemodel` → `TripleModel.model_validate` → `sync_to_graph`.
+
+**Read path:** graph → `TripleModel.from_graph` → dict → `SPARQLModel.model_validate`; Pydantic `ValidationError` surfaced as `HydrationError`.
+
+**Planning rule:** new ORM features should extend Pydantic annotations and `Field` kwargs before adding ad-hoc validation in session or compiler code. See {doc}`ROADMAP` (Pydantic-first).
 
 ---
 

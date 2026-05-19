@@ -22,7 +22,22 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Dependency:** `triplemodel>=0.9.0,<2` is **shipped** in `pyproject.toml`.
 
-**Integration debt:** `graph.py` and `serializers.py` still duplicate some TripleModel behavior — scheduled for removal, not expansion.
+**Integration debt:** `serializers.py` still duplicates some TripleModel file I/O — scheduled for thin wrappers in **0.4**, not expansion. Interim term mapping in `graph.py` was **removed in 0.3.0** (cascade/orphan policy only).
+
+---
+
+## Design principle: Pydantic-first
+
+SparqlModel and TripleModel are both **Pydantic v2** libraries. New ORM features should lean on that stack before inventing parallel validation.
+
+| Principle | Implication |
+|-----------|-------------|
+| **Types on models** | Prefer annotations and `Field(..., ge=0, min_length=1)` over manual checks in session code |
+| **`model_validate`** | Load paths use `SPARQLModel.model_validate` (see `_triple.sparql_from_graph`); avoid ad-hoc dict assembly |
+| **SHACL (0.9)** | Graph-shape validation **complements** Pydantic; does not replace app-level types |
+| **Non-persisted fields** | `computed_field` / extras that do not map to RDF stay out of `iter_sparql_fields` until a clear use case — defer by default |
+
+Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS.md](SPECS.md#validation-architecture).
 
 ---
 
@@ -45,8 +60,8 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 | Feature | Status |
 |---------|--------|
 | `triplemodel>=0.9.0,<2` required dependency | Done |
-| Interim mapping in `graph.py` (to retire) | Present — do not extend |
-| Interim `serializers.py` (to retire) | Present — do not extend |
+| Interim mapping in `graph.py` | **Removed 0.3.0** — cascade-only |
+| Interim `serializers.py` (to retire) | Present — thin wrappers in **0.4** |
 
 ---
 
@@ -150,6 +165,8 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Still SparqlModel:** session, compiler, stores, cascade, FastAPI.
 
+**Pydantic:** keep `model_validate_jsonld` / `model_dump_jsonld` as the public parse API; delegate implementation to TripleModel.
+
 ---
 
 ## 0.5 — Query production
@@ -164,6 +181,8 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Exit criteria:** FastAPI list endpoints can paginate and sort without raw SPARQL; SPECS P0 query items checked.
 
+**Pydantic:** filter values remain typed Python literals compiled to RDF; `FieldRef` unchanged.
+
 ---
 
 ## 0.6 — Session lifecycle
@@ -176,6 +195,8 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 - [ ] Threading / concurrency guide
 
 **Exit criteria:** SPECS session lifecycle table implemented; ORM guide covers detach/merge flows.
+
+**Pydantic:** `merge` / `refresh` must produce validated `SPARQLModel` instances (`model_validate` after graph merge).
 
 ---
 
@@ -205,13 +226,15 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Owner split:** mapping in **TripleModel**; hydration, compiler, cascade in **SparqlModel**.
 
+**Pydantic:** `list[str]`, `list[Organization]`, etc. with standard list validation; hydration returns typed lists.
+
 ---
 
 ## 0.9 — Ops and quality
 
 **Goal:** production operability.
 
-- [ ] Optional SHACL validation hook on `put` (`triplemodel[shacl]`)
+- [ ] Optional SHACL validation hook on `put` (`triplemodel[shacl]`) — runs after Pydantic validation passes
 - [ ] Bulk `put` / `delete` helpers for large imports
 - [ ] Structured query logging (SPARQL + timing)
 - [ ] Performance guidelines (identity map, query shape, HttpStore batching)
@@ -225,6 +248,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 **Goal:** **SQLModel of SPARQL** for backend teams — feature-complete per [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-10-ga-gate).
 
 - [ ] All SPECS **P0** and **P1** items checked
+- [ ] Document supported Pydantic features matrix (constraints, unions, `ForwardRef`, JSON Schema for OpenAPI)
 - [ ] Security review on SPARQL generation
 - [ ] Stable public API; migration guide from 0.2.x
 - [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, async extra, Oxigraph)
