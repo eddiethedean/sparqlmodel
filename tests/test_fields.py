@@ -116,6 +116,7 @@ def test_evaluate_forward_ref_all_attempts_typeerror() -> None:
         pass
 
     ref = _Ref()
+
     def _always_typeerror(*_args: object, **_kwargs: object) -> None:
         raise TypeError
 
