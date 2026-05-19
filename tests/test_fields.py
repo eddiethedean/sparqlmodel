@@ -87,6 +87,43 @@ def test_resolve_forward_ref_to_org() -> None:
     assert related is _Org
 
 
+def test_evaluate_forward_ref_retries_on_typeerror() -> None:
+    from sparqlmodel.fields import _evaluate_forward_ref
+
+    class _Ref:
+        pass
+
+    ref = _Ref()
+    calls = 0
+
+    def _evaluate(*_args: object, **_kwargs: object) -> type[int]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TypeError
+        return int
+
+    ref._evaluate = _evaluate
+
+    assert _evaluate_forward_ref(ref) is int
+    assert calls >= 2
+
+
+def test_evaluate_forward_ref_all_attempts_typeerror() -> None:
+    from sparqlmodel.fields import _evaluate_forward_ref
+
+    class _Ref:
+        pass
+
+    ref = _Ref()
+    def _always_typeerror(*_args: object, **_kwargs: object) -> None:
+        raise TypeError
+
+    ref._evaluate = _always_typeerror
+
+    assert _evaluate_forward_ref(ref) is None
+
+
 def test_resolve_forward_ref_unknown_raises() -> None:
     from sparqlmodel.exceptions import ConfigurationError
     from sparqlmodel.fields import _evaluate_forward_ref
