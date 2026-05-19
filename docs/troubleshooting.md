@@ -41,7 +41,7 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 - Comparing a field to `None` (unsupported in DSL)
 - Filtering `Person.name` on a `query(Organization)` chain
 
-**Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.5**.
+**Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.6**.
 
 ## `!=` behaves unexpectedly
 

@@ -103,8 +103,8 @@ Use standard Pydantic constraints on scalar fields. Relationship fields support 
 |---------|-------|---------|
 | App-level types and constraints | Pydantic on `SPARQLModel` | — |
 | RDF type of subject on load | TripleModel `validate_type` | — |
-| Multi-valued predicates (`list[...]`) | First value per predicate on load | **0.8** |
-| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**0.9**, TripleModel) |
+| Multi-valued predicates (`list[...]`) | First value per predicate on load | **0.9** |
+| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**1.0**, TripleModel) |
 
 Pydantic validates **Python values** against your model. It does not replace SHACL or OWL reasoning for graph-level rules.
 

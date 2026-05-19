@@ -11,7 +11,7 @@ Operator and architect guide for running SparqlModel in production. Normative AP
 | **MemoryStore** | Unit tests, local prototypes, single-process tools |
 | **HttpStore** | Remote Fuseki/Jena/compatible SPARQL 1.1 endpoint |
 
-Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **0.7**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
+Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **0.8**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
 
 ---
 
@@ -25,7 +25,7 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation today:** `put` through the same session/store, or use `MemoryStore` for single-process apps.
 
-**Planned (0.7):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
+**Planned (0.8):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
 
 ---
 
@@ -48,7 +48,7 @@ from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app
 
 ---
 
-## Pagination and sorting (planned 0.5)
+## Pagination and sorting (planned 0.6)
 
 **Today:** Use `.limit(n)` only.
 
@@ -59,7 +59,7 @@ session.query(Person).where(...).order_by(Person.name).offset(20).limit(10).all(
 total = session.query(Person).where(...).count()
 ```
 
-Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
+Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
 
 ---
 
@@ -69,7 +69,7 @@ Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 - `expire(Model, iri)` clears cache for that resource.
 - `depth=0` vs `depth=1` may cache separate hydrated views.
 
-**Planned (0.6):** `refresh`, `merge`, `expunge` for explicit cache control.
+**Planned (0.7):** `refresh`, `merge`, `expunge` for explicit cache control.
 
 ---
 
@@ -77,10 +77,11 @@ Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 
 | Concern | Today | Planned |
 |---------|-------|---------|
-| Write validation | Pydantic on `SPARQLModel` at construct / `put` | SHACL on `put` (**0.9**, TripleModel) — complements Pydantic |
-| Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.8** |
-| Query logging | None | Structured SPARQL log (**0.9**) |
-| Bulk import | Repeated `put` | Bulk helpers (**0.9**) |
+| Write validation | Pydantic on `SPARQLModel` at construct / `put` | SHACL on `put` (**1.0**, TripleModel) — complements Pydantic |
+| Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.9** |
+| Query logging | None | Structured SPARQL log (**1.0**) |
+| Bulk import | Repeated `put` | Bulk helpers (**1.0**) |
+| Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.4**) |
 
 ---
 
@@ -94,7 +95,7 @@ Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 
 ## Monitoring checklist
 
-- Log SPARQL execution time and HTTP status from `HttpStore` (custom middleware until **0.9**).
+- Log SPARQL execution time and HTTP status from `HttpStore` (custom middleware until **1.0**).
 - Alert on mirror divergence if you use both `execute` and `get` on the same dataset.
 - Track pending-queue failures after `flush()` (partial writes possible; see [SPECS limitations](SPECS.md#known-limitations)).
 
@@ -103,5 +104,5 @@ Until **0.5**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 ## Further reading
 
 - [ORM.md](ORM.md) — developer guide
-- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-10-ga-gate)
-- [ROADMAP.md — 0.5–1.0](ROADMAP.md)
+- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-11-ga-gate)
+- [ROADMAP.md — 0.4–1.1](ROADMAP.md)

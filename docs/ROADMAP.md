@@ -6,6 +6,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 - [SPECS.md](SPECS.md) — technical spec
 - [ECOSYSTEM.md](ECOSYSTEM.md) — boundaries
 - [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md) — upstream
+- [ASYNC_RDF_RUST_PLAN.md](ASYNC_RDF_RUST_PLAN.md) — optional Rust async I/O package (companion to **0.4**)
 
 ---
 
@@ -13,7 +14,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **SparqlModel builds apps. TripleModel builds correct graphs.**
 
-**1.0** = production SPARQL ORM (SQLModel of SPARQL) — [SPECS production checklist](SPECS.md#production-orm-checklist-10-ga-gate).
+**1.1** = production SPARQL ORM GA (SQLModel of SPARQL) — [SPECS production checklist](SPECS.md#production-orm-checklist-11-ga-gate).
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -22,7 +23,9 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Dependency:** `triplemodel>=0.9.0,<2` is **shipped** in `pyproject.toml`.
 
-**Integration debt:** `serializers.py` still duplicates some TripleModel file I/O — scheduled for thin wrappers in **0.4**, not expansion. Interim term mapping in `graph.py` was **removed in 0.3.0** (cascade/orphan policy only).
+**Integration debt:** `serializers.py` still duplicates some TripleModel file I/O — scheduled for thin wrappers in **0.5**, not expansion. Interim term mapping in `graph.py` was **removed in 0.3.0** (cascade/orphan policy only).
+
+**Current focus (next release):** **0.4 — async end-to-end** (async session, stores, FastAPI). File I/O delegation and query pagination follow in **0.5+**.
 
 ---
 
@@ -61,7 +64,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 |---------|--------|
 | `triplemodel>=0.9.0,<2` required dependency | Done |
 | Interim mapping in `graph.py` | **Removed 0.3.0** — cascade-only |
-| Interim `serializers.py` (to retire) | Present — thin wrappers in **0.4** |
+| Interim `serializers.py` (to retire) | Present — thin wrappers in **0.5** |
 
 ---
 
@@ -134,12 +137,12 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [x] `get` / query hydration → `sparql_from_graph` / `TripleModel.from_graph` via adapter
 - [x] Field adapter: `Field` / `Relationship` → dynamic `rdf_field` TripleModel classes (internal)
 - [x] Remove interim term conversion from `graph.py`
-- [ ] Multi-valued `list[...]` fields via TripleModel — **deferred to 0.8**
+- [ ] Multi-valued `list[...]` fields via TripleModel — **deferred to 0.9**
 
 ### SparqlModel-only
 
 - [x] `resolve_related_model` for unions / `ForwardRef`
-- [ ] Optional `put` validation via `triplemodel[shacl]` — **deferred to 0.9**
+- [ ] Optional `put` validation via `triplemodel[shacl]` — **deferred to 1.0**
 - [x] Narrow `HydrationError` cases
 
 ### Consume from TripleModel (already in 0.9)
@@ -153,7 +156,47 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.4 — File I/O delegated
+## 0.4 — Async end-to-end
+
+**Status:** **next release** (after **0.3.0**).
+
+**Goal:** first-class **async** ORM for FastAPI and asyncio apps — no blocking the event loop on `HttpStore` I/O. The **sync** API (`SPARQLSession`, `MemoryStore`, `HttpStore`, `SessionDep`) remains supported and unchanged.
+
+### Store layer
+
+- [ ] `AsyncStore` protocol — `async def query`, `async def update_graph`, `async def close` (mirror sync `Store`)
+- [ ] `AsyncHttpStore` — `httpx.AsyncClient`, same mirror semantics as sync `HttpStore`
+- [ ] `AsyncMemoryStore` — in-process graph; async methods (no network) for API symmetry and tests
+- [ ] Optional extra `sparqlmodel[async]` or fold into `[http]` (document choice in SPECS)
+
+### Session layer
+
+- [ ] `AsyncSPARQLSession` — `async with`, `async def put` / `get` / `delete` / `add`, `async def flush` / `rollback_pending`, `async def execute`
+- [ ] `async def query(Model)` → `AsyncQuery` with `async def all()` / `first()` (same expression DSL as sync)
+- [ ] Identity map + hydration cache — same semantics as sync; **one session per asyncio task** (documented)
+- [ ] Shared compiler + hydration; only I/O and session entry points are async
+
+### FastAPI
+
+- [ ] `AsyncSessionDep` — async generator dependency (`async with AsyncSPARQLSession(...) as session: yield session`)
+- [ ] `async with http_store_lifespan(...)` wires `AsyncHttpStore` when app uses async session
+- [ ] Guides: async routes with `await session.put` / `await session.query(...).all()`; when to keep sync session in `run_in_executor`
+
+### Quality
+
+- [ ] Contract tests: async session `put` / `get` / `query` parity with sync on `MemoryStore` and `AsyncHttpStore` (mock or testcontainers endpoint)
+- [ ] [ORM.md](ORM.md) async section; [PRODUCTION.md](PRODUCTION.md) concurrency (async tasks vs threads)
+- [ ] [SPECS.md](SPECS.md) async checklist — P0 for **0.4**, not deferred to 1.0+
+
+**Exit criteria:** A FastAPI app can use `AsyncSessionDep` + `AsyncHttpStore` end-to-end without sync `httpx` on the hot path; SPECS async items checked.
+
+**Out of scope for 0.4:** async TripleModel APIs (adapter stays sync; async session calls sync adapter in thread pool only if profiling shows need — prefer direct sync adapter calls from async session for in-memory work).
+
+**Pydantic:** unchanged — `model_validate` on load paths; async does not change validation rules.
+
+---
+
+## 0.5 — File I/O delegated
 
 **Goal:** no format logic in SparqlModel.
 
@@ -169,7 +212,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.5 — Query production
+## 0.6 — Query production
 
 **Goal:** SQLModel-grade list APIs over SPARQL.
 
@@ -185,7 +228,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.6 — Session lifecycle
+## 0.7 — Session lifecycle
 
 **Goal:** SQLAlchemy session parity for app code.
 
@@ -200,7 +243,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.7 — HttpStore production
+## 0.8 — HttpStore production
 
 **Goal:** safe remote SPARQL for multi-instance apps (within documented constraints).
 
@@ -213,7 +256,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.8 — RDF modeling
+## 0.9 — RDF modeling
 
 **Goal:** SPARQLMojo-class field coverage via TripleModel.
 
@@ -230,7 +273,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.9 — Ops and quality
+## 1.0 — Ops and quality
 
 **Goal:** production operability.
 
@@ -243,21 +286,21 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 1.0 — Production ORM GA
+## 1.1 — Production ORM GA
 
-**Goal:** **SQLModel of SPARQL** for backend teams — feature-complete per [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-10-ga-gate).
+**Goal:** **SQLModel of SPARQL** for backend teams — feature-complete per [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-11-ga-gate).
 
 - [ ] All SPECS **P0** and **P1** items checked
 - [ ] Document supported Pydantic features matrix (constraints, unions, `ForwardRef`, JSON Schema for OpenAPI)
 - [ ] Security review on SPARQL generation
 - [ ] Stable public API; migration guide from 0.2.x
-- [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, async extra, Oxigraph)
+- [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, Oxigraph)
 
-**Out of scope for 1.0:** OWL editor, built-in reasoner, mapping-only features in SparqlModel.
+**Out of scope for 1.1:** OWL editor, built-in reasoner, mapping-only features in SparqlModel.
 
 ---
 
-## Future (post-1.0)
+## Future (post-1.1)
 
 | Theme | Owner |
 |-------|--------|
@@ -265,7 +308,6 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 | semantic-sqlmodel backend | SparqlModel |
 | SPARQL federation | SparqlModel |
 | Oxigraph / other stores | SparqlModel `stores/` |
-| Async session extra | SparqlModel |
 | Reasoning hooks | Optional; not core ORM |
 
 ---
@@ -279,13 +321,14 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | `Session.add` / `commit` | `add` / `put` + context `flush` | Shipped |
 | `session.get(PK)` | `get(Model, iri)` | Shipped |
 | `select().where()` | `query().where()` | Shipped |
-| `limit` / `offset` | `limit` / `offset` | Partial (offset **0.5**) |
-| `order_by` | `order_by` | **0.5** |
-| `count` | `count()` | **0.5** |
+| `limit` / `offset` | `limit` / `offset` | Partial (offset **0.6**) |
+| `order_by` | `order_by` | **0.6** |
+| `count` | `count()` | **0.6** |
 | Relationships + eager load | `Relationship`, `depth` | Shipped (depth 0–2) |
-| `merge` / `refresh` / `expunge` | same | **0.6** |
-| Transactions | pending queue + store updates | Partial (**0.7** remote) |
+| `merge` / `refresh` / `expunge` | same | **0.7** |
+| Transactions | pending queue + store updates | Partial (**0.8** remote) |
 | FastAPI `Depends(Session)` | `SessionDep` | Shipped |
+| Async session / routes | `AsyncSPARQLSession`, `AsyncSessionDep` | **0.4** |
 
 ---
 
@@ -297,11 +340,12 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 |---------|------------|-------------|
 | Query compiler + session | Yes | Yes (0.2) |
 | Identity map | Yes | Yes (0.2) |
-| Lang / multi-lang literals | Yes | **0.8** (TripleModel) |
-| Collection fields (`LiteralList`, …) | Yes | **0.8** (TripleModel) |
-| Polymorphic queries | Yes | **0.8** |
-| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); extend **0.5** |
-| Read/write endpoint split | Yes | **0.7** |
+| Lang / multi-lang literals | Yes | **0.9** (TripleModel) |
+| Collection fields (`LiteralList`, …) | Yes | **0.9** (TripleModel) |
+| Polymorphic queries | Yes | **0.9** |
+| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); extend **0.6** |
+| Read/write endpoint split | Yes | **0.8** |
+| Async ORM + HTTP store | No | **0.4** |
 | FastAPI integration | No | Yes (0.2) |
 | TripleModel mapping substrate | No | Yes (required) |
 | Python 3.10+ | 3.12+ | 3.10+ |
@@ -312,11 +356,12 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities
 
-1. **Do not expand** interim `graph.py` mapping — wire TripleModel (**0.3–0.4**).
-2. **P0 query + HttpStore** for production APIs (**0.5–0.7**).
-3. **P1 session lifecycle + RDF types** (**0.6–0.8**).
-4. Keep `SPARQLSession` / `Field` / `session.put` stable; extend via new methods.
-5. Contract tests on every integration PR; SPECS checklist drives 1.0.
+1. **0.4 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep` (sync API unchanged).
+2. **Do not expand** interim `graph.py` mapping — retire `serializers.py` in **0.5**.
+3. **P0 query + HttpStore** for production APIs (**0.6–0.8**).
+4. **P1 session lifecycle + RDF types** (**0.7–0.9**).
+5. Keep sync `SPARQLSession` / `Field` / `session.put` stable; add async counterparts in parallel.
+6. Contract tests on every integration PR; SPECS checklist drives **1.1** GA.
 6. Document behavior in [ORM.md](ORM.md) and [PRODUCTION.md](PRODUCTION.md).
 
 ---

@@ -7,7 +7,7 @@ SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** 
 TripleModel’s mirror of this contract:  
 [github.com/eddiethedean/triplemodel/docs/ECOSYSTEM.md](https://github.com/eddiethedean/triplemodel/blob/main/docs/ECOSYSTEM.md)
 
-Also: [PLAN.md](PLAN.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md) · [PRODUCTION.md](PRODUCTION.md)
+Also: [PLAN.md](PLAN.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md) · [PRODUCTION.md](PRODUCTION.md) · [ASYNC_RDF_RUST_PLAN.md](ASYNC_RDF_RUST_PLAN.md) (proposed async Rust I/O package)
 
 ---
 
@@ -104,8 +104,8 @@ restored = Person.from_graph(g, person.subject_uri())
 | Stale literal after `put` | **TripleModel** `sync_to_graph` + **SparqlModel** cascade | `session.py`, `graph.py` |
 | Orphan embedded resource | **SparqlModel** | `cascade_subjects_for_removal` |
 | `!=` / nested filter | **SparqlModel** | `compiler.py` |
-| Multi-valued round-trip | **TripleModel** (target **0.8**) | `hydration.py` + query compiler consume |
-| Language-tagged literals | **TripleModel** (target **0.8**) | `Field` / adapter; not SparqlModel-only |
+| Multi-valued round-trip | **TripleModel** (target **0.9**) | `hydration.py` + query compiler consume |
+| Language-tagged literals | **TripleModel** (target **0.9**) | `Field` / adapter; not SparqlModel-only |
 | New RDF format | **TripleModel** | thin wrapper in `serializers.py` |
 | Remote Fuseki | **SparqlModel** | `stores/` |
 | SHACL validation | **TripleModel** | optional `put` hook |
@@ -169,8 +169,9 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 | **Done** | `triplemodel>=0.9` on PyPI install | Package available to all installs |
 | **0.2** | `_triple.py` adapter, contract tests | `sync_to_graph`, namespaces, nested embeds |
 | **0.3** | Shipped — interim convert removed from `graph.py` | `put`/`get` wired to `_triple.py` |
-| **0.4** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
-| **0.5+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
+| **0.4** | Async ORM (`AsyncSPARQLSession`, async stores, FastAPI) | — |
+| **0.5** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
+| **0.6+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
 
 Track upstream: [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md)
 

@@ -211,12 +211,12 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 
 **Target (1.0):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
 
-- [Production checklist](SPECS.md#production-orm-checklist-10-ga-gate) — normative P0 / P1 / P2 gates
+- [Production checklist](SPECS.md#production-orm-checklist-11-ga-gate) — normative P0 / P1 / P2 gates
 - [Roadmap](ROADMAP.md) — versions 0.3–1.0
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** `offset` / `order_by` / `count` on queries (0.5), `merge` / `refresh` / `expunge` (0.6), production HttpStore sync (0.7), multi-valued and language-tagged fields (0.8).
+**Not yet available (planned):** async session and stores (**0.4**), `offset` / `order_by` / `count` on queries (**0.6**), `merge` / `refresh` / `expunge` (**0.7**), production HttpStore sync (**0.8**), multi-valued and language-tagged fields (**0.9**).
 
 ---
 

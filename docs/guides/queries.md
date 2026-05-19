@@ -65,7 +65,7 @@ q.limit(10).all(depth=1)
 ```
 
 ```{note}
-`offset`, `order_by`, and `count()` are planned for **0.5**. Until then use `.limit()` only or raw `session.execute`.
+`offset`, `order_by`, and `count()` are planned for **0.6**. Until then use `.limit()` only or raw `session.execute`.
 ```
 
 ## Raw SPARQL
