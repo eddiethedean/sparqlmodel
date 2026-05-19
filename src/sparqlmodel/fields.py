@@ -78,9 +78,9 @@ def get_field_metadata(field_info: FieldInfo) -> SPARQLFieldMetadata | None:
 
 
 def _evaluate_forward_ref(ref: ForwardRef) -> Any:
-    """Evaluate a ``ForwardRef`` when the runtime supports it (3.12+ uses ``evaluate``)."""
+    """Evaluate a ``ForwardRef`` using the runtime's public or legacy API."""
     evaluate = getattr(ref, "evaluate", None)
-    if callable(evaluate):  # pragma: no cover -- Python 3.12+ only
+    if callable(evaluate):  # pragma: no cover -- future CPython versions
         try:
             return evaluate()
         except TypeError:
@@ -90,15 +90,28 @@ def _evaluate_forward_ref(ref: ForwardRef) -> Any:
                 recursive_guard=frozenset(),
             )
     legacy = getattr(ref, "_evaluate", None)
-    if callable(legacy):
+    if not callable(legacy):
+        return None  # pragma: no cover
+    for attempt in (
+        lambda: legacy(
+            globalns={},
+            localns={},
+            type_params=(),
+            recursive_guard=frozenset(),
+        ),
+        lambda: legacy(
+            globalns={},
+            localns={},
+            recursive_guard=frozenset(),
+        ),
+        lambda: legacy(globalns={}, localns={}, type_params=()),
+        lambda: legacy({}, {}, frozenset()),
+    ):
         try:
-            return legacy(globalns={}, localns={}, type_params=())
+            return attempt()
         except TypeError:
-            try:
-                return legacy({}, {}, frozenset())
-            except NameError:
-                return None
-        except NameError:  # pragma: no cover
+            continue
+        except NameError:
             return None
     return None  # pragma: no cover
 

@@ -221,7 +221,7 @@ class Person(SPARQLModel):
 
 See also {doc}`guides/models` for application patterns.
 
-### Validation architecture
+## Validation architecture
 
 Three layers; all are complementary, not interchangeable.
 
