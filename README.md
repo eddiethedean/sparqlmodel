@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) (Pydantic ↔ RDF) · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#030---2026-05-18) (0.3.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) (Pydantic ↔ RDF) · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#040---2026-05-18) (0.4.0)
 
 ---
 
@@ -139,9 +139,10 @@ with SPARQLSession() as session:
     session.query(Person).where(Person.name.in_(("Odos", "Ada"))).all()
 
     session.query(Person).where(Person.name != "Other").use_not_exists_for_ne().all()
+    # or .use_optional_for_comparisons() for NOT EXISTS semantics on !=
 ```
 
-Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)`, multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.use_not_exists_for_ne()`.
+Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` (also accepts lists), multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.use_not_exists_for_ne()`, `.use_optional_for_comparisons()`.
 
 ---
 
@@ -223,16 +224,16 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 ---
 
-## Known limitations (0.3)
+## Known limitations (0.4)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade
-- **0.4** adopts Option A: `SPARQLModel` subclasses `TripleModel` (removes interim `_triple.py` adapter)
+- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade (mirror sync planned **0.9**)
 - No async session or `AsyncHttpStore` yet — planned **0.5** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
-- Query: `limit` only — `offset` / `order_by` / `count` planned ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) 0.6)
+- Query: `limit` only — `offset` / `order_by` / `count` planned **0.7** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- Default `!=` excludes resources with no value for the field; use `.use_not_exists_for_ne()` or `.use_optional_for_comparisons()`
 - Sessions are not thread-safe; one session per request/task
 - Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition
-- Cyclic embedded models raise `ConfigurationError` on `put` / `model_to_graph` (not only on `to_triplemodel`)
+- Cyclic embedded models raise `ConfigurationError` on `put` / `model_to_graph`
 - Shared embedded resources referenced from multiple roots are preserved on `put` when another subject still links to them
 
 ---

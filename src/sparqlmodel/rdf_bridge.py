@@ -157,15 +157,17 @@ def load_from_graph(
     graph: Graph,
     *,
     depth: int = 0,
+    path: set[str] | None = None,
     visited: set[str] | None = None,
 ) -> SPARQLModel:
     """Hydrate a SPARQLModel from graph data via TripleModel ``from_graph``."""
-    visited = visited or set()
+    # ``path`` detects cycles on the current branch; shared DAG leaves are allowed.
+    path = path if path is not None else (visited or set())
     prefixes = model_cls.get_prefixes()
     subject_key = _expanded_iri_key(subject_iri, prefixes)
-    if subject_key in visited:
+    if subject_key in path:
         raise ConfigurationError(f"Cycle detected loading {subject_key}")
-    visited.add(subject_key)
+    branch_path = path | {subject_key}
 
     uri = expand_iri(str(subject_iri), prefixes)
     raw = model_cls.from_graph(graph, uri, validate_type=True, on_duplicate="warn")
@@ -196,7 +198,7 @@ def load_from_graph(
                         IRI(value.subject_uri()),
                         graph,
                         depth=depth - 1,
-                        visited=visited,
+                        path=branch_path.copy(),
                     )
                 else:
                     data[name] = IRI(value.subject_uri()) if allows_iri else value
@@ -207,7 +209,7 @@ def load_from_graph(
                         IRI(value),
                         graph,
                         depth=depth - 1,
-                        visited=visited,
+                        path=branch_path.copy(),
                     )
                 else:
                     data[name] = None
@@ -223,10 +225,13 @@ def sparql_from_graph(
     graph: Graph,
     *,
     depth: int = 0,
+    path: set[str] | None = None,
     visited: set[str] | None = None,
 ) -> SPARQLModel:
     """Alias for :func:`load_from_graph` (hydration and tests)."""
-    return load_from_graph(model_cls, subject_iri, graph, depth=depth, visited=visited)
+    return load_from_graph(
+        model_cls, subject_iri, graph, depth=depth, path=path, visited=visited
+    )
 
 
 def graphs_isomorphic(left: Graph, right: Graph) -> bool:

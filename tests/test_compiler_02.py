@@ -171,6 +171,47 @@ def test_or_query_integration() -> None:
     assert names == {"Odos", "Ada"}
 
 
+def test_ne_default_excludes_missing_name(session) -> None:
+    from rdflib import URIRef
+
+    from sparqlmodel import IRI
+
+    session.put(Person(id=IRI("urn:p:named"), name="Named"))
+    noname = URIRef("urn:p:noname")
+    person_type = URIRef("https://schema.org/Person")
+    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    session.graph.add((noname, rdf_type, person_type))
+    default_bindings = session.execute(
+        session.query(Person).where(Person.name != "Named")._compile()
+    )
+    assert not any("urn:p:noname" in str(b.get("person", "")) for b in default_bindings)
+    optional_bindings = session.execute(
+        session.query(Person)
+        .where(Person.name != "Named")
+        .use_optional_for_comparisons()
+        ._compile()
+    )
+    assert any("urn:p:noname" in str(v) for b in optional_bindings for v in b.values())
+
+
+def test_or_expr_and_chaining() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    combined = ((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")
+    assert isinstance(combined, AndExpr)
+    sparql = compile_where(
+        Person,
+        ((Person.name == "A") | (Person.name == "B"), Person.name != "C"),
+        registry,
+    )
+    assert "FILTER" in sparql
+
+
+def test_in_list_accepted() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.name.in_(["A", "B"]),), registry)
+    assert '"A"' in sparql and '"B"' in sparql
+
+
 def test_query_use_not_exists_for_ne() -> None:
     from sparqlmodel import IRI, SPARQLSession
 
@@ -191,7 +232,7 @@ def test_compile_in_non_tuple_raises_type_error() -> None:
     expr = replace(Person.name.in_(("a",)), right="not-a-tuple")  # type: ignore[arg-type]
     assert isinstance(expr, CompareExpr)
     assert expr.op == CompareOp.IN
-    with pytest.raises(TypeError, match="tuple"):
+    with pytest.raises(QueryError, match="tuple or sequence"):
         compile_compare(expr, Person, "?person", registry, [0], {})
 
 

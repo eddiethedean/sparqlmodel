@@ -17,7 +17,7 @@ with SPARQLSession() as session:
 | `&` | AND | Use parentheses: `(A & B) \| C` |
 | `\|` | OR | `(A & B) \| C` compiles with correct precedence (0.2+) |
 | `<`, `>`, `<=`, `>=` | comparison | Typed numeric literals use XSD datatypes |
-| `.in_(tuple)` | IN / VALUES | Membership |
+| `.in_(tuple)` | IN / VALUES | Membership; lists and other sequences accepted |
 | `None` in filter | — | Raises {class}`~sparqlmodel.exceptions.QueryError` |
 
 ## Boolean composition
@@ -46,13 +46,17 @@ The related resource must have the expected `rdf:type` in the graph. Unknown com
 
 ## Negation semantics
 
-Default `!=` uses inequality filters. For SQL-style “no matching triple” semantics:
+Default `!=` uses inequality filters and **excludes** resources with no value for the field. For SQL-style “no matching triple” semantics:
 
 ```python
 session.query(Person).where(Person.name != "X").use_not_exists_for_ne().all()
+# equivalent convenience:
+session.query(Person).where(Person.name != "X").use_optional_for_comparisons().all()
 ```
 
-Unique variables are generated per `!=` inside AND branches of OR expressions (0.2+).
+Ordering (`<`, `>`, …) and `in_` still require a bound predicate value (SPARQL-native). Unique variables are generated per `!=` inside AND branches of OR expressions (0.2+).
+
+Filter values on `IRI` fields (or unions including `IRI`) accept absolute `urn:` and `http(s)://` strings, not only `prefix:local` compact IRIs.
 
 ## Result helpers
 

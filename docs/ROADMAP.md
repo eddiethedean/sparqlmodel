@@ -14,7 +14,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **SparqlModel builds apps. TripleModel builds correct graphs.**
 
-**Single model class (Option A):** `SPARQLModel` **subclasses** `TripleModel`. `Field` and `Relationship` are ORM sugar; session I/O calls `sync_to_graph` / `from_graph` on the **same** instances. The 0.3 `_triple.py` dynamic adapter is removed in **0.4**.
+**Single model class (Option A, shipped 0.4.0):** `SPARQLModel` **subclasses** `TripleModel`. `Field` and `Relationship` are ORM sugar; session I/O uses `rdf_bridge` and `from_graph` on the **same** instances. The 0.3 `_triple.py` adapter was removed in **0.4**.
 
 **1.2** = production SPARQL ORM GA (SQLModel of SPARQL) — [SPECS production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
 
@@ -108,7 +108,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 | Feature | Status |
 |---------|--------|
-| `sparqlmodel/_triple.py` adapter (dynamic `TripleModel` classes) | Done — **interim; remove in 0.4** |
+| `sparqlmodel/_triple.py` adapter (dynamic `TripleModel` classes) | **Removed 0.4.0** — replaced by `rdf_bridge` |
 | Contract tests vs adapter `put` graphs | Done |
 | `put` / `get` via `_triple.py` (`sync_to_graph` / `from_graph`) | Done — **superseded by 0.4** |
 
@@ -386,7 +386,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities
 
-1. **0.4 unified model (Option A)** — `SPARQLModel(TripleModel)`; delete `_triple.py`; direct `sync_to_graph` / `from_graph`.
+1. **0.5 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep`.
 2. **0.5 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep` (sync API unchanged).
 3. **Do not expand** interim mapping — retire `serializers.py` in **0.6**.
 4. **P0 query + HttpStore** for production APIs (**0.7–0.9**).

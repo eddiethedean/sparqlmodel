@@ -10,7 +10,7 @@ from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_compact_iri
+from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_absolute_iri, is_compact_iri
 
 
 def _model_var_name(model_cls: type[SPARQLModel]) -> str:
@@ -51,16 +51,15 @@ def _format_object(
     if isinstance(value, IRI):
         expanded = registry.expand(str(value))
         return _format_iri(expanded)
-    if (
-        isinstance(value, str)
-        and is_compact_iri(value)
-        and _annotation_expects_iri(field_annotation)
-    ):
-        try:
-            expanded = registry.expand(value)
-        except ConfigurationError:
-            return _format_literal(value)
-        return _format_iri(expanded)
+    if isinstance(value, str) and _annotation_expects_iri(field_annotation):
+        if is_absolute_iri(value):
+            return _format_iri(value)
+        if is_compact_iri(value):
+            try:
+                expanded = registry.expand(value)
+            except ConfigurationError:
+                return _format_literal(value)
+            return _format_iri(expanded)
     return _format_literal(value)
 
 
@@ -225,7 +224,7 @@ def compile_compare(
         in_var = f"?__in_{field_name}_{id(expr)}"
         patterns.append(f"{subject_var} <{pred_expanded}> {in_var} .")
         if not isinstance(expr.right, tuple):
-            raise TypeError("IN comparison requires a tuple of values")
+            raise QueryError("IN comparison requires a tuple or sequence of values")
         formatted = [
             _format_object(v, registry, field_annotation=field_info.annotation) for v in expr.right
         ]

@@ -36,8 +36,8 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] Identity map + `flush` / `rollback_pending` / `put(..., flush=False)`
 - [x] `MemoryStore` and `HttpStore` (documented mirror semantics)
 - [x] FastAPI `SessionDep`, `init_app`, `http_store_lifespan`
-- [x] Session I/O via TripleModel (`put` / `get` / hydrate) — **0.3.0** (interim adapter)
-- [ ] **Option A** — `SPARQLModel(TripleModel)`; delete `_triple.py`; direct `sync_to_graph` / `from_graph` — **0.4**
+- [x] Session I/O via TripleModel (`put` / `get` / hydrate) — **0.3.0**
+- [x] **Option A** — `SPARQLModel(TripleModel)`; `_triple.py` removed; `rdf_bridge` + direct `from_graph` — **0.4.0**
 - [ ] `AsyncSPARQLSession` — async CRUD, `async with`, `async def execute` — **0.5**
 - [ ] `AsyncStore` + `AsyncHttpStore` (`httpx.AsyncClient`) + `AsyncMemoryStore` — **0.5**
 - [ ] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.5**
@@ -501,7 +501,7 @@ sparqlmodel/
   graph.py         # cascade/orphan policy only
   serializers.py   # → TripleModel parse/serialize (retiring 0.6)
   stores/
-  _triple.py       # interim adapter — remove in 0.4
+  rdf_bridge.py    # graph I/O (Option A; replaced _triple.py in 0.4)
 ```
 
 ---

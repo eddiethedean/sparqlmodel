@@ -142,7 +142,12 @@ class SPARQLSession:
                 self.rollback_pending()
         finally:
             if self.close_on_exit:
-                self.close()
+                try:
+                    self.close()
+                except RuntimeError:
+                    if exc_type is not None and not self.rollback_on_error:
+                        return
+                    raise
 
     def expire(self, model_cls: type[SPARQLModel], iri: str | IRI) -> None:
         """Remove a resource from the identity map and hydration cache."""
@@ -159,6 +164,24 @@ class SPARQLSession:
                 return True
         return False
 
+    @staticmethod
+    def _depth_satisfied(model: SPARQLModel, depth: int) -> bool:
+        """Return whether ``model`` has relationships loaded through ``depth``."""
+        if depth <= 0:
+            return True
+        if not SPARQLSession._relationships_materialized(model):
+            return False
+        if depth <= 1:
+            return True
+        for _name, _field_info, related_cls in model.get_relationship_fields():
+            nested = getattr(model, _name, None)
+            if isinstance(nested, SPARQLModel):
+                for n2, _, _ in related_cls.get_relationship_fields():
+                    if isinstance(getattr(nested, n2, None), SPARQLModel):
+                        return True
+                return False
+        return True
+
     def _maybe_autoflush(self) -> None:
         if self.autoflush and self._state.pending:
             self.flush()
@@ -170,11 +193,11 @@ class SPARQLSession:
 
     def _put_impl(self, model: SPARQLModel) -> SPARQLModel:
         model.ensure_id()
-        self._invalidate_cascade_keys(model, for_put=True)
         subjects = cascade_subjects_for_removal(model, self._store.graph, for_put=True)
         remove_g = triples_to_graph(owned_triples_for_subjects(subjects, self._store.graph))
         add_g = model_to_graph(model)
         self._store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
+        self._invalidate_cascade_keys(model, for_put=True)
         self._state.set_identity(model)
         return model
 
@@ -198,6 +221,7 @@ class SPARQLSession:
             return self._put_impl(model)
         model.ensure_id()
         assert model.id is not None
+        self._invalidate_cascade_keys(model, for_put=True)
         key = identity_key_for_iri(type(model), model.id)
         self._state.evict_identity_prefix(key[0], key[1])
         self._state.add_pending(model)
@@ -230,18 +254,26 @@ class SPARQLSession:
         id_key = identity_key_for_iri(model_cls, iri)
         hkey = (model_cls, id_key[1], depth)
         hydrated = self._state.get_hydration(hkey)
-        if hydrated is _HYDRATION_MISS:
-            if depth == 0:
-                identity = self._state.get_identity(id_key)
-                if identity is not None and not self._relationships_materialized(identity):
-                    self._state.set_hydration(hkey, identity)
-                    return identity
-            model = hydrate_one(model_cls, iri, self._store, depth=depth)
-            if model is not None:
+        if hydrated is not _HYDRATION_MISS:
+            return cast("SPARQLModel | None", hydrated)
+
+        identity = self._state.get_identity(id_key)
+        if identity is not None and self._depth_satisfied(identity, depth):
+            if depth == 0 and self._relationships_materialized(identity):
+                pass  # re-hydrate shallow even when identity is eager-loaded
+            else:
+                self._state.set_hydration(hkey, identity)
+                return identity
+
+        model = hydrate_one(model_cls, iri, self._store, depth=depth)
+        if model is not None:
+            existing = self._state.get_identity(id_key)
+            if existing is None or depth > 0 or not self._relationships_materialized(existing):
                 self._state.set_identity(model)
             self._state.set_hydration(hkey, model)
-            return model
-        return cast("SPARQLModel | None", hydrated)
+        else:
+            self._state.set_hydration(hkey, model)
+        return model
 
     def hydrate_bindings(
         self,

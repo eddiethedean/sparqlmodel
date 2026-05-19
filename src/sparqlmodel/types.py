@@ -27,6 +27,11 @@ def is_compact_iri(value: str) -> bool:
     return _COMPACT_IRI_RE.match(value) is not None
 
 
+def is_absolute_iri(value: str) -> bool:
+    """Return True if ``value`` is an absolute IRI string (http, https, or urn)."""
+    return value.startswith(("http://", "https://", "urn:"))
+
+
 class IRI(str):
     """RDF IRI identifier (compact or absolute)."""
 

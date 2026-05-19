@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -54,8 +55,9 @@ class FieldRef:
     def __ge__(self, other: object) -> CompareExpr:
         return self._compare(CompareOp.GTE, other)
 
-    def in_(self, values: tuple[object, ...]) -> CompareExpr:
-        return CompareExpr(self, CompareOp.IN, values)
+    def in_(self, values: tuple[object, ...] | Sequence[object]) -> CompareExpr:
+        seq = values if isinstance(values, tuple) else tuple(values)
+        return CompareExpr(self, CompareOp.IN, seq)
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,14 @@ class OrExpr:
     """OR combination of comparison or AND expressions."""
 
     expressions: tuple[CompareExpr | AndExpr, ...]
+
+    def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
+        if isinstance(other, AndExpr):
+            return AndExpr(other.expressions + self.expressions)
+        return AndExpr((other,) + self.expressions)
+
+    def __rand__(self, other: CompareExpr | AndExpr) -> AndExpr:
+        return self.__and__(other)
 
     def __or__(self, other: CompareExpr | AndExpr | OrExpr) -> OrExpr:
         if isinstance(other, OrExpr):

@@ -66,7 +66,7 @@ Person(id=IRI("urn:p:2"), name=123)     # pydantic.ValidationError
 When you `session.put(person)`, the session serializes an already-validated instance:
 
 - **0.4+:** `sync_to_graph(person, …)` on the `SPARQLModel` instance (a `TripleModel`).
-- **0.3.x (interim):** `_triple.to_triplemodel` → dynamic TripleModel subclass → `sync_to_graph`.
+- **0.4.0+:** `session.put` → `rdf_bridge.model_to_graph` on `SPARQLModel` instances (subclass `TripleModel`).
 
 ---
 
@@ -120,7 +120,7 @@ Pydantic validates **Python values** against your model. It does not replace SHA
 1. **Write:** `session.put` → cascade policy → `sync_to_graph` on your instance.
 2. **Read:** `from_graph` on your class → depth hydration → identity map.
 
-**Interim (0.3.x):** `sparqlmodel._triple` generates cached TripleModel subclasses via `exec`; removed in **0.4**.
+**0.4.0+:** one model class; no `_triple.py` adapter.
 
 Application code should stay on `SPARQLModel`, `Field`, and `Relationship`. For stateless file parse/serialize or ETL without a session, you may import TripleModel directly — see {doc}`../ORM`.
 

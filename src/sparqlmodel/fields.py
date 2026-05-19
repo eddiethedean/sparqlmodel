@@ -67,6 +67,9 @@ def Relationship(
         predicate: Compact or absolute IRI (e.g. ``schema:worksFor``).
         model: Related ``SPARQLModel`` class (inferred from annotation when omitted).
         cascade: When ``False``, nested resources are not included in put/delete cascade.
+            Pass ``model=`` to use TripleModel ``ref_field`` (URI reference only on write).
+            When ``model`` is omitted, cascade policy still applies; pass ``model=`` for
+            strict ref semantics matching :class:`~triplemodel.TripleModel` imports.
         **kwargs: Additional arguments passed to ``pydantic.Field``.
     """
     metadata = SPARQLFieldMetadata(

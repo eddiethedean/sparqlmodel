@@ -14,7 +14,10 @@ from typing_extensions import Self
 
 from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.expressions import FieldRef
-from sparqlmodel.fields import get_field_metadata, resolve_related_model
+from sparqlmodel.fields import (
+    get_field_metadata,
+    resolve_related_model,
+)
 from sparqlmodel.types import DEFAULT_PREFIXES, IRI, NamespaceRegistry, expand_iri
 
 

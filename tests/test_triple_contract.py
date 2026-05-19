@@ -59,6 +59,15 @@ def test_session_put_matches_contract() -> None:
     assert graphs_isomorphic(interim, via)
 
 
+class PersonNoCascadeInferred(SPARQLModel):
+    rdf_type = "ex:PersonNoCascadeInferred"
+    __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
+
+    id: IRI
+    name: str = Field("schema:name")
+    works_for: Organization | None = Relationship("schema:worksFor", cascade=False)
+
+
 class PersonNoCascade(SPARQLModel):
     rdf_type = "ex:PersonNoCascade"
     __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
@@ -90,6 +99,15 @@ def test_put_graph_contract_typed_literals() -> None:
 
     assert_put_graph_contract(FlagModel(id=IRI("urn:flag"), active=True))
     assert_put_graph_contract(NumModel(id=IRI("urn:n"), count=3, score=1.5))
+
+
+def test_relationship_cascade_false_inferred_skips_nested_put() -> None:
+    org = Organization(id=IRI("urn:org:inf"), name="Detached", located_in=None)
+    person = PersonNoCascadeInferred(id=IRI("urn:p:inf"), name="Solo", works_for=org)
+    session = SPARQLSession()
+    session.put(person)
+    org_ref = URIRef("urn:org:inf")
+    assert not any(session.store.graph.triples((org_ref, None, None)))
 
 
 def test_relationship_cascade_false_skips_nested_put() -> None:

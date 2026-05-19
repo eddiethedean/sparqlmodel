@@ -27,6 +27,7 @@ class Query:
         self._expressions: list[CompareExpr | AndExpr | OrExpr] = []
         self._limit: int | None = None
         self._use_not_exists_for_ne = False
+        self._use_optional_for_comparisons = False
 
     def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> Query:
         """Add WHERE filter expressions."""
@@ -38,6 +39,17 @@ class Query:
         self._use_not_exists_for_ne = enabled
         return self
 
+    def use_optional_for_comparisons(self, enabled: bool = True) -> Query:
+        """Treat missing predicates like SQL NULL for ``!=`` (via ``NOT EXISTS``).
+
+        Ordering (``<``, ``>``, …) and ``in_`` still require a bound predicate value
+        (SPARQL-native semantics). Enables :meth:`use_not_exists_for_ne` when ``enabled``.
+        """
+        self._use_optional_for_comparisons = enabled
+        if enabled:
+            self._use_not_exists_for_ne = True
+        return self
+
     def limit(self, n: int) -> Query:
         """Limit the number of results."""
         if n < 0:
@@ -45,17 +57,18 @@ class Query:
         self._limit = n
         return self
 
-    def _compile(self) -> str:
+    def _compile(self, *, limit: int | None = None) -> str:
         registry = self._session.namespaces
         merged = {**registry.prefixes, **self._model_cls.get_prefixes()}
         from sparqlmodel.types import NamespaceRegistry
 
         reg = NamespaceRegistry(merged)
+        effective_limit = self._limit if limit is None else limit
         return compile_where(
             self._model_cls,
             tuple(self._expressions),
             reg,
-            limit=self._limit,
+            limit=effective_limit,
             use_not_exists_for_ne=self._use_not_exists_for_ne,
         )
 
@@ -73,16 +86,11 @@ class Query:
     def first(self, *, depth: int = 0) -> SPARQLModel | None:
         """Return the first matching model or None."""
         validate_depth(depth)
-        original_limit = self._limit
-        self._limit = 1
-        try:
-            sparql = self._compile()
-            bindings = self._session.execute(sparql)
-            results = self._session.hydrate_bindings(
-                self._model_cls,
-                bindings,
-                depth=depth,
-            )
-        finally:
-            self._limit = original_limit
+        sparql = self._compile(limit=1)
+        bindings = self._session.execute(sparql)
+        results = self._session.hydrate_bindings(
+            self._model_cls,
+            bindings,
+            depth=depth,
+        )
         return results[0] if results else None

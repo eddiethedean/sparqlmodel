@@ -25,7 +25,7 @@ Your app
   → rdflib Graph in a Store
 ```
 
-**0.3.x (interim):** session I/O still uses `_triple.py` dynamic adapter until **0.4**.
+**0.4.0+:** session I/O uses `sparqlmodel.rdf_bridge` on unified `SPARQLModel(TripleModel)` instances.
 
 **Rule of thumb:** if your code never constructs a `SPARQLSession`, you probably want TripleModel only.
 

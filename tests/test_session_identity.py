@@ -177,3 +177,23 @@ def test_delete_expires_identity(session: SPARQLSession, odos: Person) -> None:
     session.get(Person, odos.id)
     session.delete(odos)
     assert session.get(Person, odos.id) is None
+
+
+def test_get_deep_load_reuses_identity(session: SPARQLSession, odos: Person) -> None:
+    session.put(odos)
+    session.get(Person, odos.id, depth=0)
+    deep1 = session.get(Person, odos.id, depth=1)
+    deep2 = session.get(Person, odos.id, depth=1)
+    assert deep1 is deep2
+    assert deep1.works_for is not None
+
+
+def test_get_shallow_after_deep_does_not_replace_identity(
+    session: SPARQLSession, odos: Person
+) -> None:
+    session.put(odos)
+    deep = session.get(Person, odos.id, depth=1)
+    shallow = session.get(Person, odos.id, depth=0)
+    assert shallow is not deep
+    assert shallow.works_for is None
+    assert session.get(Person, odos.id, depth=1) is deep

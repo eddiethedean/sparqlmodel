@@ -12,7 +12,7 @@ Common issues when running SparqlModel in development or production.
 
 - `put` data through the same `HttpStore` session before `get`
 - Use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps
-- Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**0.7**)
+- Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**0.9**)
 
 See {doc}`PRODUCTION` — HttpStore mirror model.
 
@@ -47,7 +47,7 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Symptom:** Resources with no value for a field still match or fail unexpectedly.
 
-**Fix:** Try `.use_not_exists_for_ne()` on the query for NOT EXISTS semantics.
+**Fix:** Try `.use_not_exists_for_ne()` or `.use_optional_for_comparisons()` on the query for NOT EXISTS semantics.
 
 ## URL strings become IRIs
 

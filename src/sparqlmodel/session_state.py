@@ -40,7 +40,9 @@ class SessionState:
         return self._identity.get(key)
 
     def set_identity(self, model: SPARQLModel) -> None:
-        self._identity[identity_key(model)] = model
+        key = identity_key(model)
+        self._identity[key] = model
+        self.invalidate_hydration_for(key[0], key[1])
 
     def pop_identity(self, key: IdentityKey) -> None:
         self._identity.pop(key, None)
@@ -65,6 +67,8 @@ class SessionState:
         self._hydration.clear()
 
     def add_pending(self, model: SPARQLModel) -> None:
+        key = identity_key(model)
+        self._pending = [m for m in self._pending if identity_key(m) != key]
         self._pending.append(model)
 
     @property

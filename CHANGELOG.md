@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hydration DAGs** — `load_from_graph` no longer treats shared embedded resources as cycles
+- **Session identity** — canonical identity per IRI with per-depth hydration cache; deep loads upgrade identity, shallow reloads do not replace eager identity
+- **Query compiler** — absolute `urn:` / `http(s)://` strings on IRI-typed fields compile as IRIs
+- **Session** — pending `put` invalidates cascade caches; dedupes pending queue by subject; `__exit__` preserves original exception when `rollback_on_error=False`
+- **`put`** — cascade cache invalidation runs after successful store update
+
+### Added
+
+- `Query.use_optional_for_comparisons()` — enables NOT EXISTS semantics for `!=`
+- `OrExpr.__and__` / `__rand__` for `(A | B) & C` style filters
+- `FieldRef.in_` accepts any sequence (not only tuples)
+- `Query.first()` no longer mutates the query’s `limit`
+
 ## [0.4.0] - 2026-05-18
 
 ### Added

@@ -55,6 +55,24 @@ def test_unknown_compact_prefix_stays_literal() -> None:
     assert '"unknown:foo"' in sparql
 
 
+def test_compile_iri_field_absolute_strings() -> None:
+    from sparqlmodel.compiler import _format_object
+
+    registry = NamespaceRegistry(Person.get_prefixes())
+    ann = Person.model_fields["works_for"].annotation
+    assert (
+        _format_object("urn:org:acme", registry, field_annotation=ann) == "<urn:org:acme>"
+    )
+    assert (
+        _format_object(
+            "https://example.org/org/acme",
+            registry,
+            field_annotation=ann,
+        )
+        == "<https://example.org/org/acme>"
+    )
+
+
 def test_compile_where_negative_limit() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     with pytest.raises(QueryError, match="limit"):
