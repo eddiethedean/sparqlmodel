@@ -79,6 +79,7 @@ troubleshooting
 
 ROADMAP
 PLAN
+ASYNC_RDF_RUST_PLAN
 changelog
 README
 ```

@@ -103,7 +103,7 @@ SparqlModel **0.5** can ship **`AsyncHttpStore`** built on **`httpx.AsyncClient`
 
 ### Layered stack
 
-```mermaid
+```text
 flowchart TB
   subgraph python [Python - maturin / PyO3]
     API["aio_rdf public API"]
