@@ -158,7 +158,7 @@ def test_resolve_forward_ref_in_optional_union() -> None:
     meta = SPARQLFieldMetadata(predicate="schema:worksFor", is_relationship=True)
     related = resolve_related_model(
         "works_for",
-        Union[ForwardRef("_Org", module=__name__), None],
+        Union[ForwardRef("_Org", module=__name__), None],  # noqa: UP007
         meta,
     )
     assert related is _Org
@@ -168,12 +168,12 @@ def test_resolve_forward_ref_non_model_union_member() -> None:
     from sparqlmodel.fields import _resolve_annotation_type
 
     int_fwd = ForwardRef("int", module="builtins")
-    assert _resolve_annotation_type(Union[int_fwd, None]) is int
-    assert _resolve_annotation_type(Union[None, int_fwd]) is int
+    assert _resolve_annotation_type(Union[int_fwd, None]) is int  # noqa: UP007
+    assert _resolve_annotation_type(Union[None, int_fwd]) is int  # noqa: UP007
     meta = SPARQLFieldMetadata(predicate="schema:count", is_relationship=True)
     related = resolve_related_model(
         "count",
-        Union[int_fwd, None],
+        Union[int_fwd, None],  # noqa: UP007
         meta,
     )
     assert related is int
