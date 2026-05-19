@@ -3,9 +3,9 @@
 import pytest
 
 from sparqlmodel import SPARQLSession
-from sparqlmodel._triple import model_to_graph, to_triplemodel
 from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.graph import iter_nested_models
+from sparqlmodel.rdf_bridge import assert_no_embed_cycles, model_to_graph
 from sparqlmodel.types import IRI
 from tests.cycle_models import CycleA, CycleB
 
@@ -17,10 +17,10 @@ def _cycle_pair() -> tuple[CycleA, CycleB]:
     return a, b
 
 
-def test_to_triplemodel_cycle() -> None:
+def test_assert_no_embed_cycles_detects_cycle() -> None:
     a, _b = _cycle_pair()
     with pytest.raises(ConfigurationError, match="Cycle detected"):
-        to_triplemodel(a)
+        assert_no_embed_cycles(a, set())
 
 
 def test_model_to_graph_cycle() -> None:

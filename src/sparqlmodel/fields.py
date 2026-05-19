@@ -7,8 +7,11 @@ from typing import Annotated, Any, ForwardRef, TypeVar, cast, get_args, get_orig
 
 from pydantic import Field as PydanticField
 from pydantic.fields import FieldInfo
+from triplemodel import ref_field
+from triplemodel.fields.metadata import predicate_for_field
 
 from sparqlmodel.exceptions import ConfigurationError
+from sparqlmodel.types import IRI
 
 T = TypeVar("T")
 
@@ -23,6 +26,17 @@ class SPARQLFieldMetadata:
     cascade: bool = True
 
 
+def _merge_json_schema_extra(
+    predicate: str,
+    metadata: SPARQLFieldMetadata,
+    extra: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(extra or {})
+    merged["sparql"] = metadata
+    merged["rdf_predicate"] = predicate
+    return merged
+
+
 def Field(predicate: str, **kwargs: Any) -> Any:
     """Map a model attribute to an RDF predicate.
 
@@ -34,8 +48,10 @@ def Field(predicate: str, **kwargs: Any) -> Any:
     json_schema_extra = kwargs.pop("json_schema_extra", {}) or {}
     if not isinstance(json_schema_extra, dict):
         json_schema_extra = {}
-    json_schema_extra["sparql"] = metadata
-    return PydanticField(**kwargs, json_schema_extra=json_schema_extra)
+    return PydanticField(
+        **kwargs,
+        json_schema_extra=_merge_json_schema_extra(predicate, metadata, json_schema_extra),
+    )
 
 
 def Relationship(
@@ -62,8 +78,21 @@ def Relationship(
     json_schema_extra = kwargs.pop("json_schema_extra", {}) or {}
     if not isinstance(json_schema_extra, dict):
         json_schema_extra = {}
-    json_schema_extra["sparql"] = metadata
-    return PydanticField(default=None, **kwargs, json_schema_extra=json_schema_extra)
+
+    if not cascade and model is not None:
+        return ref_field(
+            predicate,
+            model=model,
+            default=None,
+            json_schema_extra=_merge_json_schema_extra(predicate, metadata, json_schema_extra),
+            **kwargs,
+        )
+
+    return PydanticField(
+        default=None,
+        **kwargs,
+        json_schema_extra=_merge_json_schema_extra(predicate, metadata, json_schema_extra),
+    )
 
 
 def get_field_metadata(field_info: FieldInfo) -> SPARQLFieldMetadata | None:
@@ -75,6 +104,19 @@ def get_field_metadata(field_info: FieldInfo) -> SPARQLFieldMetadata | None:
     if isinstance(meta, SPARQLFieldMetadata):
         return meta
     return None
+
+
+def predicate_uri_for_field(field_info: FieldInfo, prefixes: dict[str, str]) -> str | None:
+    """Expanded predicate IRI for a mapped field (TripleModel or SparqlModel metadata)."""
+    from sparqlmodel.types import expand_iri
+
+    pred = predicate_for_field(field_info)
+    if pred is None:
+        meta = get_field_metadata(field_info)
+        if meta is None:
+            return None
+        pred = meta.predicate
+    return expand_iri(pred, prefixes)
 
 
 def _evaluate_forward_ref(ref: ForwardRef) -> Any:
@@ -163,6 +205,16 @@ def resolve_related_model(
         f"Cannot infer related model for relationship field '{field_name}'. "
         "Pass model=YourModel to Relationship()."
     )
+
+
+def relationship_allows_iri(annotation: Any) -> bool:
+    """True when the relationship annotation includes ``IRI`` (composition or reference)."""
+    if annotation is IRI:
+        return True
+    origin = get_origin(annotation)
+    if origin is not None:
+        return any(arg is IRI for arg in get_args(annotation))
+    return False
 
 
 # Type alias for annotated relationship fields

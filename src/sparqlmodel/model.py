@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, ClassVar, cast
+from typing import Annotated, Any, ClassVar, cast, get_origin
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 from pydantic._internal._model_construction import ModelMetaclass
 from pydantic.fields import FieldInfo
+from triplemodel import IriId, TripleModel
+from triplemodel.fields.metadata import id_field_is_iri_id
 from typing_extensions import Self
 
 from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.expressions import FieldRef
 from sparqlmodel.fields import get_field_metadata, resolve_related_model
-from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri
+from sparqlmodel.types import DEFAULT_PREFIXES, IRI, NamespaceRegistry, expand_iri
 
 
 class SPARQLModelMetaclass(ModelMetaclass):
@@ -32,15 +34,21 @@ class SPARQLModelMetaclass(ModelMetaclass):
         raise AttributeError(f"{cls.__name__} has no attribute {name}")
 
 
-class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
+class SPARQLModel(TripleModel, metaclass=SPARQLModelMetaclass):
     """ORM entity mapped to RDF; persist and query via :class:`~sparqlmodel.session.SPARQLSession`."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="forbid",
+        validate_assignment=True,
+        str_strip_whitespace=False,
+    )
 
     rdf_type: ClassVar[str]
     __prefixes__: ClassVar[dict[str, str]] = {}
+    Rdf: ClassVar[type]
 
-    id: IRI | None = None
+    id: Annotated[IRI | None, IriId()] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -53,10 +61,12 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
                     prefixes = dict(base.__dict__["__prefixes__"])
                     break
             cls.__prefixes__ = prefixes
+        _apply_rdf_config(cls)
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
+        _ensure_id_field_has_iri_id(cls)
         cls._validate_unique_predicates()
 
     @classmethod
@@ -80,8 +90,8 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
 
     @classmethod
     def get_prefixes(cls) -> dict[str, str]:
-        """Return namespace prefixes for this model."""
-        return dict(cls.__prefixes__)
+        """Return namespace prefixes for this model (includes built-in RDF prefixes)."""
+        return {**DEFAULT_PREFIXES, **dict(cls.__prefixes__)}
 
     @classmethod
     def namespace_registry(cls) -> NamespaceRegistry:
@@ -126,6 +136,14 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
         assert self.id is not None
         return self.id
 
+    def subject_uri(self, *, uri: str | None = None) -> str:
+        """Return the RDF subject IRI for this instance (expanded when compact)."""
+        if uri is not None:
+            return uri
+        if self.id is not None:
+            return expand_iri(str(self.id), self.get_prefixes())
+        return super().subject_uri()
+
     def model_dump_jsonld(self) -> dict[str, Any]:
         """Serialize model to a JSON-LD compatible dict."""
         from sparqlmodel.serializers import model_to_jsonld
@@ -138,3 +156,31 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
         from sparqlmodel.serializers import model_from_jsonld
 
         return model_from_jsonld(cls, data)
+
+
+def _ensure_id_field_has_iri_id(cls: type[SPARQLModel]) -> None:
+    """Ensure ``id`` carries :class:`~triplemodel.IriId` so graph import fills subject IRIs."""
+    if "id" not in cls.model_fields or id_field_is_iri_id(cls, "id"):
+        return
+    fi = cls.model_fields["id"]
+    existing = tuple(fi.metadata)
+    if not any(isinstance(meta, IriId) for meta in existing):
+        object.__setattr__(fi, "metadata", existing + (IriId(),))
+    ann = cls.__annotations__.get("id", IRI | None)
+    if get_origin(ann) is not Annotated:
+        cls.__annotations__["id"] = Annotated[ann, IriId()]
+
+
+def _apply_rdf_config(cls: type[SPARQLModel]) -> None:
+    """Inject TripleModel ``Rdf`` config from SparqlModel class variables."""
+    merged_prefixes = cls.get_prefixes()
+    expanded_type_uri = expand_iri(cls.rdf_type, merged_prefixes)
+
+    class Rdf:
+        type_uri = expanded_type_uri
+        prefixes = merged_prefixes
+        namespace = "urn:sparqlmodel:unused/"
+        embed = "iri"
+        id_field = "id"
+
+    cls.Rdf = Rdf

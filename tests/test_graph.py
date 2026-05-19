@@ -1,8 +1,8 @@
 """Tests for graph mapping."""
 
 from sparqlmodel import IRI, Field, SPARQLModel
-from sparqlmodel._triple import model_to_graph
 from sparqlmodel.graph import owned_triples_for_subject
+from sparqlmodel.rdf_bridge import model_to_graph
 from tests.models import Organization, Person
 
 

@@ -27,7 +27,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` still duplicates some TripleModel file I/O — thin wrappers in **0.6**. Interim `_triple.py` adapter (0.3) is **superseded by 0.4** Option A. `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **0.4 — unified model architecture (Option A)**. Async end-to-end follows in **0.5**.
+**Current focus (next release):** **0.5 — async end-to-end**. Unified model (Option A) shipped in **0.4.0**.
 
 ---
 
@@ -160,19 +160,19 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ## 0.4 — Unified model (Option A)
 
-**Status:** **next release** (after **0.3.0**).
+**Status:** shipped as **0.4.0**.
 
 **Goal:** one class, one mapping path — SQLModel pattern. **ORM public API unchanged** (`Field`, `Relationship`, `session.put`).
 
 ### Unified model layer
 
-- [ ] `class SPARQLModel(TripleModel)` + merged metaclass (query `FieldRef` + TripleModel validation)
-- [ ] `Field` / `Relationship` build `rdf_field` / `Predicate` + `Rdf` config at class creation (**no `exec`**)
-- [ ] Map `rdf_type` / `__prefixes__` → nested `class Rdf` (`type_uri`, `prefixes`, `embed`, `IriId` for `id: IRI`)
-- [ ] `session.put` / `get` call `sync_to_graph` / `from_graph` on the **same** instance type
-- [ ] Use TripleModel nested embed for composition; SparqlModel-only `cascade` / `Relationship(..., cascade=False)`
-- [ ] Delete `_triple.py`; migrate tests and contract tests
-- [ ] CHANGELOG migration note (0.3 → 0.4; no public users yet)
+- [x] `class SPARQLModel(TripleModel)` + merged metaclass (query `FieldRef` + TripleModel validation)
+- [x] `Field` / `Relationship` build `rdf_predicate` + `sparql` metadata at class creation (**no `exec`**)
+- [x] Map `rdf_type` / `__prefixes__` → nested `class Rdf` (`type_uri`, `prefixes`, `embed`, `IriId` for `id`)
+- [x] `session.put` / `get` call `rdf_bridge.model_to_graph` / `load_from_graph` on the **same** instance type
+- [x] Per-subject graph sync for composition; SparqlModel-only `cascade` / `Relationship(..., cascade=False)` via `ref_field`
+- [x] Delete `_triple.py`; migrate tests and contract tests
+- [x] CHANGELOG migration note (0.3 → 0.4)
 
 **Write path (target):** validated `SPARQLModel` → cascade in `graph.py` → `sync_to_graph(model, store.graph, …)`.
 

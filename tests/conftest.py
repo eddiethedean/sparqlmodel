@@ -5,15 +5,7 @@ from __future__ import annotations
 import pytest
 
 from sparqlmodel import IRI, SPARQLSession
-from sparqlmodel import _triple as triple_mod
 from tests.models import Organization, Person
-
-
-@pytest.fixture(autouse=True)
-def _clear_triple_class_cache() -> None:
-    triple_mod._TRIPLE_CLASS_CACHE.clear()
-    yield
-    triple_mod._TRIPLE_CLASS_CACHE.clear()
 
 
 @pytest.fixture

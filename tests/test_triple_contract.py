@@ -1,31 +1,18 @@
-"""Contract tests: SPARQLModel put graphs vs TripleModel adapter."""
+"""Contract tests: SPARQLModel put graphs vs direct/rdf_bridge export."""
 
 from __future__ import annotations
 
+from rdflib import URIRef
+
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
-from sparqlmodel._triple import (
+from sparqlmodel.rdf_bridge import (
     adapter_graph,
     assert_put_graph_contract,
-    from_triplemodel,
     graphs_isomorphic,
+    load_from_graph,
     model_to_graph,
-    sparql_from_graph,
-    to_triplemodel,
-    triple_model_class_for,
 )
 from tests.models import Location, Organization, Person
-
-
-def test_triple_model_class_for_person() -> None:
-    cls = triple_model_class_for(Person)
-    assert issubclass(cls, triple_model_class_for(Person))
-
-
-def test_to_triplemodel_roundtrip_scalars() -> None:
-    person = Person(id=IRI("urn:p:1"), name="Odos", works_for=None)
-    tm = to_triplemodel(person)
-    assert tm.subject_uri() == "urn:p:1"
-    assert tm.name == "Odos"
 
 
 def test_put_graph_isomorphic_person_org() -> None:
@@ -42,24 +29,23 @@ def test_model_to_graph_matches_adapter_graph() -> None:
     assert graphs_isomorphic(model_to_graph(person), adapter_graph(person))
 
 
-def test_sparql_from_graph_round_trip() -> None:
+def test_load_from_graph_round_trip() -> None:
     loc = Location(id=IRI("urn:loc:rt"), name="Boston")
     org = Organization(id=IRI("urn:org:rt"), name="Acme", located_in=loc)
     person = Person(id=IRI("urn:p:rt"), name="Pat", works_for=org)
     g = model_to_graph(person)
-    loaded = sparql_from_graph(Person, person.id, g, depth=2)
+    loaded = load_from_graph(Person, person.id, g, depth=2)
     assert loaded.name == "Pat"
     assert loaded.works_for is not None
     assert loaded.works_for.name == "Acme"
 
 
-def test_from_triplemodel_shallow() -> None:
+def test_load_from_graph_shallow() -> None:
     person = Person(id=IRI("urn:p:3"), name="Lee", works_for=None)
-    tm = to_triplemodel(person)
     g = adapter_graph(person)
-    restored = from_triplemodel(tm, g, sparql_cls=Person, depth=0)
-    assert restored.name == "Lee"
-    assert str(restored.id) == "urn:p:3"
+    loaded = load_from_graph(Person, person.id, g, depth=0)
+    assert loaded.name == "Lee"
+    assert str(loaded.id) == "urn:p:3"
 
 
 def test_session_put_matches_contract() -> None:
@@ -71,14 +57,6 @@ def test_session_put_matches_contract() -> None:
     interim = session.store.graph
     via = adapter_graph(person)
     assert graphs_isomorphic(interim, via)
-
-
-class LinkedOrg(SPARQLModel):
-    rdf_type = "schema:Organization"
-    __prefixes__ = {"schema": "https://schema.org/"}
-
-    id: IRI
-    name: str = Field("schema:name")
 
 
 class PersonNoCascade(SPARQLModel):
@@ -120,7 +98,5 @@ def test_relationship_cascade_false_skips_nested_put() -> None:
     session = SPARQLSession()
     session.put(person)
     g = session.store.graph
-    from rdflib import URIRef
-
     org_ref = URIRef("urn:org:nc")
     assert not any(g.triples((org_ref, None, None)))

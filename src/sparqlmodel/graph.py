@@ -1,4 +1,4 @@
-"""ORM persistence policy (cascade, orphans); mapping via TripleModel in ``_triple.py``."""
+"""ORM persistence policy (cascade, orphans); RDF mapping via ``rdf_bridge``."""
 
 from __future__ import annotations
 

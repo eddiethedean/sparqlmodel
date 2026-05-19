@@ -15,7 +15,7 @@ def test_hydrate_one_wraps_validation_error(session, odos: Person) -> None:
     session.put(odos)
     with (
         patch(
-            "sparqlmodel.hydration.sparql_from_graph",
+            "sparqlmodel.hydration.load_from_graph",
             side_effect=ValidationError.from_exception_data("Person", []),
         ),
         pytest.raises(HydrationError),

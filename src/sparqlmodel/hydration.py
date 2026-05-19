@@ -6,10 +6,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from sparqlmodel._triple import sparql_from_graph
 from sparqlmodel.exceptions import ConfigurationError, HydrationError
 from sparqlmodel.graph import subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
+from sparqlmodel.rdf_bridge import load_from_graph
 from sparqlmodel.stores.base import Store
 from sparqlmodel.types import IRI
 
@@ -77,7 +77,7 @@ def hydrate_one(
         return None
 
     try:
-        return sparql_from_graph(model_cls, IRI(str(iri)), store.graph, depth=depth)
+        return load_from_graph(model_cls, IRI(str(iri)), store.graph, depth=depth)
     except ConfigurationError:
         raise
     except (ValidationError, ValueError, TypeError) as exc:

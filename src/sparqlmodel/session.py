@@ -9,7 +9,6 @@ from typing import Any, cast
 from rdflib import Graph
 from typing_extensions import Self
 
-from sparqlmodel._triple import model_to_graph
 from sparqlmodel.graph import (
     cascade_subjects_for_removal,
     owned_triples_for_subjects,
@@ -18,6 +17,7 @@ from sparqlmodel.graph import (
 from sparqlmodel.hydration import hydrate_one, validate_depth
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.query import Query
+from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.session_state import (
     _HYDRATION_MISS,
     SessionState,

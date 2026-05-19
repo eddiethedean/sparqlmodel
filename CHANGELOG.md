@@ -7,16 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Documentation
+## [0.4.0] - 2026-05-18
 
-- **Architecture (Option A)** — `SPARQLModel` subclasses `TripleModel` (SQLModel pattern); one class, one mapping path. Planned implementation **0.4**; delete interim `_triple.py` dynamic adapter from **0.3**.
-- **Roadmap renumbering** — **0.4** unified model (Option A); **0.5** async end-to-end; file I/O **0.6**, query **0.7**, …, production GA **1.2** (was 1.1).
-- **ASYNC_RDF_RUST_PLAN.md** — companion to SparqlModel **0.5** async (optional Rust-backed RDF I/O package).
+### Added
 
-### Planned (0.4.0)
+- **Unified model (Option A)** — `SPARQLModel` subclasses `TripleModel`; nested `Rdf` config injected from `rdf_type` / `__prefixes__`; `id` uses `IriId` for explicit subject IRIs
+- **`sparqlmodel.rdf_bridge`** — `model_to_graph`, `load_from_graph` / `sparql_from_graph`, cycle detection, graph contract helpers (replaces interim adapter)
+- **Dual field metadata** — `Field` / `Relationship` set both `sparql` (ORM/compiler) and `rdf_predicate` (TripleModel) in `json_schema_extra`
+- **`Relationship(..., cascade=False)`** — uses TripleModel `ref_field` for URI FK without nested embed on put
 
-- **`SPARQLModel(TripleModel)`** — merged metaclass for query DSL; `Field` / `Relationship` sugar over `rdf_field` / `Predicate`
-- **Remove `_triple.py`** — session calls `sync_to_graph` / `from_graph` on app instances directly
+### Changed
+
+- **Session / hydration / serializers / FastAPI** — import graph I/O from `rdf_bridge` instead of `_triple`
+- **`get_prefixes()`** — merges built-in RDF prefixes (`rdf`, `rdfs`, `xsd`, `schema`) with model `__prefixes__`
+- **Removed `sparqlmodel._triple`** — no `exec`-generated shadow `TripleModel` classes
+
+### Fixed
+
+- Subclasses that redeclare `id: IRI` without `IriId` get `IriId` metadata applied at class creation so `from_graph` populates subject IRIs
+
+### Migration (0.3 → 0.4)
+
+No public API changes for `SPARQLModel`, `Field`, `Relationship`, or `SPARQLSession.put` / `get` / `query`. Internal adapter module removed; tests and apps should import `sparqlmodel.rdf_bridge` only if they used private `_triple` helpers.
 
 ## [0.3.0] - 2026-05-18
 

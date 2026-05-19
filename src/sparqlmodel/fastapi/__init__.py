@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from rdflib import Graph
 
-from sparqlmodel._triple import model_to_graph
 from sparqlmodel.fastapi.deps import (
     SessionDep,
     get_session,
@@ -15,6 +14,7 @@ from sparqlmodel.fastapi.deps import (
     session_dependency,
 )
 from sparqlmodel.model import SPARQLModel
+from sparqlmodel.rdf_bridge import model_to_graph
 
 __all__ = [
     "SessionDep",
