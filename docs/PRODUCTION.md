@@ -81,7 +81,7 @@ Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 | Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.9** |
 | Query logging | None | Structured SPARQL log (**1.0**) |
 | Bulk import | Repeated `put` | Bulk helpers (**1.0**) |
-| Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.4**) |
+| Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.5**) |
 
 ---
 
@@ -104,5 +104,5 @@ Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 ## Further reading
 
 - [ORM.md](ORM.md) — developer guide
-- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-11-ga-gate)
-- [ROADMAP.md — 0.4–1.1](ROADMAP.md)
+- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate)
+- [ROADMAP.md — 0.4–1.2](ROADMAP.md)

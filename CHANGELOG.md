@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- **Roadmap** — **0.4** is async end-to-end (`AsyncSPARQLSession`, async stores, FastAPI); later milestones renumbered (file I/O **0.5**, query **0.6**, …, GA **1.1**). Async removed from post-1.0 / P2 deferrals.
-- **ASYNC_RDF_RUST_PLAN.md** — proposal for a standalone async-first, Rust-backed RDF I/O package (HTTP, streaming parse, optional Oxigraph store).
+- **Architecture (Option A)** — `SPARQLModel` subclasses `TripleModel` (SQLModel pattern); one class, one mapping path. Planned implementation **0.4**; delete interim `_triple.py` dynamic adapter from **0.3**.
+- **Roadmap renumbering** — **0.4** unified model (Option A); **0.5** async end-to-end; file I/O **0.6**, query **0.7**, …, production GA **1.2** (was 1.1).
+- **ASYNC_RDF_RUST_PLAN.md** — companion to SparqlModel **0.5** async (optional Rust-backed RDF I/O package).
+
+### Planned (0.4.0)
+
+- **`SPARQLModel(TripleModel)`** — merged metaclass for query DSL; `Field` / `Relationship` sugar over `rdf_field` / `Predicate`
+- **Remove `_triple.py`** — session calls `sync_to_graph` / `from_graph` on app instances directly
 
 ## [0.3.0] - 2026-05-18
 

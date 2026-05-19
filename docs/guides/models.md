@@ -16,7 +16,7 @@ SparqlModel applies that to RDF:
 - Catch graph data that does not match your annotations when hydrating from a store.
 - Generate JSON Schema from models for OpenAPI when using {doc}`fastapi`.
 
-TripleModel (required dependency) is also Pydantic-based; SparqlModel’s `SPARQLModel` is the **application-facing** model type. You rarely import `triplemodel` in app code.
+TripleModel (required dependency) is also Pydantic-based. **`SPARQLModel` subclasses `TripleModel`** (Option A, **0.4+**) — one class for app code, mapping, and queries. You rarely import `triplemodel` in app code unless you need stateless file I/O without a session.
 
 ---
 
@@ -45,12 +45,12 @@ class Person(SPARQLModel):
 
 | Piece | Role |
 |-------|------|
-| `rdf_type` | RDF class IRI (compact or absolute) |
+| `rdf_type` | RDF class IRI (compact or absolute); maps to TripleModel `Rdf.type_uri` at class creation (**0.4+**) |
 | `__prefixes__` | CURIE → namespace map for predicates and types |
-| `Field("schema:…")` | Scalar mapped to a predicate |
+| `Field("schema:…")` | Scalar mapped to a predicate (`rdf_field` sugar) |
 | `Relationship(...)` | Link to another `SPARQLModel` or `IRI` |
 
-`SPARQLModel` subclasses `pydantic.BaseModel` with `model_config = ConfigDict(extra="forbid")`, so extra keys in input data are rejected.
+`SPARQLModel` uses `model_config = ConfigDict(extra="forbid")`, so extra keys in input data are rejected.
 
 ---
 
@@ -63,13 +63,16 @@ Person(id=IRI("urn:p:1"), name="Ada")   # ok
 Person(id=IRI("urn:p:2"), name=123)     # pydantic.ValidationError
 ```
 
-When you `session.put(person)`, the session serializes an already-validated instance through the TripleModel adapter (`sync_to_graph`). The adapter builds a dynamic TripleModel class and calls `model_validate` before writing triples.
+When you `session.put(person)`, the session serializes an already-validated instance:
+
+- **0.4+:** `sync_to_graph(person, …)` on the `SPARQLModel` instance (a `TripleModel`).
+- **0.3.x (interim):** `_triple.to_triplemodel` → dynamic TripleModel subclass → `sync_to_graph`.
 
 ---
 
 ## Validation on read
 
-`session.get` and query hydration load from the store graph via `sparql_from_graph`, which ends with `SPARQLModel.model_validate(...)`.
+`session.get` and query hydration load from the store graph via TripleModel `from_graph`, then `SPARQLModel.model_validate` (with SparqlModel depth for relationships).
 
 If stored triples do not match your field types (for example a literal where you declared `int`), hydration raises `HydrationError` wrapping Pydantic’s `ValidationError`.
 
@@ -103,22 +106,23 @@ Use standard Pydantic constraints on scalar fields. Relationship fields support 
 |---------|-------|---------|
 | App-level types and constraints | Pydantic on `SPARQLModel` | — |
 | RDF type of subject on load | TripleModel `validate_type` | — |
-| Multi-valued predicates (`list[...]`) | First value per predicate on load | **0.9** |
-| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**1.0**, TripleModel) |
+| Multi-valued predicates (`list[...]`) | First value per predicate on load | **1.0** |
+| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**1.1**, TripleModel) |
 
 Pydantic validates **Python values** against your model. It does not replace SHACL or OWL reasoning for graph-level rules.
 
 ---
 
-## TripleModel behind the adapter
+## TripleModel integration (Option A)
 
-Session I/O uses `sparqlmodel._triple`:
+**Target (0.4+):** `SPARQLModel` **is** a `TripleModel`. `Field` / `Relationship` build `rdf_field` / `Predicate` and nested `class Rdf` at class creation — no dynamic shadow classes.
 
-1. Your `SPARQLModel` class → dynamically generated TripleModel subclass (cached).
-2. **Write:** `to_triplemodel` → `sync_to_graph` per cascaded subject.
-3. **Read:** `TripleModel.from_graph` → `model_validate` → `SPARQLModel`.
+1. **Write:** `session.put` → cascade policy → `sync_to_graph` on your instance.
+2. **Read:** `from_graph` on your class → depth hydration → identity map.
 
-Application code should stay on `SPARQLModel`, `Field`, and `Relationship`. Use TripleModel directly for stateless file parse/serialize or ETL without a session — see {doc}`../ORM`.
+**Interim (0.3.x):** `sparqlmodel._triple` generates cached TripleModel subclasses via `exec`; removed in **0.4**.
+
+Application code should stay on `SPARQLModel`, `Field`, and `Relationship`. For stateless file parse/serialize or ETL without a session, you may import TripleModel directly — see {doc}`../ORM`.
 
 ---
 

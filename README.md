@@ -83,7 +83,7 @@ with SPARQLSession() as session:
 | When | What runs |
 |------|-----------|
 | `Person(...)` / API body | Pydantic validates types and `Field` constraints |
-| `session.put(model)` | Validated instance → TripleModel adapter → graph |
+| `session.put(model)` | Validated instance → `sync_to_graph` (0.4+: same `SPARQLModel` instance subclasses `TripleModel`) |
 | `session.get` / query hydration | Graph → `model_validate` → `SPARQLModel` instance |
 
 ```python
@@ -97,7 +97,7 @@ class Person(SPARQLModel):
 
 - **`extra="forbid"`** — unknown fields on a model raise at validation time (safer for APIs).
 - **FastAPI** — reuse the same `SPARQLModel` classes for request/response bodies (see [FastAPI](#fastapi) below).
-- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers are thin wrappers until 0.4; prefer TripleModel for file I/O long term).
+- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers are thin wrappers until 0.6; prefer TripleModel for file I/O long term).
 
 Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md#pydantic-integration)
 
@@ -215,7 +215,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 | [Getting started](https://sparqlmodel.readthedocs.io/en/latest/getting-started.html) | Quickstart and first session |
 | [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Models (Pydantic), sessions, queries, FastAPI |
 | [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
-| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-11-ga-gate) |
+| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-12-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
 | [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.3–1.0 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
 | [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
@@ -227,7 +227,8 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade
-- No async session or `AsyncHttpStore` yet — planned **0.4** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- **0.4** adopts Option A: `SPARQLModel` subclasses `TripleModel` (removes interim `_triple.py` adapter)
+- No async session or `AsyncHttpStore` yet — planned **0.5** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
 - Query: `limit` only — `offset` / `order_by` / `count` planned ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) 0.6)
 - Sessions are not thread-safe; one session per request/task
 - Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition

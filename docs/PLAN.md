@@ -6,17 +6,17 @@
 
 SparqlModel is a **SPARQL ORM** for application developers. It requires **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9` and focuses exclusively on what TripleModel does not provide: **sessions**, a **query compiler**, **store backends**, **cascade persistence policy**, and **hydration depth**.
 
-TripleModel is the **mapping substrate** — literals, terms, `sync_to_graph`, `from_graph`, and file parse/serialize. SparqlModel does not compete with it; it **consumes** it.
+TripleModel is the **mapping substrate** — literals, terms, `sync_to_graph`, `from_graph`, and file parse/serialize. SparqlModel does not compete with it; **`SPARQLModel` subclasses `TripleModel`** (Option A) so there is one class and one mapping path.
 
 Guides: [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md) · [SPECS.md](SPECS.md) · [PRODUCTION.md](PRODUCTION.md)
 
 ---
 
-# Production ORM definition (1.1 GA north star)
+# Production ORM definition (1.2 GA north star)
 
-SparqlModel **1.1** means a **fully featured production SPARQL ORM** — the [SQLModel](https://sqlmodel.tiangolo.com/) of SPARQL for backend and FastAPI teams:
+SparqlModel **1.2** means a **fully featured production SPARQL ORM** — the [SQLModel](https://sqlmodel.tiangolo.com/) of SPARQL for backend and FastAPI teams:
 
-1. **Correctness** — One mapping path via TripleModel; cascade/orphan rules covered by contract tests.
+1. **Correctness** — One mapping path via `SPARQLModel(TripleModel)`; cascade/orphan rules covered by contract tests.
 2. **Session parity** — Identity map, pending flush, `expire` / `refresh` / `merge` / `expunge`, scoped session for FastAPI, documented threading.
 3. **Query parity** — Pagination (`offset` + `limit`), sorting, `count()`, filters including null/absence on relationships.
 4. **RDF fidelity** — Multi-valued fields, language tags (TripleModel), polymorphic `rdf:type` queries where modeled.
@@ -25,7 +25,7 @@ SparqlModel **1.1** means a **fully featured production SPARQL ORM** — the [SQ
 
 **Explicit non-goals:** OWL editor, built-in reasoner, reimplementing TripleModel in `graph.py`.
 
-GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-11-ga-gate).
+GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
 
 ---
 
@@ -33,7 +33,7 @@ GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-1
 
 | Tier | Meaning | Examples |
 |------|---------|----------|
-| **P0** | Required for production HTTP/API apps | TripleModel wiring, `offset` / `order_by` / `count`, OPTIONAL filters, HttpStore mirror strategy |
+| **P0** | Required for production HTTP/API apps | Unified `SPARQLModel(TripleModel)`, `offset` / `order_by` / `count`, OPTIONAL filters, HttpStore mirror strategy |
 | **P1** | SQLModel / SPARQLMojo parity | `merge` / `refresh` / `expunge`, multi-valued + lang fields, polymorphic query, read/write endpoints |
 | **P2** | Advanced / ecosystem | Named graphs, federation, CONSTRUCT/ASK helpers, Oxigraph store |
 
@@ -49,7 +49,7 @@ GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-1
 | Cascade `put` / orphans | Yes | Partial | Manual |
 | Python 3.10+ | Yes | 3.12+ | Yes |
 
-SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **composition semantics**, and **documented store contracts**. SPARQLMojo leads on **lang/collection fields** until **0.9** (planned via TripleModel).
+SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **composition semantics**, and **documented store contracts**. SPARQLMojo leads on **lang/collection fields** until **1.0** (planned via TripleModel).
 
 ---
 
@@ -58,7 +58,7 @@ SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **composi
 ## SparqlModel (ORM)
 
 - Entry point: `with SPARQLSession() as session:`
-- SQLModel-style models: `SPARQLModel`, `Field`, `Relationship`
+- SQLModel-style models: `SPARQLModel` (subclasses `TripleModel`), `Field`, `Relationship`
 - Python queries → SPARQL: `session.query(Person).where(Person.name == x)`
 - Unit-of-work semantics: `add`, `put`, `delete`, cascade, orphans
 - Stores: `MemoryStore`, `HttpStore` (`sparqlmodel[http]`)
@@ -92,30 +92,32 @@ SparqlModel exists to answer: **“How do I build and operate an application on 
 5. Pluggable stores (`MemoryStore`, `HttpStore`, …)
 6. Optional FastAPI integration
 
-**Owned by TripleModel (SparqlModel delegates):**
+**Owned by TripleModel (SparqlModel delegates via subclass):**
 
 1. Model ↔ triple conversion
 2. Literal and IRI term handling
 3. `sync_to_graph` / `from_graph` / `parse` / `serialize`
 4. Multi-valued fields, nested embeds, blank nodes (per TripleModel roadmap)
 
-**Public ORM API stays stable** while interim `graph.py` / `serializers.py` are retired in favor of TripleModel calls.
+**Public ORM API stays stable** (`Field`, `Relationship`, `session.put`) while internals move to **Option A** (delete `_triple.py` adapter in **0.4**) and `serializers.py` is retired in **0.6**.
 
 ---
 
-# Architecture
+# Architecture (Option A)
 
 ```text
 Application
     ↓
-SPARQLSession · Query · Compiler · Stores     ← SparqlModel
+SPARQLModel(TripleModel) · Field/Relationship sugar · Query metaclass
     ↓
-triplemodel>=0.9 (sync, load, terms, files)   ← TripleModel
+SPARQLSession · Compiler · Stores · graph.py (cascade only)   ← SparqlModel
+    ↓
+sync_to_graph · from_graph · terms · files                    ← TripleModel (same instance type)
     ↓
 rdflib · pydantic
 ```
 
-**Never in SparqlModel:** duplicate `python_to_term`, new RDF format parsers, or session-free mapping APIs.
+**Never in SparqlModel:** duplicate `python_to_term`, new RDF format parsers, dynamic shadow `TripleModel` classes (`exec` adapter), or session-free mapping APIs.
 
 **Never in TripleModel:** `SPARQLSession`, query compiler, cascade `put`, or HTTP store plugins.
 
@@ -123,21 +125,22 @@ rdflib · pydantic
 
 # Integration strategy
 
-SparqlModel **already depends** on `triplemodel>=0.9`. The remaining work is **wiring**, not packaging:
+SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify the model layer (0.4)**, then async, file I/O, and production features.
 
 | Phase | SparqlModel | TripleModel usage |
 |-------|-------------|-------------------|
-| **0.1.x** | ORM shipped; interim `graph.py` | Dependency declared |
-| **0.2** | `HttpStore`, identity map, `_triple` adapter | Contract tests |
-| **0.3** | Session I/O via adapter | `sync_to_graph` / `from_graph`; retire interim mapping |
-| **0.4** | **Async end-to-end** (`AsyncSPARQLSession`, `AsyncHttpStore`, FastAPI) | — |
-| **0.5** | Thin `serializers.py` | `parse` / `serialize` only |
-| **0.6** | Query production (`offset`, `order_by`, `count`, OPTIONAL) | — |
-| **0.7** | Session lifecycle (`merge`, `refresh`, `expunge`, scoped session) | — |
-| **0.8** | HttpStore production (read/write URLs, mirror sync) | — |
-| **0.9** | RDF modeling in ORM layer | Multi-valued, lang tags, polymorphic query |
-| **1.0** | Ops (SHACL hook, bulk, logging) | SHACL validation |
-| **1.1** | Production GA (SPECS P0+P1 complete) | Stable mapping substrate |
+| **0.1.x** | ORM shipped; interim `graph.py` mapping | Dependency declared |
+| **0.2** | `HttpStore`, identity map, `_triple` adapter (interim) | Contract tests |
+| **0.3** | Session I/O via adapter (interim bridge) | `sync_to_graph` / `from_graph`; cascade-only `graph.py` |
+| **0.4** | **Unified model (Option A)** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |
+| **0.5** | **Async end-to-end** (`AsyncSPARQLSession`, `AsyncHttpStore`, FastAPI) | — |
+| **0.6** | Thin `serializers.py` | `parse` / `serialize` only |
+| **0.7** | Query production (`offset`, `order_by`, `count`, OPTIONAL) | — |
+| **0.8** | Session lifecycle (`merge`, `refresh`, `expunge`, scoped session) | — |
+| **0.9** | HttpStore production (read/write URLs, mirror sync) | — |
+| **1.0** | RDF modeling in ORM layer | Multi-valued, lang tags, polymorphic query |
+| **1.1** | Ops (SHACL hook, bulk, logging) | SHACL validation |
+| **1.2** | Production GA (SPECS P0+P1 complete) | Stable mapping substrate |
 
 ---
 
@@ -145,7 +148,8 @@ SparqlModel **already depends** on `triplemodel>=0.9`. The remaining work is **w
 
 **P0 (production APIs):**
 
-- **Async ORM** — `AsyncSPARQLSession`, async stores, FastAPI `AsyncSessionDep` (**0.4**)
+- **Unified model (Option A)** — `SPARQLModel(TripleModel)`; one mapping path (**0.4**)
+- **Async ORM** — `AsyncSPARQLSession`, async stores, FastAPI `AsyncSessionDep` (**0.5**)
 - Typed SPARQL persistence with explicit `add` / `put` / `delete` semantics
 - Pythonic filters compiled to SPARQL (including pagination and sorting)
 - Relationship hydration with `depth`; nullable relationship filters
@@ -192,12 +196,13 @@ SparqlModel **already depends** on `triplemodel>=0.9`. The remaining work is **w
 |---------|--------|
 | **0.1.x** | Core ORM + cascade |
 | **0.2** | HttpStore, identity map, compiler 0.2, FastAPI |
-| **0.3** | TripleModel session I/O (shipped) |
-| **0.4** | Async end-to-end |
-| **0.5** | Delegated file I/O |
-| **0.6–0.8** | Production query + session + HttpStore |
-| **0.9–1.0** | RDF modeling + ops |
-| **1.1** | Production GA |
+| **0.3** | TripleModel session I/O via interim adapter (shipped) |
+| **0.4** | Unified model (Option A) |
+| **0.5** | Async end-to-end |
+| **0.6** | Delegated file I/O |
+| **0.7–0.9** | Production query + session + HttpStore |
+| **1.0–1.1** | RDF modeling + ops |
+| **1.2** | Production GA |
 
 Detail: [ROADMAP.md](ROADMAP.md)
 
@@ -205,10 +210,11 @@ Detail: [ROADMAP.md](ROADMAP.md)
 
 # Risks
 
-- Reimplementing TripleModel in `graph.py` instead of deleting it
+- Reimplementing TripleModel in `graph.py` instead of keeping cascade-only policy
 - ORM scope creep (reasoning, ontology editing)
 - Performance without identity map on large graphs
-- Diverging `Field` UX from TripleModel predicate metadata during adapter work
+- **Metaclass + `TripleModel.__pydantic_init_subclass__` ordering** when merging query DSL with mapping validation
+- Diverging `Field` sugar from TripleModel `rdf_field` / `Predicate` metadata
 - Documenting features as shipped when only planned (keep ROADMAP / SPECS in sync)
 - **HttpStore mirror** in multi-tenant or multi-writer deployments without sync strategy
 
@@ -218,8 +224,8 @@ Detail: [ROADMAP.md](ROADMAP.md)
 
 1. **TripleModel first** for any mapping, literal, or format bug
 2. **SparqlModel first** for session, compiler, cascade, stores
-3. **P0 before P2** — async (**0.4**), then pagination and HttpStore, before federation/reasoning
-4. Preserve ORM public API; add methods; change internals via adapter layer
+3. **Option A before async** — unified model (**0.4**), then async (**0.5**), then pagination and HttpStore
+4. Preserve ORM public API (`Field`, `Relationship`, `session.put`); change internals on unified `SPARQLModel(TripleModel)` base
 5. Document semantics in [ORM.md](ORM.md), [SPECS.md](SPECS.md), [PRODUCTION.md](PRODUCTION.md)
 6. Contract tests: SparqlModel `put` triple sets align with TripleModel `sync_to_graph` + cascade rules
-7. **SPECS Production checklist** is the **1.1** GA gate
+7. **SPECS Production checklist** is the **1.2** GA gate

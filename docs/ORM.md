@@ -19,10 +19,13 @@ Related: {doc}`guides/index` · {doc}`SPECS` · {doc}`ECOSYSTEM` · {doc}`ROADMA
 
 ```text
 Your app
+  → SPARQLModel(TripleModel) — one class (Option A; 0.4+)
   → SPARQLSession.put / .query / .get
-  → _triple.py (TripleModel sync_to_graph / from_graph) + graph.py (cascade policy)
+  → sync_to_graph / from_graph + graph.py (cascade policy)
   → rdflib Graph in a Store
 ```
+
+**0.3.x (interim):** session I/O still uses `_triple.py` dynamic adapter until **0.4**.
 
 **Rule of thumb:** if your code never constructs a `SPARQLSession`, you probably want TripleModel only.
 
@@ -30,13 +33,13 @@ Your app
 
 ## Pydantic integration
 
-`SPARQLModel` is a **Pydantic v2** model (`pydantic.BaseModel` with a custom metaclass for the query DSL). That is the same positioning as SQLModel relative to SQLAlchemy: the ORM session layer plus validated data classes.
+`SPARQLModel` is a **Pydantic v2** model that **subclasses `TripleModel`** (Option A, target **0.4**) with a merged metaclass for the query DSL. That is the same positioning as SQLModel relative to SQLAlchemy: one class for mapping and ORM ergonomics.
 
 | Layer | Validation |
 |-------|------------|
 | **Construct** | `Person(...)` and `Person.model_validate({...})` run Pydantic field validators |
-| **Persist** | `session.put` serializes validated instances via `_triple.to_triplemodel` → `model_validate` on the adapter |
-| **Load** | `session.get` / hydration call `sparql_from_graph` → `SPARQLModel.model_validate` |
+| **Persist** | `session.put` → cascade in `graph.py` → `sync_to_graph` on the instance (**0.4+**; 0.3 uses interim `_triple.py`) |
+| **Load** | `from_graph` on `SPARQLModel` + depth hydration → `model_validate` |
 | **Config** | `extra="forbid"` rejects unknown fields on models |
 
 `Field("schema:name", ...)` and `Relationship(...)` wrap `pydantic.Field` and forward keyword arguments (`min_length`, `ge`, `description`, defaults, and so on) for scalar and relationship annotations.
@@ -75,8 +78,8 @@ from sparqlmodel import (
 ```
 
 - **`SPARQLSession`** — unit of work over a store
-- **`SPARQLModel`** — entity class (SQLModel-style); not a standalone mapper
-- **`Field` / `Relationship`** — ORM field API (backed by TripleModel predicate metadata as integration completes)
+- **`SPARQLModel`** — entity class (SQLModel-style); subclasses `TripleModel` (**0.4+**)
+- **`Field` / `Relationship`** — ORM sugar over `rdf_field` / `Predicate`
 
 You generally **do not** import `triplemodel` in application code unless you are mixing stateless file I/O with session usage — e.g. bulk `TripleModel.parse()` then `session.put()` per row.
 
@@ -153,7 +156,7 @@ with SPARQLSession() as session:
 
 ORM eager-load. Query `.all(depth=1)` and `.first(depth=1)` accept the same parameter.
 
-Loading scalars and relationships uses `sparql_from_graph` in `hydration.py`, backed by TripleModel `from_graph` in `_triple.py`.
+Loading scalars and relationships uses `hydration.py` over TripleModel `from_graph` on `SPARQLModel` instances (**0.4+**; 0.3 via interim `_triple.py`).
 
 ---
 
@@ -180,7 +183,7 @@ from triplemodel import TripleModel  # example — use your TripleModel classes
 # persons = Person.parse("data.ttl")
 ```
 
-**From SparqlModel today (serializers interim until 0.4):**
+**From SparqlModel today (serializers interim until 0.6):**
 
 ```python
 from sparqlmodel.serializers import export_model
@@ -195,10 +198,11 @@ Roadmap: SparqlModel export becomes a thin wrapper over TripleModel `serialize`;
 
 | Capability | Owner today | Direction |
 |------------|-------------|-----------|
-| Literals, XSD, subject IRIs | TripleModel (package dep) | SparqlModel stops reimplementing in `graph.py` |
-| `session.put` graph writes | SparqlModel + interim `graph.py` | `sync_to_graph` + cascade orchestration |
-| `session.get` / query hydrate | SparqlModel + interim loaders | `from_graph` + depth walker |
-| Turtle / JSON-LD export | Interim `serializers.py` | TripleModel `serialize` |
+| Literals, XSD, subject IRIs | TripleModel (package dep) | Via `SPARQLModel(TripleModel)` (**0.4**) |
+| `session.put` graph writes | SparqlModel cascade + TripleModel `sync_to_graph` | Direct on instances (**0.4**) |
+| `session.get` / query hydrate | SparqlModel depth + `from_graph` | Unified subclass (**0.4**) |
+| Interim `_triple.py` adapter | Shipped 0.3 | **Remove 0.4** |
+| Turtle / JSON-LD export | Interim `serializers.py` | TripleModel `serialize` (**0.6**) |
 | Query compiler | SparqlModel only | Stays in SparqlModel |
 
 See [ROADMAP.md](ROADMAP.md) for milestones.
@@ -209,14 +213,14 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 
 **Today (0.2.0):** Suitable for prototypes, tests, single-process apps (`MemoryStore`), and early FastAPI services. Remote `HttpStore` requires understanding the [mirror model](SPECS.md#httpstore) (query vs `get`).
 
-**Target (1.0):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
+**Target (1.2):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
 
-- [Production checklist](SPECS.md#production-orm-checklist-11-ga-gate) — normative P0 / P1 / P2 gates
-- [Roadmap](ROADMAP.md) — versions 0.3–1.0
+- [Production checklist](SPECS.md#production-orm-checklist-12-ga-gate) — normative P0 / P1 / P2 gates
+- [Roadmap](ROADMAP.md) — versions 0.4–1.2
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** async session and stores (**0.4**), `offset` / `order_by` / `count` on queries (**0.6**), `merge` / `refresh` / `expunge` (**0.7**), production HttpStore sync (**0.8**), multi-valued and language-tagged fields (**0.9**).
+**Not yet available (planned):** unified model Option A (**0.4**), async session and stores (**0.5**), `offset` / `order_by` / `count` on queries (**0.7**), `merge` / `refresh` / `expunge` (**0.8**), production HttpStore sync (**0.9**), multi-valued and language-tagged fields (**1.0**).
 
 ---
 
