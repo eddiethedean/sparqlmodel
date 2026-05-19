@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ForwardRef
+from typing import ForwardRef, Union
 
 import pytest
 
@@ -158,7 +158,7 @@ def test_resolve_forward_ref_in_optional_union() -> None:
     meta = SPARQLFieldMetadata(predicate="schema:worksFor", is_relationship=True)
     related = resolve_related_model(
         "works_for",
-        ForwardRef("_Org", module=__name__) | None,
+        Union[ForwardRef("_Org", module=__name__), None],
         meta,
     )
     assert related is _Org
@@ -167,12 +167,13 @@ def test_resolve_forward_ref_in_optional_union() -> None:
 def test_resolve_forward_ref_non_model_union_member() -> None:
     from sparqlmodel.fields import _resolve_annotation_type
 
-    assert _resolve_annotation_type(ForwardRef("int", module="builtins") | None) is int
-    assert _resolve_annotation_type(None | ForwardRef("int", module="builtins")) is int
+    int_fwd = ForwardRef("int", module="builtins")
+    assert _resolve_annotation_type(Union[int_fwd, None]) is int
+    assert _resolve_annotation_type(Union[None, int_fwd]) is int
     meta = SPARQLFieldMetadata(predicate="schema:count", is_relationship=True)
     related = resolve_related_model(
         "count",
-        ForwardRef("int", module="builtins") | None,
+        Union[int_fwd, None],
         meta,
     )
     assert related is int
