@@ -1,13 +1,14 @@
 """Tests for graph mapping."""
 
 from sparqlmodel import IRI, Field, SPARQLModel
-from sparqlmodel.graph import model_to_graph, model_to_triples, owned_triples_for_subject
+from sparqlmodel._triple import model_to_graph
+from sparqlmodel.graph import owned_triples_for_subject
 from tests.models import Organization, Person
 
 
-def test_model_to_triples(odos: Person) -> None:
-    triples = model_to_triples(odos)
-    assert len(triples) >= 4
+def test_model_to_graph(odos: Person) -> None:
+    g = model_to_graph(odos)
+    assert len(g) >= 4
 
 
 def test_round_trip_scalars(session, odos: Person) -> None:
@@ -34,8 +35,8 @@ def test_model_with_bool() -> None:
         active: bool = Field("schema:value")
 
     m = FlagModel(id=IRI("urn:flag"), active=True)
-    triples = model_to_triples(m)
-    assert len(triples) >= 2
+    g = model_to_graph(m)
+    assert len(g) >= 2
 
 
 def test_model_with_int_float() -> None:
@@ -45,5 +46,5 @@ def test_model_with_int_float() -> None:
         score: float = Field("schema:value")
 
     m = NumModel(id=IRI("urn:n"), count=3, score=1.5)
-    triples = model_to_triples(m)
-    assert len(triples) >= 3
+    g = model_to_graph(m)
+    assert len(g) >= 3

@@ -1,7 +1,26 @@
 """Tests for hydration."""
 
+from unittest.mock import patch
+
+import pytest
+from pydantic import ValidationError
+
 from sparqlmodel import IRI
+from sparqlmodel.exceptions import HydrationError
+from sparqlmodel.hydration import hydrate_one
 from tests.models import Organization, Person
+
+
+def test_hydrate_one_wraps_validation_error(session, odos: Person) -> None:
+    session.put(odos)
+    with (
+        patch(
+            "sparqlmodel.hydration.sparql_from_graph",
+            side_effect=ValidationError.from_exception_data("Person", []),
+        ),
+        pytest.raises(HydrationError),
+    ):
+        hydrate_one(Person, odos.id, session.store)
 
 
 def test_hydration_depth_0(session, odos: Person) -> None:

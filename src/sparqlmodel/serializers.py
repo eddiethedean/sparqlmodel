@@ -6,8 +6,8 @@ from typing import Any, TypeVar, get_args, get_origin
 
 from rdflib import Graph
 
+from sparqlmodel._triple import model_to_graph
 from sparqlmodel.fields import get_field_metadata
-from sparqlmodel.graph import model_to_graph
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.types import IRI, compact_iri, expand_iri
 

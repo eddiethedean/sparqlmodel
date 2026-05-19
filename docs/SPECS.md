@@ -36,7 +36,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] Identity map + `flush` / `rollback_pending` / `put(..., flush=False)`
 - [x] `MemoryStore` and `HttpStore` (documented mirror semantics)
 - [x] FastAPI `SessionDep`, `init_app`, `http_store_lifespan`
-- [ ] Session I/O via TripleModel only (`put` / `get` / hydrate) — **0.3**
+- [x] Session I/O via TripleModel only (`put` / `get` / hydrate) — **0.3.0**
 - [ ] `Query.offset(n)` — **0.5**
 - [ ] `Query.order_by(...)` — **0.5**
 - [ ] `Query.count()` — **0.5**
@@ -194,7 +194,7 @@ with SPARQLSession() as session:
 
 `validate_depth` rejects values outside 0–2.
 
-**Integration note:** scalar and object loading will call TripleModel `from_graph` (or batch helpers) as interim `graph_to_model` is retired.
+**Integration note:** scalar and relationship loading uses `sparql_from_graph` → TripleModel `from_graph` (see `sparqlmodel._triple`).
 
 ---
 
@@ -270,14 +270,14 @@ Remove owned triples for cascade subject set (no re-add).
 
 **Dependency:** `triplemodel>=0.9.0,<2` in `pyproject.toml`.
 
-**Today (0.1.x):** `graph.py`, `fields.py`, and `serializers.py` contain interim logic. **Do not extend** interim parsers or datatype tables — fix upstream in TripleModel, then wire SparqlModel.
+**Today (0.3.x):** `graph.py` holds cascade/orphan policy only; mapping is in `_triple.py`. `serializers.py` remains interim until **0.4**. **Do not extend** interim serializers — fix upstream in TripleModel.
 
 **Target wiring:**
 
 | SparqlModel surface | TripleModel API |
 |---------------------|-----------------|
 | `put` graph write | `sync_to_graph(model, graph, mode=...)` + cascade |
-| `get` / query load | `from_graph` / `graph_to_model` |
+| `get` / query load | `sparql_from_graph` → `TripleModel.from_graph` |
 | `export_model` | `to_graph().serialize(...)` or `serialize()` |
 | Predicate metadata | `rdf_field`, `Predicate`, `RdfConfig` |
 
@@ -368,7 +368,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 | `flush()` | Not a full remote transaction; partial failure re-queues remainder (0.2+) |
 | Sessions | Not thread-safe; one session per task unless scoped externally |
 | Closed session | After `close()`, all CRUD/query methods raise `RuntimeError`; share the store via a new session |
-| Interim mapping | Until 0.3, some paths use `graph.py` instead of TripleModel |
+| Interim mapping | **0.3.0:** session I/O uses `_triple.py`; `serializers.py` interim until 0.4 |
 
 ## Other (current)
 
@@ -438,7 +438,7 @@ sparqlmodel/
   graph.py         # cascade; → sync_to_graph (retiring local convert)
   serializers.py   # → TripleModel parse/serialize (retiring)
   stores/
-  _triple.py       # TripleModel adapter (shipped; session wiring 0.3)
+  _triple.py       # TripleModel adapter (session put/get/hydrate — 0.3.0)
 ```
 
 ---

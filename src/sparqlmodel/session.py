@@ -9,9 +9,9 @@ from typing import Any, cast
 from rdflib import Graph
 from typing_extensions import Self
 
+from sparqlmodel._triple import model_to_graph
 from sparqlmodel.graph import (
     cascade_subjects_for_removal,
-    model_to_graph,
     owned_triples_for_subjects,
     triples_to_graph,
 )

@@ -3,7 +3,7 @@
 import pytest
 
 from sparqlmodel import IRI
-from sparqlmodel.exceptions import HydrationError
+from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.hydration import hydrate_from_bindings
 from tests.models import Organization, Person
 
@@ -36,5 +36,5 @@ def test_hydrate_cycle_raises(session) -> None:
     rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
     session.graph.add((person_uri, rdf_type, org_type))
     bindings = [{"person": str(lone.id)}]
-    with pytest.raises(HydrationError):
+    with pytest.raises(ConfigurationError, match="Cycle detected"):
         hydrate_from_bindings(Person, bindings, session.store, depth=1)

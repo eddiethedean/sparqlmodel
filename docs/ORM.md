@@ -20,7 +20,7 @@ Related: {doc}`guides/index` · {doc}`SPECS` · {doc}`ECOSYSTEM` · {doc}`ROADMA
 ```text
 Your app
   → SPARQLSession.put / .query / .get
-  → (today: interim graph.py; tomorrow: TripleModel sync/load APIs)
+  → _triple.py (TripleModel sync_to_graph / from_graph) + graph.py (cascade policy)
   → rdflib Graph in a Store
 ```
 
@@ -132,7 +132,7 @@ with SPARQLSession() as session:
 
 ORM eager-load. Query `.all(depth=1)` and `.first(depth=1)` accept the same parameter.
 
-Loading scalars and objects ultimately uses TripleModel `from_graph` (or equivalent) as integration replaces interim loaders in `hydration.py` / `graph.py`.
+Loading scalars and relationships uses `sparql_from_graph` in `hydration.py`, backed by TripleModel `from_graph` in `_triple.py`.
 
 ---
 
@@ -159,7 +159,7 @@ from triplemodel import TripleModel  # example — use your TripleModel classes
 # persons = Person.parse("data.ttl")
 ```
 
-**From SparqlModel today (interim):**
+**From SparqlModel today (serializers interim until 0.4):**
 
 ```python
 from sparqlmodel.serializers import export_model

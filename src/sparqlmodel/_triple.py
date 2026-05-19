@@ -1,4 +1,4 @@
-"""Adapter between :class:`~sparqlmodel.model.SPARQLModel` and TripleModel (0.2 foundation)."""
+"""Adapter between :class:`~sparqlmodel.model.SPARQLModel` and TripleModel."""
 
 from __future__ import annotations
 
@@ -7,12 +7,17 @@ from typing import Annotated, Any, Union, get_args, get_origin
 from rdflib import Graph, Literal, URIRef
 from triplemodel import IriId, TripleModel, rdf_field, sync_to_graph
 
+from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.fields import get_field_metadata
-from sparqlmodel.graph import iter_nested_models, model_to_graph
+from sparqlmodel.graph import iter_nested_models, subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.types import IRI, expand_iri
 
 _TRIPLE_CLASS_CACHE: dict[type[SPARQLModel], type[TripleModel]] = {}
+
+
+def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
+    return expand_iri(str(iri), prefixes)
 
 
 def _annotation_label(annotation: Any) -> str:
@@ -61,14 +66,12 @@ def _build_class_source(model_cls: type[SPARQLModel]) -> str:
         ann = _annotation_label(field_info.annotation)
         lines.append(f"    {name}: {ann} = rdf_field({pred!r}, default=None)")
 
-    for name, field_info, related_cls in model_cls.get_relationship_fields():
+    for name, field_info, _related_cls in model_cls.get_relationship_fields():
         meta = get_field_metadata(field_info)
         if meta is None:
             continue
         pred = expand_iri(meta.predicate, prefixes)
-        related_name = triple_model_class_for(related_cls).__name__
-        ann = f"{related_name} | None"
-        lines.append(f"    {name}: {ann} = rdf_field({pred!r}, default=None)")
+        lines.append(f"    {name}: str | None = rdf_field({pred!r}, default=None)")
 
     return "\n".join(lines)
 
@@ -79,7 +82,6 @@ def triple_model_class_for(model_cls: type[SPARQLModel]) -> type[TripleModel]:
     if cached is not None:
         return cached
 
-    # Build related classes first (dependency order).
     for _name, _field_info, related_cls in model_cls.get_relationship_fields():
         triple_model_class_for(related_cls)
 
@@ -101,12 +103,39 @@ def triple_model_class_for(model_cls: type[SPARQLModel]) -> type[TripleModel]:
     return triple_cls
 
 
-def to_triplemodel(instance: SPARQLModel) -> TripleModel:
+def _assert_no_embed_cycles(
+    instance: SPARQLModel,
+    visited: set[str],
+) -> None:
+    """Raise if nested ``SPARQLModel`` embeds form a cycle (shared leaves are allowed)."""
+    from sparqlmodel.model import SPARQLModel as _SPARQLModel
+
+    prefixes = instance.get_prefixes()
+    subject_key = _expanded_iri_key(instance.ensure_id(), prefixes)
+    if subject_key in visited:
+        raise ConfigurationError(f"Cycle detected serializing {subject_key}")
+    path = visited | {subject_key}
+    for name, field_info, _related_cls in instance.get_relationship_fields():
+        meta = get_field_metadata(field_info)
+        if meta is not None and not meta.cascade:
+            continue
+        value = getattr(instance, name, None)
+        if isinstance(value, _SPARQLModel):
+            _assert_no_embed_cycles(value, path.copy())
+
+
+def to_triplemodel(
+    instance: SPARQLModel,
+    *,
+    visited: set[str] | None = None,
+) -> TripleModel:
     """Convert a SPARQLModel instance to a dynamically mapped TripleModel."""
     from sparqlmodel.model import SPARQLModel as _SPARQLModel
 
     if not isinstance(instance, _SPARQLModel):
         raise TypeError("Expected SPARQLModel instance")
+
+    _assert_no_embed_cycles(instance, visited or set())
 
     tm_cls = triple_model_class_for(type(instance))
     data: dict[str, Any] = {"id": str(instance.ensure_id())}
@@ -116,29 +145,27 @@ def to_triplemodel(instance: SPARQLModel) -> TripleModel:
         if value is not None:
             data[name] = value
 
-    for name, _field_info, related_cls in instance.get_relationship_fields():
+    for name, _field_info, _related_cls in instance.get_relationship_fields():
         value = getattr(instance, name, None)
         if value is None:
             data[name] = None
-        elif isinstance(value, IRI):
-            related_tm = triple_model_class_for(related_cls)
-            data[name] = related_tm.model_validate({"id": str(value)})
-        elif isinstance(value, _SPARQLModel):
-            data[name] = to_triplemodel(value)
+        elif isinstance(value, (IRI, _SPARQLModel)):
+            data[name] = str(value if isinstance(value, IRI) else value.ensure_id())
         else:
             data[name] = value
 
     return tm_cls.model_validate(data)
 
 
-def from_triplemodel(
+def _tm_to_sparqlmodel(
     tm: TripleModel,
+    sparql_cls: type[SPARQLModel],
     graph: Graph,
     *,
-    sparql_cls: type[SPARQLModel],
-    depth: int = 0,
+    depth: int,
+    visited: set[str],
 ) -> SPARQLModel:
-    """Hydrate a SPARQLModel from a TripleModel instance and supporting graph."""
+    """Map a loaded TripleModel instance to SPARQLModel with relationship depth."""
     data: dict[str, Any] = {"id": IRI(tm.subject_uri())}
 
     for name, _field_info in sparql_cls.get_scalar_fields():
@@ -154,21 +181,59 @@ def from_triplemodel(
             value = getattr(tm, name)
             if value is None:
                 data[name] = None
-            elif isinstance(value, TripleModel):
-                data[name] = from_triplemodel(
-                    value,
-                    graph,
-                    sparql_cls=related_cls,
-                    depth=depth - 1,
-                )
             elif isinstance(value, str) and (
                 value.startswith("http://")
                 or value.startswith("https://")
                 or value.startswith("urn:")
+                or value.startswith("_:")
             ):
-                data[name] = IRI(value)
+                if subject_has_rdf_type(related_cls, value, graph):
+                    data[name] = sparql_from_graph(
+                        related_cls,
+                        value,
+                        graph,
+                        depth=depth - 1,
+                        visited=visited,
+                    )
+                else:
+                    data[name] = None
+            else:
+                data[name] = None
 
     return sparql_cls.model_validate(data)
+
+
+def sparql_from_graph(
+    model_cls: type[SPARQLModel],
+    subject_iri: str | IRI,
+    graph: Graph,
+    *,
+    depth: int = 0,
+    visited: set[str] | None = None,
+) -> SPARQLModel:
+    """Hydrate a SPARQLModel from graph data via TripleModel ``from_graph``."""
+    visited = visited or set()
+    prefixes = model_cls.get_prefixes()
+    subject_key = _expanded_iri_key(subject_iri, prefixes)
+    if subject_key in visited:
+        raise ConfigurationError(f"Cycle detected loading {subject_key}")
+    visited.add(subject_key)
+
+    tm_cls = triple_model_class_for(model_cls)
+    uri = expand_iri(str(subject_iri), prefixes)
+    tm = tm_cls.from_graph(graph, uri, validate_type=True, on_duplicate="warn")
+    return _tm_to_sparqlmodel(tm, model_cls, graph, depth=depth, visited=visited)
+
+
+def from_triplemodel(
+    tm: TripleModel,
+    graph: Graph,
+    *,
+    sparql_cls: type[SPARQLModel],
+    depth: int = 0,
+) -> SPARQLModel:
+    """Hydrate a SPARQLModel from an existing TripleModel instance."""
+    return _tm_to_sparqlmodel(tm, sparql_cls, graph, depth=depth, visited=set())
 
 
 def adapter_graph(root: SPARQLModel) -> Graph:
@@ -177,6 +242,13 @@ def adapter_graph(root: SPARQLModel) -> Graph:
     for nested in iter_nested_models(root):
         tm = to_triplemodel(nested)
         sync_to_graph(tm, g, uri=str(nested.ensure_id()), mode="replace")
+    return g
+
+
+def model_to_graph(model: SPARQLModel) -> Graph:
+    """Serialize a model to an rdflib Graph (TripleModel ``sync_to_graph``)."""
+    g = _normalize_graph(adapter_graph(model))
+    model.namespace_registry().bind(g)
     return g
 
 
@@ -200,11 +272,7 @@ def graphs_isomorphic(left: Graph, right: Graph) -> bool:
 
 
 def assert_put_graph_contract(root: SPARQLModel) -> None:
-    """Raise AssertionError if interim ``model_to_graph`` diverges from the adapter graph."""
-    interim = model_to_graph(root)
-    via_adapter = adapter_graph(root)
-    if not graphs_isomorphic(interim, via_adapter):
-        raise AssertionError(
-            f"Triple set mismatch for {type(root).__name__}: "
-            f"interim={len(interim)} triples adapter={len(via_adapter)} triples"
-        )
+    """Raise AssertionError if the adapter graph is empty for a model with data."""
+    g = adapter_graph(root)
+    if len(g) == 0 and root.id is not None:
+        raise AssertionError(f"Adapter graph empty for {type(root).__name__}")

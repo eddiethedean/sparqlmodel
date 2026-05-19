@@ -1,7 +1,13 @@
 """Tests for field metadata."""
 
+from __future__ import annotations
+
+from typing import ForwardRef
+
+import pytest
+
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel
-from sparqlmodel.fields import get_field_metadata, resolve_related_model
+from sparqlmodel.fields import SPARQLFieldMetadata, get_field_metadata, resolve_related_model
 
 
 class _Org(SPARQLModel):
@@ -69,6 +75,69 @@ def test_resolve_related_model_prefers_sparqlmodel_over_iri() -> None:
     assert meta is not None
     related = resolve_related_model("works_for", field_info.annotation, meta)
     assert related is _Org
+
+
+def test_resolve_forward_ref_to_org() -> None:
+    meta = SPARQLFieldMetadata(predicate="schema:worksFor", is_relationship=True)
+    related = resolve_related_model(
+        "works_for",
+        ForwardRef("_Org", module=__name__),
+        meta,
+    )
+    assert related is _Org
+
+
+def test_resolve_forward_ref_unknown_raises() -> None:
+    from sparqlmodel.exceptions import ConfigurationError
+    from sparqlmodel.fields import _evaluate_forward_ref
+
+    assert _evaluate_forward_ref(ForwardRef("NoSuchNameXYZ")) is None
+    meta = SPARQLFieldMetadata(predicate="schema:link", is_relationship=True)
+    with pytest.raises(ConfigurationError):
+        resolve_related_model("link", ForwardRef("UnknownModel"), meta)
+
+
+def test_resolve_annotation_type_returns_none() -> None:
+    from sparqlmodel.exceptions import ConfigurationError
+    from sparqlmodel.fields import _resolve_annotation_type
+
+    class NotAType:
+        pass
+
+    assert _resolve_annotation_type(NotAType()) is None
+    meta = SPARQLFieldMetadata(predicate="schema:link", is_relationship=True)
+    with pytest.raises(ConfigurationError):
+        resolve_related_model("link", NotAType(), meta)
+
+
+def test_resolve_related_int_union() -> None:
+    meta = SPARQLFieldMetadata(predicate="schema:count", is_relationship=True)
+    related = resolve_related_model("count", int | None, meta)
+    assert related is int
+
+
+def test_resolve_forward_ref_in_optional_union() -> None:
+    meta = SPARQLFieldMetadata(predicate="schema:worksFor", is_relationship=True)
+    related = resolve_related_model(
+        "works_for",
+        ForwardRef("_Org", module=__name__) | None,
+        meta,
+    )
+    assert related is _Org
+
+
+def test_resolve_forward_ref_non_model_union_member() -> None:
+    from sparqlmodel.fields import _resolve_annotation_type
+
+    assert _resolve_annotation_type(ForwardRef("int", module="builtins") | None) is int
+    assert _resolve_annotation_type(None | ForwardRef("int", module="builtins")) is int
+    meta = SPARQLFieldMetadata(predicate="schema:count", is_relationship=True)
+    related = resolve_related_model(
+        "count",
+        ForwardRef("int", module="builtins") | None,
+        meta,
+    )
+    assert related is int
 
 
 def test_get_field_metadata_none() -> None:

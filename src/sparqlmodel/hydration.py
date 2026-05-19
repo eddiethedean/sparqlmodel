@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
+from sparqlmodel._triple import sparql_from_graph
 from sparqlmodel.exceptions import ConfigurationError, HydrationError
-from sparqlmodel.graph import graph_to_model, subject_has_rdf_type
+from sparqlmodel.graph import subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.stores.base import Store
 from sparqlmodel.types import IRI
@@ -53,7 +56,9 @@ def hydrate_from_bindings(
             model = hydrate_one(model_cls, IRI(iri_str), store, depth=depth)
             if model is not None:
                 results.append(model)
-        except Exception as exc:
+        except ConfigurationError:
+            raise
+        except (ValidationError, ValueError, TypeError) as exc:
             raise HydrationError(f"Failed to hydrate {iri_str}: {exc}") from exc
 
     return results
@@ -71,4 +76,9 @@ def hydrate_one(
     if not subject_has_rdf_type(model_cls, iri, store.graph):
         return None
 
-    return graph_to_model(model_cls, IRI(str(iri)), store.graph, depth=depth)
+    try:
+        return sparql_from_graph(model_cls, IRI(str(iri)), store.graph, depth=depth)
+    except ConfigurationError:
+        raise
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise HydrationError(f"Failed to hydrate {iri!s}: {exc}") from exc

@@ -2,27 +2,18 @@
 
 from __future__ import annotations
 
-import pytest
-
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
-from sparqlmodel import _triple as triple_mod
 from sparqlmodel._triple import (
     adapter_graph,
     assert_put_graph_contract,
     from_triplemodel,
     graphs_isomorphic,
+    model_to_graph,
+    sparql_from_graph,
     to_triplemodel,
     triple_model_class_for,
 )
-from sparqlmodel.graph import model_to_graph
 from tests.models import Location, Organization, Person
-
-
-@pytest.fixture(autouse=True)
-def _clear_triple_class_cache() -> None:
-    triple_mod._TRIPLE_CLASS_CACHE.clear()
-    yield
-    triple_mod._TRIPLE_CLASS_CACHE.clear()
 
 
 def test_triple_model_class_for_person() -> None:
@@ -44,11 +35,22 @@ def test_put_graph_isomorphic_person_org() -> None:
     assert_put_graph_contract(person)
 
 
-def test_adapter_graph_matches_model_to_graph() -> None:
+def test_model_to_graph_matches_adapter_graph() -> None:
     loc = Location(id=IRI("urn:loc:2"), name="NYC")
     org = Organization(id=IRI("urn:org:2"), name="Corp", located_in=loc)
     person = Person(id=IRI("urn:p:2"), name="Sam", works_for=org)
     assert graphs_isomorphic(model_to_graph(person), adapter_graph(person))
+
+
+def test_sparql_from_graph_round_trip() -> None:
+    loc = Location(id=IRI("urn:loc:rt"), name="Boston")
+    org = Organization(id=IRI("urn:org:rt"), name="Acme", located_in=loc)
+    person = Person(id=IRI("urn:p:rt"), name="Pat", works_for=org)
+    g = model_to_graph(person)
+    loaded = sparql_from_graph(Person, person.id, g, depth=2)
+    assert loaded.name == "Pat"
+    assert loaded.works_for is not None
+    assert loaded.works_for.name == "Acme"
 
 
 def test_from_triplemodel_shallow() -> None:
@@ -80,8 +82,8 @@ class LinkedOrg(SPARQLModel):
 
 
 class PersonNoCascade(SPARQLModel):
-    rdf_type = "schema:Person"
-    __prefixes__ = {"schema": "https://schema.org/"}
+    rdf_type = "ex:PersonNoCascade"
+    __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
 
     id: IRI
     name: str = Field("schema:name")

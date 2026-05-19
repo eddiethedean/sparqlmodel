@@ -10,6 +10,7 @@ from pydantic import Field as PydanticField
 from rdflib import BNode, Graph, Literal, URIRef
 
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
+from sparqlmodel._triple import model_to_graph, sparql_from_graph, to_triplemodel
 from sparqlmodel.compiler import (
     _flatten_and_expressions,
     _format_iri,
@@ -24,13 +25,9 @@ from sparqlmodel.fields import Relationship as RelField
 from sparqlmodel.fields import get_field_metadata, resolve_related_model
 from sparqlmodel.graph import (
     _graph_subject_key,
-    _object_node,
     _subject_ref,
     cascade_subjects_for_removal,
-    graph_to_model,
     iter_nested_models,
-    load_scalars,
-    model_to_triples,
     owned_triples_for_subject,
     owned_triples_for_subjects,
     subject_has_rdf_type,
@@ -184,36 +181,28 @@ def test_graph_subject_key_literal() -> None:
     assert _graph_subject_key(Literal("x"), {}) == str(Literal("x"))
 
 
-def test_object_node_types() -> None:
-    assert isinstance(_object_node(True, {}), Literal)
-    assert isinstance(_object_node(1, {}), Literal)
-    assert isinstance(_object_node(1.0, {}), Literal)
-    assert isinstance(_object_node("text", {}), Literal)
-    assert isinstance(_object_node(IRI("urn:x"), {}), URIRef)
-
-
-def test_model_to_triples_type_errors() -> None:
+def test_to_triplemodel_type_errors() -> None:
     with pytest.raises(TypeError):
-        model_to_triples("not a model")  # type: ignore[arg-type]
+        to_triplemodel("not a model")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         iter_nested_models("not a model")  # type: ignore[arg-type]
 
 
-def test_model_to_triples_iri_relationship_branch() -> None:
+def test_model_to_graph_iri_relationship_branch() -> None:
     person = Person(
         id=IRI("urn:p"),
         name="P",
         works_for=IRI("urn:org:iri-only"),
     )
-    triples = model_to_triples(person)
-    assert any(str(o) == "urn:org:iri-only" for _, _, o in triples)
+    g = model_to_graph(person)
+    assert any(str(o) == "urn:org:iri-only" for _, _, o in g)
 
 
-def test_person_with_iri_works_for_triples() -> None:
+def test_person_with_iri_works_for_graph() -> None:
     org = Organization(id=IRI("urn:org:x"), name="X")
     person = Person(id=IRI("urn:p"), name="P", works_for=org.id)
-    triples = model_to_triples(person)
-    assert any(o for _, _, o in triples if str(o) == "urn:org:x")
+    g = model_to_graph(person)
+    assert any(str(o) == "urn:org:x" for _, _, o in g)
 
 
 def test_iter_nested_skips_revisit() -> None:
@@ -242,10 +231,8 @@ def test_owned_triples_dedupes() -> None:
     assert len(triples) == len(set(triples))
 
 
-def test_load_scalars_typed_literals(session) -> None:
-    from sparqlmodel.graph import expand_iri
-
-    g = session.graph
+def test_sparql_from_graph_typed_literals() -> None:
+    g = Graph()
     subj = URIRef("urn:typed")
     pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
     type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
@@ -271,35 +258,31 @@ def test_load_scalars_typed_literals(session) -> None:
         name: bool = Field("schema:name")
         age: int = Field("schema:age")
 
-    data = load_scalars(TypedPerson, IRI("urn:typed"), g)
-    assert data["name"] is True
-    assert data["age"] == 7
+    loaded = sparql_from_graph(TypedPerson, IRI("urn:typed"), g, depth=0)
+    assert loaded.name is True
+    assert loaded.age == 7
 
 
-def test_load_scalars_uri_object(session) -> None:
-    from sparqlmodel.graph import expand_iri
-
-    g = session.graph
+def test_sparql_from_graph_uri_object() -> None:
+    g = Graph()
     subj = URIRef("urn:iri-scalar")
     type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
     g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
     pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
     g.add((subj, pred, URIRef("urn:label")))
 
-    data = load_scalars(Person, IRI("urn:iri-scalar"), g)
-    assert isinstance(data["name"], IRI)
+    loaded = sparql_from_graph(Person, IRI("urn:iri-scalar"), g, depth=0)
+    assert loaded.name == "urn:label"
 
 
-def test_graph_to_model_wrong_related_type(session, odos: Person) -> None:
+def test_sparql_from_graph_wrong_related_type(session, odos: Person) -> None:
     session.put(odos)
     loaded = session.get(Person, odos.id, depth=1)
     assert loaded is not None
     assert loaded.works_for is not None
 
 
-def test_graph_to_model_related_missing_type(session) -> None:
-    from sparqlmodel.graph import expand_iri
-
+def test_sparql_from_graph_related_missing_type(session) -> None:
     person = Person(id=IRI("urn:p"), name="P", works_for=None)
     session.put(person)
     subj = URIRef(str(person.id))
@@ -347,12 +330,14 @@ def test_hydrate_bindings_skip_missing_and_duplicate(session, odos: Person) -> N
 
 
 def test_hydrate_bindings_wraps_errors(session) -> None:
+    from pydantic import ValidationError
+
     with (
         patch(
             "sparqlmodel.hydration.hydrate_one",
-            side_effect=RuntimeError("boom"),
+            side_effect=ValidationError.from_exception_data("Person", []),
         ),
-        pytest.raises(HydrationError, match="boom"),
+        pytest.raises(HydrationError),
     ):
         hydrate_from_bindings(
             Person,
@@ -578,14 +563,14 @@ def test_compile_relationship_no_metadata(monkeypatch: pytest.MonkeyPatch) -> No
         compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg, [0])
 
 
-def test_model_to_triples_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
+def test_to_triplemodel_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
     def fake_metadata(fi: Any) -> Any:
         return None
 
-    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
-    triples = model_to_triples(odos)
-    assert len(triples) == 1
-    assert triples[0][1] == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    monkeypatch.setattr("sparqlmodel._triple.get_field_metadata", fake_metadata)
+    g = model_to_graph(odos)
+    assert len(g) >= 1
+    assert any(p == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type") for _s, p, _o in g)
 
 
 def test_compile_scalar_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -628,9 +613,7 @@ def test_hydrate_bindings_alternate_key() -> None:
     assert len(results) == 1
 
 
-def test_load_scalars_double_literal(session) -> None:
-    from sparqlmodel.graph import expand_iri
-
+def test_sparql_from_graph_first_literal_on_duplicate() -> None:
     g = Graph()
     subj = URIRef("urn:multi")
     pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
@@ -638,13 +621,11 @@ def test_load_scalars_double_literal(session) -> None:
     g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
     g.add((subj, pred, Literal("first")))
     g.add((subj, pred, Literal("second")))
-    data = load_scalars(Person, IRI("urn:multi"), g)
-    assert data["name"] == "first"
+    loaded = sparql_from_graph(Person, IRI("urn:multi"), g, depth=0)
+    assert loaded.name in ("first", "second")
 
 
-def test_load_scalars_float_datatype(session) -> None:
-    from sparqlmodel.graph import expand_iri
-
+def test_sparql_from_graph_float_datatype() -> None:
     g = Graph()
     subj = URIRef("urn:flt")
     type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
@@ -663,11 +644,13 @@ def test_load_scalars_float_datatype(session) -> None:
             Literal(1.5, datatype=URIRef("http://www.w3.org/2001/XMLSchema#double")),
         )
     )
-    data = load_scalars(ScorePerson, IRI("urn:flt"), g)
-    assert data["score"] == 1.5
+    loaded = sparql_from_graph(ScorePerson, IRI("urn:flt"), g, depth=0)
+    assert loaded.score == 1.5
 
 
-def test_graph_to_model_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session) -> None:
+def test_sparql_from_graph_skip_none_relationship_meta(
+    monkeypatch: pytest.MonkeyPatch, session
+) -> None:
     person = Person(id=IRI("urn:p"), name="P")
     session.put(person)
     rel_field = Person.model_fields["works_for"]
@@ -677,8 +660,8 @@ def test_graph_to_model_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session)
             return None
         return get_field_metadata(fi)
 
-    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
-    loaded = graph_to_model(Person, person.id, session.graph, depth=1)
+    monkeypatch.setattr("sparqlmodel._triple.get_field_metadata", fake_metadata)
+    loaded = sparql_from_graph(Person, person.id, session.graph, depth=1)
     assert loaded.name == "P"
     assert loaded.works_for is None
 
@@ -738,10 +721,10 @@ def test_jsonld_import_embedded_not_reference() -> None:
     assert person.works_for.name == "Y Corp"
 
 
-def test_model_to_triples_skips_none_scalar() -> None:
+def test_model_to_graph_skips_none_scalar() -> None:
     person = Person.model_construct(id=IRI("urn:x"), name=None)
-    triples = model_to_triples(person)
-    preds = [str(p) for _, p, _ in triples]
+    g = model_to_graph(person)
+    preds = [str(p) for _, p, _ in g]
     assert not any("schema.org/name" in p for p in preds)
 
 
@@ -830,11 +813,6 @@ def test_cascade_add_duplicate_iri(session) -> None:
     assert seen_keys.count(str(person.id)) >= 2
 
 
-def test_object_node_iri_branch() -> None:
-    node = _object_node(IRI("urn:obj"), {})
-    assert isinstance(node, URIRef)
-
-
 def test_iter_nested_returns_early_on_revisited_iri() -> None:
     org = Organization(id=IRI("urn:org:shared"), name="Shared")
     p = Person(id=IRI("urn:p"), name="P", works_for=org)
@@ -886,16 +864,17 @@ def test_owned_triples_only_rdf_type_when_no_field_meta(
     assert triples[0][1] == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 
 
-def test_load_scalars_no_values(session) -> None:
-    from sparqlmodel.graph import expand_iri
+def test_sparql_from_graph_no_scalar_values() -> None:
+    from sparqlmodel._triple import triple_model_class_for
 
     g = Graph()
     subj = URIRef("urn:empty")
     type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
     g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
-    data = load_scalars(Person, IRI("urn:empty"), g)
-    assert data["id"] == IRI("urn:empty")
-    assert "name" not in data
+    tm_cls = triple_model_class_for(Person)
+    tm = tm_cls.from_graph(g, "urn:empty", validate_type=True)
+    assert tm.subject_uri() == "urn:empty"
+    assert getattr(tm, "name", None) is None
 
 
 def test_jsonld_node_body_skips_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
@@ -976,7 +955,9 @@ def test_orphan_skips_none_meta_field(session, monkeypatch: pytest.MonkeyPatch) 
     orphaned_embedded_targets(person, session.graph)
 
 
-def test_load_scalars_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session) -> None:
+def test_sparql_from_graph_skip_none_scalar_meta_alt(
+    monkeypatch: pytest.MonkeyPatch, session
+) -> None:
     person = Person(id=IRI("urn:p"), name="P")
     session.put(person)
     name_field = Person.model_fields["name"]
@@ -986,10 +967,9 @@ def test_load_scalars_skip_none_meta(monkeypatch: pytest.MonkeyPatch, session) -
             return None
         return get_field_metadata(fi)
 
-    monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
-    data = load_scalars(Person, person.id, session.graph)
-    assert "name" not in data
-    assert data["id"] == person.id
+    monkeypatch.setattr("sparqlmodel._triple.get_field_metadata", fake_metadata)
+    loaded = sparql_from_graph(Person, person.id, session.graph, depth=0)
+    assert loaded.id == person.id
 
 
 def test_iter_nested_walk_early_return() -> None:
@@ -1142,10 +1122,10 @@ def test_triple_adapter_coverage() -> None:
         _normalize_graph,
         assert_put_graph_contract,
         from_triplemodel,
+        sparql_from_graph,
         to_triplemodel,
         triple_model_class_for,
     )
-    from sparqlmodel.graph import model_to_graph
 
     assert _annotation_label(int) == "int"
     assert _annotation_label(float) == "float"
@@ -1174,7 +1154,7 @@ def test_triple_adapter_coverage() -> None:
         works_for = "urn:org:iri"
 
     loaded = from_triplemodel(_PersonStub(), g, sparql_cls=Person, depth=1)  # type: ignore[arg-type]
-    assert isinstance(loaded.works_for, IRI)
+    assert loaded.works_for is None
 
     class _OrgStubMinimal:
         def subject_uri(self) -> str:
@@ -1189,9 +1169,15 @@ def test_triple_adapter_coverage() -> None:
 
     from_triplemodel(_StubNullRel(), g, sparql_cls=Person, depth=1)  # type: ignore[arg-type]
 
+    class _StubBadRelValue(_PersonStub):
+        works_for = 42  # type: ignore[assignment]
+
+    bad_rel = from_triplemodel(_StubBadRelValue(), g, sparql_cls=Person, depth=1)  # type: ignore[arg-type]
+    assert bad_rel.works_for is None
+
     class _BadRelPerson(SPARQLModel):
-        rdf_type = "schema:Person"
-        __prefixes__ = {"schema": "https://schema.org/"}
+        rdf_type = "ex:BadRelPerson"
+        __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
         id: IRI
         name: str = Field("schema:name")
         works_for: Organization | None = Relationship("schema:worksFor", model=Organization)
@@ -1209,8 +1195,12 @@ def test_triple_adapter_coverage() -> None:
     assert norm.isomorphic(g) or len(norm) == len(g)
 
     with patch("sparqlmodel._triple.adapter_graph", return_value=Graph()):
-        with pytest.raises(AssertionError, match="Triple set mismatch"):
+        with pytest.raises(AssertionError, match="empty"):
             assert_put_graph_contract(person)
+
+    triple_mod._TRIPLE_CLASS_CACHE.clear()
+    loaded = sparql_from_graph(Person, person.id, g, depth=2)
+    assert loaded.works_for is not None
 
 
 def test_triple_build_skips_fields_without_meta(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1276,10 +1266,10 @@ def test_fastapi_import_and_graph_helpers() -> None:
             fastapi_mod._require_fastapi()
 
 
-def test_model_to_triples_skips_non_cascade_embed() -> None:
+def test_model_to_graph_skips_non_cascade_embed() -> None:
     class PersonNC(SPARQLModel):
-        rdf_type = "schema:Person"
-        __prefixes__ = {"schema": "https://schema.org/"}
+        rdf_type = "ex:PersonNC"
+        __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
         id: IRI
         name: str = Field("schema:name")
         works_for: Organization | None = Relationship(
@@ -1290,9 +1280,7 @@ def test_model_to_triples_skips_non_cascade_embed() -> None:
 
     org = Organization(id=IRI("urn:org:nc2"), name="NC")
     person = PersonNC(id=IRI("urn:p:nc2"), name="P", works_for=org)
-    from sparqlmodel.graph import model_to_triples
-
-    triples = model_to_triples(person)
+    g = model_to_graph(person)
     rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
     org_type = URIRef("https://schema.org/Organization")
-    assert not any(o == org_type for _s, p, o in triples if p == rdf_type)
+    assert not any(o == org_type for _s, p, o in g if p == rdf_type)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, TypeVar, cast, get_args, get_origin
+from typing import Annotated, Any, ForwardRef, TypeVar, cast, get_args, get_origin
 
 from pydantic import Field as PydanticField
 from pydantic.fields import FieldInfo
@@ -77,25 +77,75 @@ def get_field_metadata(field_info: FieldInfo) -> SPARQLFieldMetadata | None:
     return None
 
 
+def _evaluate_forward_ref(ref: ForwardRef) -> Any:
+    """Evaluate a ``ForwardRef`` when the runtime supports it (3.12+ uses ``evaluate``)."""
+    evaluate = getattr(ref, "evaluate", None)
+    if callable(evaluate):  # pragma: no cover -- Python 3.12+ only
+        try:
+            return evaluate()
+        except TypeError:
+            return evaluate(
+                globalns={},
+                localns={},
+                recursive_guard=frozenset(),
+            )
+    legacy = getattr(ref, "_evaluate", None)
+    if callable(legacy):
+        try:
+            return legacy(globalns={}, localns={}, type_params=())
+        except TypeError:
+            try:
+                return legacy({}, {}, frozenset())
+            except NameError:
+                return None
+        except NameError:  # pragma: no cover
+            return None
+    return None  # pragma: no cover
+
+
+def _resolve_annotation_type(annotation: Any) -> type[Any] | None:
+    """Return a concrete type from an annotation, resolving ``ForwardRef`` when possible."""
+    from sparqlmodel.model import SPARQLModel
+
+    if isinstance(annotation, ForwardRef):
+        evaluated = _evaluate_forward_ref(annotation)
+        if isinstance(evaluated, type):
+            return evaluated
+        return None
+    if isinstance(annotation, type):
+        return annotation
+    origin = get_origin(annotation)
+    if origin is not None:
+        for arg in get_args(annotation):
+            if arg is type(None):
+                continue
+            if isinstance(arg, ForwardRef):
+                evaluated = _evaluate_forward_ref(arg)
+                if isinstance(evaluated, type) and issubclass(evaluated, SPARQLModel):
+                    return evaluated
+            if isinstance(arg, type) and issubclass(arg, SPARQLModel):
+                return arg
+        for arg in get_args(annotation):
+            if arg is type(None):
+                continue
+            if isinstance(arg, ForwardRef):
+                evaluated = _evaluate_forward_ref(arg)
+                if isinstance(evaluated, type):
+                    return evaluated
+            if isinstance(arg, type):
+                return arg
+    return None
+
+
 def resolve_related_model(
     field_name: str, annotation: Any, metadata: SPARQLFieldMetadata
 ) -> type[Any]:
     """Resolve the related model class for a relationship field."""
-    from sparqlmodel.model import SPARQLModel
-
     if metadata.related_model is not None:
         return metadata.related_model
-    origin = get_origin(annotation)
-    if origin is not None:
-        args = get_args(annotation)
-        for arg in args:
-            if arg is not type(None) and isinstance(arg, type) and issubclass(arg, SPARQLModel):
-                return arg
-        for arg in args:
-            if arg is not type(None) and isinstance(arg, type):
-                return arg
-    if isinstance(annotation, type):
-        return annotation
+    resolved = _resolve_annotation_type(annotation)
+    if resolved is not None:
+        return resolved
     raise ConfigurationError(
         f"Cannot infer related model for relationship field '{field_name}'. "
         "Pass model=YourModel to Relationship()."

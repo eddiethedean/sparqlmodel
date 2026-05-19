@@ -120,7 +120,7 @@ SparqlModel **depends on TripleModel** but **0.1.x** still ships duplicate logic
 
 | Module | Status | Action |
 |--------|--------|--------|
-| `graph.py` | Interim convert + cascade | Route sync/load to TripleModel; **keep** cascade orchestration |
+| `graph.py` | Cascade / orphan policy | **Keep** orchestration; mapping in `_triple.py` (0.3.0) |
 | `fields.py` | Interim predicate metadata | Adapter to `rdf_field` / `Predicate` |
 | `serializers.py` | Interim formats | Replace with TripleModel `parse` / `serialize` |
 | `hydration.py` | Depth walker | Keep depth; load via TripleModel |
@@ -166,7 +166,7 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 |-----------|-------------|-------------------|
 | **Done** | `triplemodel>=0.9` on PyPI install | Package available to all installs |
 | **0.2** | `_triple.py` adapter, contract tests | `sync_to_graph`, namespaces, nested embeds |
-| **0.3** | Delete interim convert in `graph.py` | `put`/`get` wired to sync/load |
+| **0.3** | Shipped — interim convert removed from `graph.py` | `put`/`get` wired to `_triple.py` |
 | **0.4** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
 | **0.5+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
 

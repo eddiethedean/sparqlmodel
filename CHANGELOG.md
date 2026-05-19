@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-18
+
+### Added
+
+- **Session I/O via TripleModel** — `put` / `add` / `get` / hydration use `sparqlmodel._triple` (`sync_to_graph`, `TripleModel.from_graph`) as the single mapping path
+- **`sparql_from_graph`** — load `SPARQLModel` instances from an rdflib graph with relationship depth (0–2)
+- **`resolve_related_model`** — resolves `typing.ForwardRef` on relationship annotations (Python 3.10–3.13)
+
+### Changed
+
+- **`graph.py`** — cascade/orphan orchestration only; interim `model_to_triples`, `load_scalars`, and `graph_to_model` removed
+- **`model_to_graph`** (internal) — implemented via TripleModel `sync_to_graph`; normalizes `xsd:string` literals for SPARQL query compatibility
+- **`HydrationError`** — raised only for validation / value errors during `from_graph` hydration (`ConfigurationError` for cycles propagates unchanged)
+- **Contract tests** — `assert_put_graph_contract` and `test_session_put_matches_contract` assert adapter graphs only (no interim branch)
+
 ### Fixed
 
 - **`SPARQLSession`** — raise `RuntimeError` on use after `close()` (CRUD, `query`, `execute`, `flush`, `expire`, `rollback_pending`)
@@ -14,13 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`execute()`** — inject session `PREFIX` declarations only when the query prologue has no `PREFIX` line (not when the word appears in a string literal)
 - **`negotiated_response`** — respect `Accept` quality values (`;q=`) when choosing Turtle vs JSON-LD
 
-### Changed
-
-- Export `StaleTripleWarning` from `sparqlmodel` package root
-
 ### Documentation
 
-- SPECS / troubleshooting — closed-session behavior; README clarifies comparison operators vs SQL `ORDER BY`
+- ROADMAP / SPECS / ORM / ECOSYSTEM — mark **0.3.0** session I/O milestone shipped; multi-valued `list[...]` fields remain **0.8**
 
 ## [0.2.0] - 2026-05-18
 

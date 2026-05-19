@@ -319,6 +319,9 @@ def test_session_with_http_store_put_and_query() -> None:
     person = Person(id=IRI("urn:person:odos"), name="Odos")
     session.put(person)
     assert len(store.graph) >= 2
+    loaded = session.get(Person, person.id, depth=0)
+    assert loaded is not None
+    assert loaded.name == "Odos"
     bindings = session.execute("SELECT ?person WHERE { ?person a <https://schema.org/Person> }")
     assert bindings[0]["person"] == "urn:person:odos"
     store.close()

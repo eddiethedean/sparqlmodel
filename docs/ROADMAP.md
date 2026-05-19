@@ -89,8 +89,8 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 | Feature | Status |
 |---------|--------|
 | `sparqlmodel/_triple.py` adapter | Done |
-| Contract tests vs interim `put` graphs | Done |
-| `put` still uses `graph.py` (0.3 switch) | Planned |
+| Contract tests vs adapter `put` graphs | Done |
+| `put` / `get` via `_triple.py` (`sync_to_graph` / `from_graph`) | Done |
 
 ### Persistence polish
 
@@ -109,21 +109,23 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 ## 0.3 — Session I/O through TripleModel
 
+**Status:** shipped as **0.3.0**.
+
 **Goal:** one mapping path. **ORM public API unchanged.**
 
 ### Wire session to TripleModel
 
-- [ ] `put` → compute cascade subjects, then `sync_to_graph` (or batch) per resource
-- [ ] `get` / query hydration → `from_graph` / `graph_to_model` via adapter
-- [ ] Field adapter: `Field("curie")` / `Relationship` → `rdf_field` / `Predicate`
-- [ ] Remove interim term conversion from `graph.py`
-- [ ] Multi-valued fields via TripleModel; update hydration + query as needed
+- [x] `put` → cascade subjects in `graph.py`, then `sync_to_graph` per nested resource via `_triple.py`
+- [x] `get` / query hydration → `sparql_from_graph` / `TripleModel.from_graph` via adapter
+- [x] Field adapter: `Field` / `Relationship` → dynamic `rdf_field` TripleModel classes (internal)
+- [x] Remove interim term conversion from `graph.py`
+- [ ] Multi-valued `list[...]` fields via TripleModel — **deferred to 0.8**
 
 ### SparqlModel-only
 
-- [ ] `resolve_related_model` for unions / `ForwardRef`
-- [ ] Optional `put` validation via `triplemodel[shacl]`
-- [ ] Narrow `HydrationError` cases
+- [x] `resolve_related_model` for unions / `ForwardRef`
+- [ ] Optional `put` validation via `triplemodel[shacl]` — **deferred to 0.9**
+- [x] Narrow `HydrationError` cases
 
 ### Consume from TripleModel (already in 0.9)
 
