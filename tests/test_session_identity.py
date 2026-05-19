@@ -34,6 +34,30 @@ def test_put_flush_false_get_before_flush_not_pending_instance(
     assert session.get(Person, plain.id) is plain
 
 
+def test_put_flush_false_evicts_stale_identity(session: SPARQLSession) -> None:
+    from sparqlmodel import IRI
+
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    plain.name = "Updated"
+    session.autoflush = False
+    session.put(plain, flush=False)
+    found = session.get(Person, plain.id)
+    assert found is None or found.name != "Updated"
+    session.flush()
+    loaded = session.get(Person, plain.id)
+    assert loaded is not None
+    assert loaded.name == "Updated"
+
+
+def test_expire_drops_pending_put(session: SPARQLSession, odos: Person) -> None:
+    session.autoflush = False
+    session.put(odos, flush=False)
+    session.expire(Person, odos.id)
+    session.flush()
+    assert session.get(Person, odos.id) is None
+
+
 def test_flush_requeues_on_failure(
     session: SPARQLSession, odos: Person, monkeypatch: pytest.MonkeyPatch
 ) -> None:

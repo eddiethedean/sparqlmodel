@@ -101,6 +101,57 @@ def test_jsonld_scalar_iri_field() -> None:
     assert doc["https://schema.org/sameAs"] == {"@id": "urn:person:2"}
 
 
+def test_jsonld_scalar_iri_field_round_trip_compact_id() -> None:
+    class Tagged(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        same_as: IRI = Field("schema:sameAs")
+
+    doc = {
+        "@context": {"schema": "https://schema.org/"},
+        "@id": "urn:person:1",
+        "@type": "schema:Person",
+        "schema:sameAs": {"@id": "local-ref"},
+    }
+    restored = model_from_jsonld(Tagged, doc)
+    assert restored.same_as == IRI("local-ref")
+
+
+def test_jsonld_scalar_iri_field_round_trip() -> None:
+    class Tagged(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        same_as: IRI = Field("schema:sameAs")
+
+    model = Tagged(id=IRI("urn:person:1"), same_as=IRI("urn:person:2"))
+    restored = model_from_jsonld(Tagged, model_to_jsonld(model))
+    assert restored.same_as == IRI("urn:person:2")
+
+
+def test_jsonld_skips_non_cascade_embed() -> None:
+    from sparqlmodel import Relationship
+
+    class Org(SPARQLModel):
+        rdf_type = "schema:Organization"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+
+    class Employee(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+        works_for: Org | None = Relationship("schema:worksFor", model=Org, cascade=False)
+
+    org = Org(id=IRI("urn:org:1"), name="Acme")
+    emp = Employee(id=IRI("urn:p:1"), name="Pat", works_for=org)
+    doc = model_to_jsonld(emp)
+    assert "https://schema.org/worksFor" not in doc
+
+
 def test_model_from_jsonld_empty_relationship_list_skipped() -> None:
     doc = {
         "@context": {"schema": "https://schema.org/"},

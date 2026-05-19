@@ -113,6 +113,12 @@ class SPARQLSession:
         """Close the backing store when it implements ``close()``."""
         if self._closed:
             return
+        if self._state.pending:
+            n = len(self._state.pending)
+            raise RuntimeError(
+                f"Cannot close SPARQLSession with {n} pending put(s); "
+                "call flush() or rollback_pending() first"
+            )
         self._closed = True
         close = getattr(self._store, "close", None)
         if callable(close):
@@ -144,6 +150,7 @@ class SPARQLSession:
         key = identity_key_for_iri(model_cls, iri)
         self._state.evict_identity_prefix(key[0], key[1])
         self._state.invalidate_hydration_for(key[0], key[1])
+        self._state.remove_pending_for(key[0], key[1])
 
     @staticmethod
     def _relationships_materialized(model: SPARQLModel) -> bool:
@@ -192,6 +199,7 @@ class SPARQLSession:
         model.ensure_id()
         assert model.id is not None
         key = identity_key_for_iri(type(model), model.id)
+        self._state.evict_identity_prefix(key[0], key[1])
         self._state.add_pending(model)
         self._state.invalidate_hydration_for(key[0], key[1])
         return model

@@ -100,14 +100,14 @@ def test_compile_unknown_relationship_path() -> None:
     reg = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Person, "name", ("nonexistent",))
     with pytest.raises(QueryError, match="Unknown relationship"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0])
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0], {})
 
 
 def test_compile_unknown_scalar_on_target() -> None:
     reg = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Person, "bogus", ("works_for",))
     with pytest.raises(QueryError, match="Unknown or non-scalar"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0])
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0], {})
 
 
 def test_compile_where_no_filters_branch() -> None:
@@ -560,7 +560,7 @@ def test_compile_relationship_no_metadata(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
     ref = FieldRef(Person, "name", ("works_for",))
     with pytest.raises(QueryError, match="no SPARQL metadata"):
-        compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg, [0])
+        compile_compare(CompareExpr(ref, CompareOp.EQ, "Acme"), Person, "?person", reg, [0], {})
 
 
 def test_to_triplemodel_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Person) -> None:
@@ -584,7 +584,7 @@ def test_compile_scalar_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("sparqlmodel.compiler.get_field_metadata", fake_metadata)
     with pytest.raises(QueryError, match="no SPARQL metadata"):
-        compile_compare(Person.name == "x", Person, "?person", reg, [0])  # type: ignore[arg-type]
+        compile_compare(Person.name == "x", Person, "?person", reg, [0], {})  # type: ignore[arg-type]
 
 
 def test_hydrate_bindings_alternate_key() -> None:
@@ -1058,7 +1058,7 @@ def test_resolve_compare_wrong_model() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Organization, "name")
     with pytest.raises(QueryError, match="does not match"):
-        _resolve_compare_target(ref, Person, "?person", registry, [0])
+        _resolve_compare_target(ref, Person, "?person", registry, [0], {})
     with pytest.raises(QueryError, match="does not match"):
         compile_compare(
             CompareExpr(ref, CompareOp.EQ, "x"),
@@ -1066,9 +1066,10 @@ def test_resolve_compare_wrong_model() -> None:
             "?person",
             registry,
             [0],
+            {},
         )
     with pytest.raises(QueryError, match="FieldRef"):
-        _resolve_compare_target("not-a-ref", Person, "?person", registry, [0])  # type: ignore[arg-type]
+        _resolve_compare_target("not-a-ref", Person, "?person", registry, [0], {})  # type: ignore[arg-type]
 
 
 def test_compile_and_branch_exists() -> None:

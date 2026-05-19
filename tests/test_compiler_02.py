@@ -192,7 +192,7 @@ def test_compile_in_non_tuple_raises_type_error() -> None:
     assert isinstance(expr, CompareExpr)
     assert expr.op == CompareOp.IN
     with pytest.raises(TypeError, match="tuple"):
-        compile_compare(expr, Person, "?person", registry, [0])
+        compile_compare(expr, Person, "?person", registry, [0], {})
 
 
 def test_compare_unsupported_op() -> None:
@@ -204,4 +204,4 @@ def test_compare_unsupported_op() -> None:
     expr = replace(Person.name == "x", op="bogus")  # type: ignore[arg-type]
     assert isinstance(expr, CompareExpr)
     with pytest.raises(QueryError, match="Unsupported comparison"):
-        compile_compare(expr, Person, "?person", registry, [0])
+        compile_compare(expr, Person, "?person", registry, [0], {})

@@ -39,6 +39,13 @@ def test_session_context_manager_keeps_pending_on_error_when_disabled(odos: Pers
     assert fresh.get(Person, odos.id) is None
 
 
+def test_session_close_with_pending_raises(odos: Person) -> None:
+    session = SPARQLSession(autoflush=False, close_on_exit=False)
+    session.put(odos, flush=False)
+    with pytest.raises(RuntimeError, match="pending put"):
+        session.close()
+
+
 def test_session_close_calls_store_close() -> None:
     store = MagicMock()
     store.graph = MagicMock()

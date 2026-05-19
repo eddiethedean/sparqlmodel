@@ -107,7 +107,7 @@ def test_put_graph_contract_typed_literals() -> None:
         __prefixes__ = {"schema": "https://schema.org/"}
 
         id: IRI
-        count: int = Field("schema:value")
+        count: int = Field("schema:integerValue")
         score: float = Field("schema:value")
 
     assert_put_graph_contract(FlagModel(id=IRI("urn:flag"), active=True))

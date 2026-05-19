@@ -98,9 +98,28 @@ def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
     return models
 
 
+def _object_referenced_from_outside(
+    obj_key: str,
+    graph: Graph,
+    exclude_subject_keys: set[str],
+    prefixes: dict[str, str],
+) -> bool:
+    """Return True if a subject outside ``exclude_subject_keys`` links to ``obj_key``."""
+    for s, _p, o in graph:
+        if not isinstance(o, (URIRef, BNode)):
+            continue
+        if _graph_subject_key(o, prefixes) != obj_key:
+            continue
+        if _graph_subject_key(s, prefixes) not in exclude_subject_keys:
+            return True
+    return False
+
+
 def orphaned_embedded_targets(
     model: SPARQLModel,
     graph: Graph,
+    *,
+    exclude_subject_keys: set[str] | None = None,
 ) -> list[tuple[type[SPARQLModel], str]]:
     """Graph-linked resources dropped from an embedded relationship (put orphan cleanup)."""
     prefixes = model.get_prefixes()
@@ -109,6 +128,7 @@ def orphaned_embedded_targets(
     }
     subject = _subject_ref(model.ensure_id(), prefixes)
     orphans: list[tuple[type[SPARQLModel], str]] = []
+    cascade_keys = exclude_subject_keys if exclude_subject_keys is not None else nested_iris
 
     from sparqlmodel.model import SPARQLModel as _SPARQLModel
 
@@ -127,6 +147,8 @@ def orphaned_embedded_targets(
             if isinstance(obj, (URIRef, BNode)):
                 obj_key = _graph_subject_key(obj, prefixes)
                 if obj_key not in protected:
+                    if _object_referenced_from_outside(obj_key, graph, cascade_keys, prefixes):
+                        continue
                     orphans.append((related_cls, obj_key))
     return orphans
 
@@ -149,12 +171,21 @@ def cascade_subjects_for_removal(
         seen.add(key)
         subjects.append((model_cls, key))
 
+    cascade_subject_keys: set[str] = set()
     for nested in iter_nested_models(model):
+        nested_prefixes = nested.get_prefixes()
+        raw = str(nested.ensure_id())
+        key = (
+            raw if raw.startswith("_:") else _expanded_iri_key(nested.ensure_id(), nested_prefixes)
+        )
+        cascade_subject_keys.add(key)
         add(type(nested), nested.ensure_id())
 
     if for_put:
         for nested in iter_nested_models(model):
-            for model_cls, iri in orphaned_embedded_targets(nested, graph):
+            for model_cls, iri in orphaned_embedded_targets(
+                nested, graph, exclude_subject_keys=cascade_subject_keys
+            ):
                 add(model_cls, iri)
 
     return subjects

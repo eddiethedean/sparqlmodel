@@ -13,7 +13,7 @@ from typing_extensions import Self
 from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.expressions import FieldRef
 from sparqlmodel.fields import get_field_metadata, resolve_related_model
-from sparqlmodel.types import IRI, NamespaceRegistry
+from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri
 
 
 class SPARQLModelMetaclass(ModelMetaclass):
@@ -53,6 +53,30 @@ class SPARQLModel(BaseModel, metaclass=SPARQLModelMetaclass):
                     prefixes = dict(base.__dict__["__prefixes__"])
                     break
             cls.__prefixes__ = prefixes
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        cls._validate_unique_predicates()
+
+    @classmethod
+    def _validate_unique_predicates(cls) -> None:
+        """Raise if two mapped fields share the same expanded RDF predicate."""
+        prefixes = cls.get_prefixes()
+        by_predicate: dict[str, list[str]] = {}
+        for name, field_info, _ in cls.iter_sparql_fields():
+            meta = get_field_metadata(field_info)
+            assert meta is not None  # ``iter_sparql_fields`` only yields mapped fields
+            pred = expand_iri(meta.predicate, prefixes)
+            by_predicate.setdefault(pred, []).append(name)
+        duplicates = {pred: names for pred, names in by_predicate.items() if len(names) > 1}
+        if duplicates:
+            detail = "; ".join(
+                f"{', '.join(names)} -> {pred}" for pred, names in duplicates.items()
+            )
+            raise ConfigurationError(
+                f"{cls.__name__} maps multiple fields to the same predicate: {detail}"
+            )
 
     @classmethod
     def get_prefixes(cls) -> dict[str, str]:

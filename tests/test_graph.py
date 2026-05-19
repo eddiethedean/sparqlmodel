@@ -42,7 +42,7 @@ def test_model_with_bool() -> None:
 def test_model_with_int_float() -> None:
     class NumModel(SPARQLModel):
         rdf_type = "schema:Thing"
-        count: int = Field("schema:value")
+        count: int = Field("schema:integerValue")
         score: float = Field("schema:value")
 
     m = NumModel(id=IRI("urn:n"), count=3, score=1.5)

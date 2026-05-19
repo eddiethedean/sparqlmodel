@@ -229,6 +229,9 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 - `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade
 - Query: `limit` only — `offset` / `order_by` / `count` planned ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) 0.5)
 - Sessions are not thread-safe; one session per request/task
+- Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition
+- Cyclic embedded models raise `ConfigurationError` on `put` / `model_to_graph` (not only on `to_triplemodel`)
+- Shared embedded resources referenced from multiple roots are preserved on `put` when another subject still links to them
 
 ---
 

@@ -106,13 +106,19 @@ def _follow_path(
     root_var: str,
     registry: NamespaceRegistry,
     join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
 ) -> tuple[type[SPARQLModel], str, list[str]]:
     """Walk relationship path; return target model, final variable, patterns."""
     patterns: list[str] = []
     current_cls = model_cls
     current_var = root_var
 
-    for segment in path:
+    for index, segment in enumerate(path):
+        partial = path[: index + 1]
+        cached = join_cache.get(partial)
+        if cached is not None:
+            current_var, current_cls = cached
+            continue
         rel_map = {n: (fi, rc) for n, fi, rc in current_cls.get_relationship_fields()}
         if segment not in rel_map:
             raise QueryError(f"Unknown relationship field '{segment}' on {current_cls.__name__}")
@@ -128,6 +134,7 @@ def _follow_path(
         patterns.append(f"{join_var} a <{type_expanded}> .")
         current_cls = related_cls
         current_var = join_var
+        join_cache[partial] = (current_var, current_cls)
 
     return current_cls, current_var, patterns
 
@@ -138,6 +145,7 @@ def _resolve_compare_target(
     root_var: str,
     registry: NamespaceRegistry,
     join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
 ) -> tuple[type[SPARQLModel], str, list[str], Any, str]:
     if not isinstance(left, FieldRef):
         raise QueryError("Expected FieldRef on left side of comparison")
@@ -154,7 +162,7 @@ def _resolve_compare_target(
     patterns: list[str] = []
     if path:
         target_model, subject_var, path_patterns = _follow_path(
-            model_cls, path, root_var, registry, join_counter
+            model_cls, path, root_var, registry, join_counter, join_cache
         )
         patterns.extend(path_patterns)
     else:
@@ -187,6 +195,7 @@ def compile_compare(
     root_var: str,
     registry: NamespaceRegistry,
     join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
     *,
     use_not_exists_for_ne: bool = False,
 ) -> tuple[list[str], list[str]]:
@@ -202,7 +211,7 @@ def compile_compare(
                 raise QueryError("IN filter values cannot be None")
 
     _, subject_var, path_patterns, field_info, field_name = _resolve_compare_target(
-        expr.left, model_cls, root_var, registry, join_counter
+        expr.left, model_cls, root_var, registry, join_counter, join_cache
     )
 
     patterns: list[str] = list(path_patterns)
@@ -265,6 +274,7 @@ def compile_and_branch(
     compares = _flatten_and_expressions((expr,))
     patterns: list[str] = []
     filters: list[str] = []
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]] = {}
     for compare in compares:
         pats, filts = compile_compare(
             compare,
@@ -272,6 +282,7 @@ def compile_and_branch(
             root_var,
             registry,
             join_counter,
+            join_cache,
             use_not_exists_for_ne=use_not_exists_for_ne,
         )
         patterns.extend(pats)
@@ -295,6 +306,7 @@ def compile_or(
 
     exists_parts: list[str] = []
     for branch in branches:
+        branch_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]] = {}
         if isinstance(branch, CompareExpr):
             pats, filts = compile_compare(
                 branch,
@@ -302,6 +314,7 @@ def compile_or(
                 root_var,
                 registry,
                 join_counter,
+                branch_cache,
                 use_not_exists_for_ne=use_not_exists_for_ne,
             )
             exists_parts.append(_exists_block(pats, filts))
@@ -341,6 +354,7 @@ def compile_where(
     all_filters: list[str] = []
 
     join_counter = [0]
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]] = {}
 
     and_exprs: list[CompareExpr | AndExpr] = []
     or_exprs: list[OrExpr] = []
@@ -360,6 +374,7 @@ def compile_where(
             root_var,
             registry,
             join_counter,
+            join_cache,
             use_not_exists_for_ne=use_not_exists_for_ne,
         )
         all_patterns.extend(pats)

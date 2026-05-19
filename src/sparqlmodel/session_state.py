@@ -74,6 +74,13 @@ class SessionState:
     def clear_pending(self) -> None:
         self._pending.clear()
 
+    def remove_pending_for(self, model_cls: type[SPARQLModel], iri_key: str) -> None:
+        """Drop queued ``put(..., flush=False)`` writes for ``(model_cls, iri_key)``."""
+        target = (model_cls, iri_key)
+        self._pending = [
+            m for m in self._pending if identity_key_for_iri(type(m), m.ensure_id()) != target
+        ]
+
     def expire_model(self, model: SPARQLModel) -> None:
         key = identity_key(model)
         self.pop_identity(key)

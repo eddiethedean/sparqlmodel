@@ -32,7 +32,7 @@ session.query(Person).where(
 ).all()
 ```
 
-Parenthesize mixed `&` and `|` — the compiler does not rely on Python operator precedence alone for nested SPARQL grouping.
+Parenthesize mixed `&` and `|` for clarity — Python binds `&` tighter than `|`, and the compiler follows that precedence (same as `(A & B) | C`).
 
 ## Multi-hop paths
 

@@ -28,9 +28,9 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Symptom:** `put(model, flush=False)` then `get` returns old or missing data.
 
-**Cause:** Pending queue is not flushed until `flush()` or context manager exit.
+**Cause:** Pending queue is not flushed until `flush()` or context manager exit. The graph is unchanged until flush. The identity map is cleared for that subject when enqueueing a pending `put`, so `get` may return `None` or reload from the store rather than a stale instance.
 
-**Fix:** Call `session.flush()` or exit the `with SPARQLSession()` block successfully.
+**Fix:** Call `session.flush()` or exit the `with SPARQLSession()` block successfully. Do not call `close()` while pending writes remain — use `flush()` or `rollback_pending()` first.
 
 ## `QueryError` on `None` or wrong model class
 

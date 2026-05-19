@@ -51,6 +51,22 @@ def test_cascade_subjects_skips_iri_reference_orphans(session, acme: Organizatio
     assert keys == {"urn:person:ref"}
 
 
+def test_put_shared_embed_not_deleted_when_other_root_references(session) -> None:
+    shared = Organization(id=IRI("urn:org:shared"), name="Shared Co")
+    alice = Person(id=IRI("urn:person:alice"), name="Alice", works_for=shared)
+    bob = Person(id=IRI("urn:person:bob"), name="Bob", works_for=shared)
+    session.put(alice)
+    session.put(bob)
+    solo = Person(id=IRI("urn:person:alice"), name="Alice Solo", works_for=None)
+    session.put(solo)
+    assert session.get(Organization, shared.id) is not None
+    assert session.get(Person, bob.id) is not None
+    loaded_bob = session.get(Person, bob.id, depth=1)
+    assert loaded_bob is not None
+    assert loaded_bob.works_for is not None
+    assert loaded_bob.works_for.name == "Shared Co"
+
+
 def test_owned_triples_for_subjects_dedupes(session, odos: Person) -> None:
     session.put(odos)
     subjects = cascade_subjects_for_removal(odos, session.graph)

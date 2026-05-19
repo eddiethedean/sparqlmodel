@@ -238,6 +238,7 @@ def from_triplemodel(
 
 def adapter_graph(root: SPARQLModel) -> Graph:
     """Build an rdflib graph via TripleModel ``sync_to_graph`` for nested cascade models."""
+    _assert_no_embed_cycles(root, set())
     g = Graph()
     for nested in iter_nested_models(root):
         tm = to_triplemodel(nested)

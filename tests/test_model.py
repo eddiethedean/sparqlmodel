@@ -14,6 +14,17 @@ def test_model_requires_rdf_type() -> None:
             id: IRI
 
 
+def test_model_rejects_duplicate_predicates() -> None:
+    from sparqlmodel import Field
+
+    with pytest.raises(ConfigurationError, match="same predicate"):
+
+        class Dup(SPARQLModel):
+            rdf_type = "schema:Person"
+            x: str = Field("schema:name")
+            y: str = Field("schema:name")
+
+
 def test_person_field_ref() -> None:
     expr = Person.name == "Odos"
     assert expr.left.field_name == "name"

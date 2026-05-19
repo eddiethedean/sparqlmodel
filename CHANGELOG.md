@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`SPARQLModel`** — reject duplicate RDF predicates on the same class at definition time (`ConfigurationError`)
+- **`put` / `model_to_graph`** — detect cyclic embedded models on write (same as `to_triplemodel`)
+- **Orphan cleanup** — do not delete embedded resources still referenced from another subject in the graph (shared composition)
+- **`put(..., flush=False)`** — evict identity-map entry for that subject so `get` does not return a stale pre-pending instance
+- **`expire()`** — drop matching entries from the pending `put` queue
+- **`close()`** — raise `RuntimeError` when pending writes remain (call `flush()` or `rollback_pending()` first)
+- **Query compiler** — reuse join variables for the same relationship path within AND / single EXISTS blocks (fixes false positives with multiple values per predicate)
+- **JSON-LD** — unwrap scalar `IRI` fields from `{"@id": ...}` on import; omit non-cascade embedded nodes from `model_to_jsonld`
+
+### Documentation
+
+- Sessions / troubleshooting — clarify pending `put` vs identity map and `close()` with pending queue
+- Queries guide — Python `&` / `|` precedence matches the compiler
+
 ## [0.3.0] - 2026-05-18
 
 ### Added

@@ -45,7 +45,7 @@ with SPARQLSession() as session:
 ```
 
 ```{warning}
-Pending models are not visible to `get` until flushed. A failed `flush()` re-queues remaining models (0.2+).
+Pending models are not written to the store until `flush()` (or successful context-manager exit). `get` does not return the pending instance; identity for that subject is evicted when the pending `put` is queued. A failed `flush()` re-queues remaining models (0.2+). Calling `close()` with a non-empty pending queue raises `RuntimeError`.
 ```
 
 ## Identity map

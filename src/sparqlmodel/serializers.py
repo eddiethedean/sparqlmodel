@@ -51,6 +51,25 @@ def _is_jsonld_reference_node(data: dict[str, Any]) -> bool:
     return keys <= {"@id", "id"} and ("@id" in data or "id" in data)
 
 
+def _jsonld_scalar_value(
+    value: Any,
+    field_info: Any,
+    prefixes: dict[str, str],
+) -> Any:
+    """Coerce a JSON-LD scalar value for ``model_validate``."""
+    if (
+        isinstance(value, dict)
+        and _is_jsonld_reference_node(value)
+        and _annotation_allows_iri(field_info.annotation)
+    ):
+        ref_id = value.get("@id", value.get("id"))
+        ref_str = str(ref_id)
+        if ref_str.startswith(("http", "urn:")):
+            return IRI(compact_iri(ref_str, prefixes))
+        return IRI(ref_str)
+    return value
+
+
 def _jsonld_node_body(
     model: SPARQLModel,
     *,
@@ -91,7 +110,8 @@ def _jsonld_node_body(
             continue
         key = expand_iri(meta.predicate, prefixes)
         if isinstance(value, SPARQLModel):
-            node[key] = _jsonld_node_body(value, visited=visited)
+            if meta.cascade:
+                node[key] = _jsonld_node_body(value, visited=visited)
         elif isinstance(value, IRI):
             node[key] = {"@id": expand_iri(str(value), prefixes)}
 
@@ -147,10 +167,13 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
         if meta is None:
             continue
         expanded = expand_iri(meta.predicate, prefixes)
+        raw: Any | None = None
         if expanded in data:
-            kwargs[name] = data[expanded]
+            raw = data[expanded]
         elif meta.predicate in data:
-            kwargs[name] = data[meta.predicate]
+            raw = data[meta.predicate]
+        if raw is not None:
+            kwargs[name] = _jsonld_scalar_value(raw, field_info, prefixes)
 
     for name, field_info, related_cls in model_cls.get_relationship_fields():
         meta = get_field_metadata(field_info)

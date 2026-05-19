@@ -394,8 +394,13 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 | Area | Behavior |
 |------|----------|
+| Duplicate predicates | Two fields with the same expanded predicate on one model class → `ConfigurationError` at class definition |
+| Write-path cycles | Cyclic embedded `SPARQLModel` graphs → `ConfigurationError` on `put` / `model_to_graph` |
+| Shared composition | Orphan cleanup skips embedded targets still linked from subjects outside the current put cascade |
+| Pending `put` | Identity for that subject evicted when queued; `close()` with pending writes raises `RuntimeError` |
 | Nested query filters | Related resource must have expected `rdf:type` |
-| JSON-LD | `model_dump_jsonld` vs `export_model(..., "json-ld")` differ |
+| AND filters, same path | Compiler reuses join variables per relationship path within one WHERE / EXISTS block |
+| JSON-LD | `model_dump_jsonld` vs `export_model(..., "json-ld")` differ; non-cascade embeds omitted from `model_to_jsonld` |
 | Export without `id` | `ensure_id()` may assign `urn:uuid:…` |
 
 ---
