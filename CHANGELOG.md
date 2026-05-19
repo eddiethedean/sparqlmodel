@@ -7,22 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **`SPARQLModel`** — reject duplicate RDF predicates on the same class at definition time (`ConfigurationError`)
-- **`put` / `model_to_graph`** — detect cyclic embedded models on write (same as `to_triplemodel`)
-- **Orphan cleanup** — do not delete embedded resources still referenced from another subject in the graph (shared composition)
-- **`put(..., flush=False)`** — evict identity-map entry for that subject so `get` does not return a stale pre-pending instance
-- **`expire()`** — drop matching entries from the pending `put` queue
-- **`close()`** — raise `RuntimeError` when pending writes remain (call `flush()` or `rollback_pending()` first)
-- **Query compiler** — reuse join variables for the same relationship path within AND / single EXISTS blocks (fixes false positives with multiple values per predicate)
-- **JSON-LD** — unwrap scalar `IRI` fields from `{"@id": ...}` on import; omit non-cascade embedded nodes from `model_to_jsonld`
-
-### Documentation
-
-- Sessions / troubleshooting — clarify pending `put` vs identity map and `close()` with pending queue
-- Queries guide — Python `&` / `|` precedence matches the compiler
-
 ## [0.3.0] - 2026-05-18
 
 ### Added
@@ -40,14 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`SPARQLSession`** — raise `RuntimeError` on use after `close()` (CRUD, `query`, `execute`, `flush`, `expire`, `rollback_pending`)
+- **`SPARQLSession`** — raise `RuntimeError` on use after `close()` (CRUD, `query`, `execute`, `flush`, `expire`, `rollback_pending`); raise when `close()` is called with a non-empty pending `put` queue
 - **`HttpStore`** — raise `RuntimeError` on `query` / `update_graph` after `close()`
 - **`execute()`** — inject session `PREFIX` declarations only when the query prologue has no `PREFIX` line (not when the word appears in a string literal)
 - **`negotiated_response`** — respect `Accept` quality values (`;q=`) when choosing Turtle vs JSON-LD
+- **`SPARQLModel`** — reject duplicate RDF predicates on the same class at definition time (`ConfigurationError`)
+- **`put` / `model_to_graph`** — detect cyclic embedded models on write (same as `to_triplemodel`)
+- **Orphan cleanup** — do not delete embedded resources still referenced from another subject in the graph (shared composition)
+- **`put(..., flush=False)`** — evict identity-map entry for that subject so `get` does not return a stale pre-pending instance
+- **`expire()`** — drop matching entries from the pending `put` queue
+- **Query compiler** — reuse join variables for the same relationship path within AND / single EXISTS blocks (fixes false positives with multiple values per predicate)
+- **JSON-LD** — unwrap scalar `IRI` fields from `{"@id": ...}` on import; omit non-cascade embedded nodes from `model_to_jsonld`
 
 ### Documentation
 
 - ROADMAP / SPECS / ORM / ECOSYSTEM — mark **0.3.0** session I/O milestone shipped; multi-valued `list[...]` fields remain **0.8**
+- Sessions / troubleshooting — pending `put` vs identity map and `close()` with pending queue
+- Queries guide — Python `&` / `|` precedence matches the compiler
+- README / SPECS — duplicate predicates, write-path cycles, shared composition, compiler join reuse
 
 ## [0.2.0] - 2026-05-18
 
