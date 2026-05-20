@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import Field as PydanticField
 from pydantic import ValidationError
-from rdflib import BNode, Graph, Literal, URIRef
+from pyoxigraph import BlankNode as BNode
+from pyoxigraph import Literal
+from triplemodel import Store
+from triplemodel.store.terms import term_str
 
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
 from sparqlmodel.compiler import (
@@ -52,6 +55,7 @@ from sparqlmodel.stores.memory import MemoryStore, _term_value
 from sparqlmodel.types import IRI as IRIType
 from sparqlmodel.types import NamespaceRegistry, compact_iri, expand_iri
 from tests.models import Location, Organization, Person
+from tests.rdf_helpers import RDF_TYPE
 
 # --- compiler ---
 
@@ -179,12 +183,14 @@ def test_subject_ref_bnode_and_fallback() -> None:
     assert isinstance(_subject_ref("_:bn123", {}), BNode)
     with patch("sparqlmodel.graph.expand_iri", return_value="_:abc"):
         assert isinstance(_subject_ref("x:local", {}), BNode)
-    assert isinstance(_subject_ref("custom:local", {"custom": "http://example.org/"}), URIRef)
-    assert isinstance(_subject_ref("plainlocal", {}), URIRef)
+    assert _subject_ref("custom:local", {"custom": "http://example.org/"}) == (
+        "http://example.org/local"
+    )
+    assert _subject_ref("plainlocal", {}) == "plainlocal"
 
 
 def test_graph_subject_key_literal() -> None:
-    assert _graph_subject_key(Literal("x"), {}) == str(Literal("x"))
+    assert _graph_subject_key(Literal("x"), {}) == term_str(Literal("x"))
 
 
 def test_iter_nested_models_type_error() -> None:
@@ -199,14 +205,14 @@ def test_model_to_graph_iri_relationship_branch() -> None:
         works_for=IRI("urn:org:iri-only"),
     )
     g = model_to_graph(person)
-    assert any(str(o) == "urn:org:iri-only" for _, _, o in g)
+    assert any(term_str(o) == "urn:org:iri-only" for _, _, o in g)
 
 
 def test_person_with_iri_works_for_graph() -> None:
     org = Organization(id=IRI("urn:org:x"), name="X")
     person = Person(id=IRI("urn:p"), name="P", works_for=org.id)
     g = model_to_graph(person)
-    assert any(str(o) == "urn:org:x" for _, _, o in g)
+    assert any(term_str(o) == "urn:org:x" for _, _, o in g)
 
 
 def test_iter_nested_skips_revisit() -> None:
@@ -236,23 +242,23 @@ def test_owned_triples_dedupes() -> None:
 
 
 def test_load_from_graph_typed_literals() -> None:
-    g = Graph()
-    subj = URIRef("urn:typed")
-    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
-    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
-    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g = Store()
+    subj = "urn:typed"
+    pred = expand_iri("schema:name", Person.get_prefixes())
+    type_uri = expand_iri("schema:Person", Person.get_prefixes())
+    g.add((subj, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", type_uri))
     g.add(
         (
             subj,
             pred,
-            Literal(True, datatype=URIRef("http://www.w3.org/2001/XMLSchema#boolean")),
+            Literal(True),
         )
     )
     g.add(
         (
             subj,
-            URIRef(expand_iri("schema:age", Person.get_prefixes())),
-            Literal(7, datatype=URIRef("http://www.w3.org/2001/XMLSchema#integer")),
+            expand_iri("schema:age", Person.get_prefixes()),
+            Literal(7),
         )
     )
 
@@ -268,12 +274,12 @@ def test_load_from_graph_typed_literals() -> None:
 
 
 def test_load_from_graph_uri_object() -> None:
-    g = Graph()
-    subj = URIRef("urn:iri-scalar")
-    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
-    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
-    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
-    g.add((subj, pred, URIRef("urn:label")))
+    g = Store()
+    subj = "urn:iri-scalar"
+    type_uri = expand_iri("schema:Person", Person.get_prefixes())
+    g.add((subj, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", type_uri))
+    pred = expand_iri("schema:name", Person.get_prefixes())
+    g.add((subj, pred, "urn:label"))
 
     loaded = load_from_graph(Person, IRI("urn:iri-scalar"), g, depth=0)
     assert loaded.name == "urn:label"
@@ -289,9 +295,9 @@ def test_load_from_graph_wrong_related_type(session, odos: Person) -> None:
 def test_load_from_graph_related_missing_type(session) -> None:
     person = Person(id=IRI("urn:p"), name="P", works_for=None)
     session.put(person)
-    subj = URIRef(str(person.id))
-    works = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
-    session.graph.add((subj, works, URIRef("urn:org:ghost")))
+    subj = str(person.id)
+    works = expand_iri("schema:worksFor", Person.get_prefixes())
+    session.graph.add((subj, works, "urn:org:ghost"))
     loaded = session.get(Person, person.id, depth=1)
     assert loaded is not None
     assert loaded.works_for is None
@@ -510,20 +516,26 @@ def test_execute_prefix_in_string_literal_still_injects(session) -> None:
 
 def test_store_query_failure() -> None:
     store = MemoryStore()
-    with (
-        patch.object(store.graph, "query", side_effect=RuntimeError("parse error")),
-        pytest.raises(QueryError, match="failed"),
-    ):
+    mock_graph = MagicMock()
+    mock_graph.query.side_effect = RuntimeError("parse error")
+    store._graph = mock_graph
+    with pytest.raises(QueryError, match="failed"):
         store.query("SELECT ?s WHERE { ?s ?p ?o }")
 
 
 def test_store_non_result_row_skipped() -> None:
+    from triplemodel.store.sparql_result import SparqlResult, Variable
+
     store = MemoryStore()
-    mock_result = MagicMock()
-    mock_result.type = "SELECT"
-    mock_result.__iter__ = lambda self: iter([("not", "a", "ResultRow")])
-    with patch.object(store.graph, "query", return_value=mock_result):
-        assert store.query("SELECT ?s WHERE { ?s ?p ?o }") == []
+    mock_result = SparqlResult(
+        result_type="SELECT",
+        vars_=[Variable("s")],
+        rows=[("not", "a", "ResultRow")],
+    )
+    mock_graph = MagicMock()
+    mock_graph.query.return_value = mock_result
+    store._graph = mock_graph
+    assert store.query("SELECT ?s WHERE { ?s ?p ?o }") == []
 
 
 def test_term_value_none() -> None:
@@ -574,7 +586,7 @@ def test_to_triplemodel_skip_none_meta(monkeypatch: pytest.MonkeyPatch, odos: Pe
     monkeypatch.setattr("sparqlmodel.rdf_bridge.get_field_metadata", fake_metadata)
     g = model_to_graph(odos)
     assert len(g) >= 1
-    assert any(p == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type") for _s, p, _o in g)
+    assert any(term_str(p) == RDF_TYPE for _s, p, _o in g)
 
 
 def test_compile_scalar_no_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -599,15 +611,15 @@ def test_hydrate_bindings_alternate_key() -> None:
     store = MemoryStore()
     store.graph.add(
         (
-            URIRef("urn:p"),
-            URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-            URIRef("https://schema.org/Person"),
+            "urn:p",
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
         )
     )
     store.graph.add(
         (
-            URIRef("urn:p"),
-            URIRef("https://schema.org/name"),
+            "urn:p",
+            "https://schema.org/name",
             Literal("P"),
         )
     )
@@ -618,11 +630,11 @@ def test_hydrate_bindings_alternate_key() -> None:
 
 
 def test_load_from_graph_first_literal_on_duplicate() -> None:
-    g = Graph()
-    subj = URIRef("urn:multi")
-    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
-    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
-    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g = Store()
+    subj = "urn:multi"
+    pred = expand_iri("schema:name", Person.get_prefixes())
+    type_uri = expand_iri("schema:Person", Person.get_prefixes())
+    g.add((subj, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", type_uri))
     g.add((subj, pred, Literal("first")))
     g.add((subj, pred, Literal("second")))
     loaded = load_from_graph(Person, IRI("urn:multi"), g, depth=0)
@@ -630,22 +642,22 @@ def test_load_from_graph_first_literal_on_duplicate() -> None:
 
 
 def test_load_from_graph_float_datatype() -> None:
-    g = Graph()
-    subj = URIRef("urn:flt")
-    type_uri = URIRef(expand_iri("schema:Person", Person.get_prefixes()))
-    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g = Store()
+    subj = "urn:flt"
+    type_uri = expand_iri("schema:Person", Person.get_prefixes())
+    g.add((subj, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", type_uri))
 
     class ScorePerson(SPARQLModel):
         rdf_type = "schema:Person"
         __prefixes__ = {"schema": "https://schema.org/"}
         score: float = Field("schema:value")
 
-    pred = URIRef(expand_iri("schema:value", Person.get_prefixes()))
+    pred = expand_iri("schema:value", Person.get_prefixes())
     g.add(
         (
             subj,
             pred,
-            Literal(1.5, datatype=URIRef("http://www.w3.org/2001/XMLSchema#double")),
+            Literal(1.5),
         )
     )
     loaded = load_from_graph(ScorePerson, IRI("urn:flt"), g, depth=0)
@@ -826,7 +838,7 @@ def test_iter_nested_returns_early_on_revisited_iri() -> None:
         "sparqlmodel.graph.iter_nested_models",
         return_value=[p, org, org],
     ):
-        subjects = cascade_subjects_for_removal(p, Graph(), for_put=False)
+        subjects = cascade_subjects_for_removal(p, Store(), for_put=False)
     assert len(subjects) >= 2
 
 
@@ -836,7 +848,7 @@ def test_orphan_detects_bnode_target(session) -> None:
     person = Person(id=IRI("urn:p"), name="P", works_for=None)
     session.put(person)
     subj = _subject_ref(person.id, Person.get_prefixes())
-    pred = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
+    pred = expand_iri("schema:worksFor", Person.get_prefixes())
     bnode = BNode()
     session.graph.add((subj, pred, bnode))
     orphans = orphaned_embedded_targets(person, session.graph)
@@ -867,7 +879,7 @@ def test_owned_triples_only_rdf_type_when_no_field_meta(
     monkeypatch.setattr("sparqlmodel.graph.get_field_metadata", fake_metadata)
     triples = owned_triples_for_subject(Person, person.id, session.graph)
     assert len(triples) == 1
-    assert triples[0][1] == URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    assert term_str(triples[0][1]) == RDF_TYPE
 
 
 def test_load_from_graph_no_scalar_values() -> None:
@@ -876,10 +888,10 @@ def test_load_from_graph_no_scalar_values() -> None:
         __prefixes__ = {"schema": "https://schema.org/"}
         name: str | None = Field("schema:name", default=None)
 
-    g = Graph()
-    subj = URIRef("urn:empty")
-    type_uri = URIRef(expand_iri("schema:Person", EmptyPerson.get_prefixes()))
-    g.add((subj, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), type_uri))
+    g = Store()
+    subj = "urn:empty"
+    type_uri = expand_iri("schema:Person", EmptyPerson.get_prefixes())
+    g.add((subj, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", type_uri))
     loaded = load_from_graph(EmptyPerson, IRI("urn:empty"), g, depth=0)
     assert str(loaded.id) == "urn:empty"
     assert loaded.name is None
@@ -1146,7 +1158,7 @@ def test_rdf_bridge_coverage() -> None:
     norm = _normalize_graph(g)
     assert norm.isomorphic(g) or len(norm) == len(g)
 
-    with patch("sparqlmodel.rdf_bridge.adapter_graph", return_value=Graph()):
+    with patch("sparqlmodel.rdf_bridge.adapter_graph", return_value=Store()):
         with pytest.raises(AssertionError, match="empty"):
             assert_put_graph_contract(person)
 
@@ -1236,7 +1248,7 @@ def test_rdf_bridge_export_import_edges(monkeypatch: pytest.MonkeyPatch) -> None
     raw.name = "P"
     del raw.works_for
     with patch.object(Person, "from_graph", return_value=raw):
-        loaded = load_from_graph(Person, IRI("urn:p"), Graph(), depth=1)
+        loaded = load_from_graph(Person, IRI("urn:p"), Store(), depth=1)
     assert loaded.name == "P"
 
     class RefOnlyPerson(SPARQLModel):
@@ -1258,7 +1270,7 @@ def test_rdf_bridge_export_import_edges(monkeypatch: pytest.MonkeyPatch) -> None
         loaded_nc = load_from_graph(
             RefOnlyPerson,
             IRI("urn:p:nc"),
-            Graph(),
+            Store(),
             depth=1,
         )
     assert loaded_nc.works_for == IRI("urn:org:nc")
@@ -1269,7 +1281,7 @@ def test_rdf_bridge_export_import_edges(monkeypatch: pytest.MonkeyPatch) -> None
     raw_bad.works_for = 99
     with patch.object(Person, "from_graph", return_value=raw_bad):
         with pytest.raises(ValidationError):
-            load_from_graph(Person, IRI("urn:p:bad"), Graph(), depth=1)
+            load_from_graph(Person, IRI("urn:p:bad"), Store(), depth=1)
 
 
 def test_sparql_instance_to_triples_skips_none_meta(
@@ -1284,27 +1296,31 @@ def test_sparql_instance_to_triples_skips_none_meta(
 
     monkeypatch.setattr("sparqlmodel.rdf_bridge.get_field_metadata", fake_meta)
     triples = sparql_instance_to_triples(odos)
-    assert not any(
-        p == URIRef(expand_iri("schema:name", Person.get_prefixes())) for _s, p, _o in triples
-    )
+    name_pred = expand_iri("schema:name", Person.get_prefixes())
+
+    def _pred_key(p: object) -> str:
+        return p if isinstance(p, str) else term_str(p)  # type: ignore[arg-type]
+
+    assert not any(_pred_key(p) == name_pred for _s, p, _o in triples)
 
 
 def test_fastapi_import_and_graph_helpers() -> None:
-    from rdflib import Graph
-
     from sparqlmodel.fastapi import jsonld_response, negotiated_response, turtle_response
 
     person = Person(id=IRI("urn:p:fast"), name="Fast")
-    g = Graph()
-    g.add((URIRef("urn:p:fast"), URIRef("https://schema.org/name"), Literal("Fast")))
-    with patch.object(Graph, "serialize", return_value=b"@prefix x: <http://example/> ."):
+    g = Store()
+    g.add(("urn:p:fast", "https://schema.org/name", Literal("Fast")))
+    with patch(
+        "sparqlmodel.fastapi.export_graph",
+        return_value=b"@prefix x: <http://example/> .",
+    ):
         t_resp = turtle_response(g)
         assert t_resp.body == b"@prefix x: <http://example/> ."
     j_resp = jsonld_response(person)
     assert j_resp.media_type == "application/ld+json"
-    with patch.object(Graph, "serialize", return_value=b"{}") as mock_ser:
+    with patch("sparqlmodel.fastapi.export_graph", return_value=b"{}") as mock_export:
         j_resp2 = jsonld_response(person)
-        mock_ser.assert_called()
+        mock_export.assert_called()
         assert j_resp2.body == b"{}"
     req = MagicMock()
     req.headers = {"accept": "text/plain"}
@@ -1333,6 +1349,6 @@ def test_model_to_graph_skips_non_cascade_embed() -> None:
     org = Organization(id=IRI("urn:org:nc2"), name="NC")
     person = PersonNC(id=IRI("urn:p:nc2"), name="P", works_for=org)
     g = model_to_graph(person)
-    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-    org_type = URIRef("https://schema.org/Organization")
-    assert not any(o == org_type for _s, p, o in g if p == rdf_type)
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    org_type = "https://schema.org/Organization"
+    assert not any(term_str(o) == org_type for _s, p, o in g if term_str(p) == rdf_type)

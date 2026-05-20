@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import httpx
 import pytest
-from rdflib import Graph, URIRef
+from pyoxigraph import Literal
+from triplemodel import Store
 
 from sparqlmodel import IRI, Field, SPARQLModel, SPARQLSession
 from sparqlmodel.exceptions import QueryError
@@ -22,13 +21,13 @@ class Person(SPARQLModel):
 
 
 def test_insert_delete_data_helpers() -> None:
-    g = Graph()
-    s = URIRef("urn:s")
-    p = URIRef("urn:p")
-    g.add((s, p, URIRef("urn:o")))
+    g = Store()
+    s = "urn:s"
+    p = "urn:p"
+    g.add((s, p, "urn:o"))
     assert "INSERT DATA" in _graph_to_insert_data(g)
     assert "DELETE DATA" in _graph_to_delete_data(g)
-    assert _graph_to_insert_data(Graph()) == ""
+    assert _graph_to_insert_data(Store()) == ""
 
 
 def test_http_store_update_and_mirror() -> None:
@@ -46,16 +45,16 @@ def test_http_store_update_and_mirror() -> None:
         "http://example.org/", client=client, prefixes={"schema": "https://schema.org/"}
     )
 
-    add_g = Graph()
-    s = URIRef("urn:person:1")
+    add_g = Store()
+    s = "urn:person:1"
     add_g.add(
         (
             s,
-            URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-            URIRef("https://schema.org/Person"),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
         )
     )
-    add_g.add((s, URIRef("https://schema.org/name"), URIRef("urn:literal:Alice")))
+    add_g.add((s, "https://schema.org/name", Literal("Alice")))
     store.update_graph(add=add_g)
     assert len(store.graph) == 2
     assert len(updates) == 1
@@ -105,8 +104,8 @@ def test_http_store_update_failure() -> None:
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
     store = HttpStore("http://example.org/sparql", client=client)
-    g = Graph()
-    g.add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
+    g = Store()
+    g.add(("urn:s", "urn:p", "urn:o"))
     with pytest.raises(QueryError, match="SPARQL UPDATE failed"):
         store.update_graph(add=g)
     assert len(store.graph) == 0
@@ -153,9 +152,10 @@ def test_http_store_sparql_url_suffix() -> None:
 
 
 def test_http_store_delete_data_empty_and_term_value() -> None:
-    from sparqlmodel.stores.http import _graph_to_delete_data, _term_value
+    from sparqlmodel.stores.http import _graph_to_delete_data
+    from sparqlmodel.stores.memory import _term_value
 
-    assert _graph_to_delete_data(Graph()) == ""
+    assert _graph_to_delete_data(Store()) == ""
     assert _term_value(None) is None
 
 
@@ -173,25 +173,13 @@ def test_http_store_query_bad_result_type() -> None:
 
 def test_http_store_query_non_select() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={"head": {"vars": []}, "results": {"bindings": []}},
-        )
+        return httpx.Response(200, json={"not": "sparql-results"})
 
     transport = httpx.MockTransport(handler)
-
-    class FakeResult:
-        type = "ASK"
-
-        def __iter__(self):
-            return iter([])
-
     client = httpx.Client(transport=transport)
     store = HttpStore("http://example.org/sparql", client=client)
-    with patch("sparqlmodel.stores.http.JSONResultParser") as mock_parser:
-        mock_parser.return_value.parse.return_value = FakeResult()
-        with pytest.raises(QueryError, match="Expected SELECT"):
-            store.query("SELECT * WHERE { ?s ?p ?o }")
+    with pytest.raises(QueryError, match="Failed to parse"):
+        store.query("SELECT * WHERE { ?s ?p ?o }")
     store.close()
 
 
@@ -204,8 +192,8 @@ def test_http_store_operations_after_close_raise() -> None:
     store.close()
     with pytest.raises(RuntimeError, match="closed HttpStore"):
         store.query("SELECT * WHERE { ?s ?p ?o }")
-    g = Graph()
-    g.add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
+    g = Store()
+    g.add(("urn:s", "urn:p", "urn:o"))
     with pytest.raises(RuntimeError, match="closed HttpStore"):
         store.update_graph(add=g)
     store.close()
@@ -247,8 +235,8 @@ def test_http_store_update_remove_only() -> None:
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
     store = HttpStore("http://example.org/sparql", client=client)
-    g = Graph()
-    g.add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
+    g = Store()
+    g.add(("urn:s", "urn:p", "urn:o"))
     store.update_graph(remove=g)
     assert "DELETE DATA" in updates[0]
     assert len(store.graph) == 0

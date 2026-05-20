@@ -1,31 +1,32 @@
-"""In-memory RDF store backed by rdflib."""
+"""In-memory RDF store backed by pyoxigraph (``triplemodel.Store``)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from rdflib import Graph
-from rdflib.query import ResultRow
+from pyoxigraph import BlankNode, Literal, NamedNode
+from triplemodel import Store
+from triplemodel.store.sparql_result import SparqlResult
 
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.types import NamespaceRegistry
 
 
 class MemoryStore:
-    """In-memory RDF store using an rdflib Graph."""
+    """In-memory RDF store using :class:`~triplemodel.Store`."""
 
     def __init__(
         self,
-        graph: Graph | None = None,
+        graph: Store | None = None,
         *,
         prefixes: dict[str, str] | None = None,
     ) -> None:
-        self._graph = graph or Graph()
+        self._graph = graph or Store()
         self._registry = NamespaceRegistry(prefixes)
         self._registry.bind(self._graph)
 
     @property
-    def graph(self) -> Graph:
+    def graph(self) -> Store:
         return self._graph
 
     @property
@@ -39,16 +40,19 @@ class MemoryStore:
         except Exception as exc:
             raise QueryError(f"SPARQL query failed: {exc}") from exc
 
-        if result.type != "SELECT":
+        if not isinstance(result, SparqlResult):
+            raise QueryError(f"Unexpected SPARQL result type: {type(result).__name__}")
+        if result.type not in ("SELECT", "bindings"):
             raise QueryError(f"Expected SELECT query, got {result.type}")
 
         bindings: list[dict[str, Any]] = []
         for row in result:
-            if isinstance(row, ResultRow):
-                bindings.append({str(k): _term_value(row[k]) for k in row.labels})
+            if not hasattr(row, "keys"):
+                continue
+            bindings.append({str(var): _term_value(row[var]) for var in row})
         return bindings
 
-    def update_graph(self, add: Graph | None = None, remove: Graph | None = None) -> None:
+    def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Add or remove triples."""
         if remove is not None:
             for triple in remove:
@@ -58,7 +62,14 @@ class MemoryStore:
                 self._graph.add(triple)
 
 
-def _term_value(term: Any) -> Any:
+def _term_value(term: object) -> Any:
     if term is None:
         return None
+    if isinstance(term, NamedNode):
+        return term.value
+    if isinstance(term, BlankNode):
+        raw = str(term)
+        return raw if raw.startswith("_:") else f"_:{raw}"
+    if isinstance(term, Literal):
+        return str(term.value)
     return str(term)

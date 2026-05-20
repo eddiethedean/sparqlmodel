@@ -4,7 +4,7 @@
 **Working name:** `aio-rdf` (PyPI name TBD — verify availability)  
 **Audience:** SparqlModel maintainers, potential library authors, FastAPI / asyncio app developers  
 
-Related: [ROADMAP.md](ROADMAP.md) (SparqlModel **0.5** async session; **0.4** unified model Option A) · [ECOSYSTEM.md](ECOSYSTEM.md) · [PLAN.md](PLAN.md) · [Pyoxigraph](https://pyoxigraph.readthedocs.io/)
+Related: [ROADMAP.md](ROADMAP.md) (SparqlModel **0.6** async session; **0.5** pyoxigraph engine shipped) · [ECOSYSTEM.md](ECOSYSTEM.md) · [PLAN.md](PLAN.md) · [Pyoxigraph](https://pyoxigraph.readthedocs.io/)
 
 ---
 
@@ -60,7 +60,7 @@ Remote SPARQL endpoint · files · in-memory/disk dataset
 |---------|------|--------|-------|---------------------|
 | **rdflib** | General RDF in Python | No | No | Via plugins / manual |
 | **Pyoxigraph** | Embedded SPARQL store + parse | No | Yes | No (local store only) |
-| **SparqlModel** | ORM + compiler + stores | **0.5** (Python async on sync rdflib mirror) | No (today) | Via `HttpStore` / `AsyncHttpStore` |
+| **SparqlModel** | ORM + compiler + stores | **0.6** (Python async on pyoxigraph `Store` mirror) | No (today) | Via `HttpStore` / `AsyncHttpStore` |
 | **TripleModel** | Pydantic mapping | No | No | No |
 | **`aio-rdf` (proposed)** | Async I/O + optional fast store | **Yes (primary)** | Yes | **Yes (core)** |
 
@@ -71,11 +71,11 @@ Remote SPARQL endpoint · files · in-memory/disk dataset
 - **General-purpose sync graph API** → rdflib (interop, not replacement).  
 - **Reimplementing all of Pyoxigraph’s Python API** → integrate or delegate.
 
-### Relationship to SparqlModel **0.4** and **0.5**
+### Relationship to SparqlModel **0.5** and **0.6**
 
 SparqlModel **0.4** ships **Option A** — `SPARQLModel(TripleModel)` — before async work.
 
-SparqlModel **0.5** can ship **`AsyncHttpStore`** built on **`httpx.AsyncClient`** alone. That is sufficient for ORM async end-to-end.
+SparqlModel **0.6** can ship **`AsyncHttpStore`** built on **`httpx.AsyncClient`** alone. That is sufficient for ORM async end-to-end. **0.5** shipped the pyoxigraph engine (`triplemodel.Store`) that async stores will target.
 
 **`aio-rdf`** becomes attractive when you want:
 
@@ -224,7 +224,7 @@ Returns **`aio_rdf.Quad`** or converter to rdflib.
 | Mirror for `get` / cascade | Python graph | Same contract; mirror can be rdflib or Oxigraph via adapter |
 | Compiler / hydration | Python | Unchanged |
 
-**Dependency policy:** `aio-rdf` is an **optional** SparqlModel extra: `sparqlmodel[async]` → depends on `aio-rdf` when mature; **0.5 can ship without it** using httpx only.
+**Dependency policy:** `aio-rdf` is an **optional** SparqlModel extra: `sparqlmodel[async]` → depends on `aio-rdf` when mature; **0.6 can ship without it** using httpx only.
 
 ---
 
@@ -308,7 +308,7 @@ Returns **`aio_rdf.Quad`** or converter to rdflib.
 | Embedded store | **oxigraph** crate | Align with Pyoxigraph semantics where possible |
 | Python packaging | **uv/poetry** + maturin in CI | manylinux aarch64 + x86_64 |
 
-**Alternative considered:** Python **`httpx` only** (no Rust HTTP) — simpler, but does not deliver Rust parse/store story; acceptable as SparqlModel **0.5** stopgap, not as this package’s end state.
+**Alternative considered:** Python **`httpx` only** (no Rust HTTP) — simpler, but does not deliver Rust parse/store story; acceptable as SparqlModel **0.6** stopgap, not as this package’s end state.
 
 ---
 
@@ -352,7 +352,7 @@ Returns **`aio_rdf.Quad`** or converter to rdflib.
 1. **Approve scope** — HTTP-only MVP vs wait for full Rust stack.  
 2. **Create repo** — `aio-rdf` skeleton (maturin, pyo3, empty `SparqlClient.select`).  
 3. **Benchmark** — SparqlModel workload on sync `HttpStore` vs `httpx.AsyncClient` vs future `aio-rdf`.  
-4. **SparqlModel 0.5** — ship `AsyncSPARQLSession` + `httpx`; refactor store backend to `aio-rdf` when 0.1.0 exists.  
+4. **SparqlModel 0.6** — ship `AsyncSPARQLSession` + `httpx`; refactor store backend to `aio-rdf` when 0.1.0 exists.  
 5. **Upstream** — open Oxigraph discussion on async Python bindings; avoid duplicating if they add official support.
 
 ---

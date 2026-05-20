@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from rdflib import Graph
+from triplemodel import Store
 
 
-class Store(Protocol):
+class StoreProtocol(Protocol):
     """Protocol for RDF persistence backends."""
 
     @property
-    def graph(self) -> Graph:
-        """Underlying RDF graph."""
+    def graph(self) -> Store:
+        """Underlying RDF graph (pyoxigraph via :class:`~triplemodel.Store`)."""
 
     def query(self, sparql: str) -> list[dict[str, Any]]:
         """Execute a SPARQL SELECT query and return bindings."""
 
-    def update_graph(self, add: Graph | None = None, remove: Graph | None = None) -> None:
+    def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Add or remove triples from the store."""

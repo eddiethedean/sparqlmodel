@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from rdflib import Graph
+from triplemodel import Store
 
 from sparqlmodel.fastapi.deps import (
     SessionDep,
@@ -15,6 +15,7 @@ from sparqlmodel.fastapi.deps import (
 )
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_bridge import model_to_graph
+from sparqlmodel.serializers import export_graph
 
 __all__ = [
     "SessionDep",
@@ -43,8 +44,8 @@ def _require_fastapi() -> tuple[Any, Any]:
     return FastAPIRequest, FastAPIResponse
 
 
-def _graph_from_model(model: SPARQLModel | Graph) -> Graph:
-    if isinstance(model, Graph):
+def _graph_from_model(model: SPARQLModel | Store) -> Store:
+    if isinstance(model, Store):
         return model
     return model_to_graph(model)
 
@@ -87,26 +88,26 @@ def _negotiate_format_kind(accept: str, mapping: dict[str, str]) -> str:
 
 
 def turtle_response(
-    model: SPARQLModel | Graph,
+    model: SPARQLModel | Store,
     *,
     status_code: int = 200,
 ) -> Response:
     """Return a Turtle ``Response`` for a model or graph."""
     _, ResponseCls = _require_fastapi()
     graph = _graph_from_model(model)
-    content = _body_bytes(graph.serialize(format="turtle"))
+    content = _body_bytes(export_graph(graph, format="turtle"))
     return ResponseCls(content=content, media_type="text/turtle", status_code=status_code)
 
 
 def jsonld_response(
-    model: SPARQLModel | Graph,
+    model: SPARQLModel | Store,
     *,
     status_code: int = 200,
 ) -> Response:
     """Return a JSON-LD ``Response`` for a model or graph."""
     _, ResponseCls = _require_fastapi()
     graph = _graph_from_model(model)
-    content = _body_bytes(graph.serialize(format="json-ld"))
+    content = _body_bytes(export_graph(graph, format="json-ld"))
     return ResponseCls(
         content=content,
         media_type="application/ld+json",
@@ -116,7 +117,7 @@ def jsonld_response(
 
 def negotiated_response(
     request: Request,
-    model: SPARQLModel | Graph,
+    model: SPARQLModel | Store,
     *,
     formats: dict[str, str] | None = None,
 ) -> Response:

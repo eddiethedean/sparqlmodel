@@ -100,7 +100,7 @@ class NamespaceRegistry:
         return dict(self._prefixes)
 
     def bind(self, graph: Any) -> None:
-        """Bind prefixes to an rdflib Graph."""
+        """Bind prefixes to a TripleModel ``Store`` graph."""
         for prefix, uri in self._prefixes.items():
             graph.bind(prefix, uri)
 

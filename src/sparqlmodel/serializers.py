@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, TypeVar, get_args, get_origin
 
-from rdflib import Graph
+from triplemodel import Store, load_graph
+from triplemodel.io.files import dump_graph
 
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
@@ -16,18 +17,20 @@ T = TypeVar("T", bound=SPARQLModel)
 SUPPORTED_FORMATS = frozenset({"turtle", "ttl", "nt", "ntriples", "xml", "json-ld", "jsonld"})
 
 
-def export_graph(graph: Graph, format: str = "turtle") -> str:
-    """Serialize an rdflib Graph to a string."""
+def export_graph(graph: Store, format: str = "turtle") -> str:
+    """Serialize a graph to a string."""
     fmt = _normalize_format(format)
-    return graph.serialize(format=fmt)
+    result = dump_graph(graph, format=fmt)
+    if isinstance(result, bytes):
+        return result.decode("utf-8")
+    assert isinstance(result, str)
+    return result
 
 
-def import_graph(data: str, format: str = "turtle") -> Graph:
-    """Parse RDF data into an rdflib Graph."""
-    g = Graph()
+def import_graph(data: str, format: str = "turtle") -> Store:
+    """Parse RDF data into a :class:`~triplemodel.Store`."""
     fmt = _normalize_format(format)
-    g.parse(data=data, format=fmt)
-    return g
+    return load_graph(data, format=fmt)
 
 
 def export_model(model: SPARQLModel, format: str = "turtle") -> str:

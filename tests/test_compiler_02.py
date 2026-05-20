@@ -172,15 +172,13 @@ def test_or_query_integration() -> None:
 
 
 def test_ne_default_excludes_missing_name(session) -> None:
-    from rdflib import URIRef
-
     from sparqlmodel import IRI
+    from tests.rdf_helpers import RDF_TYPE
 
     session.put(Person(id=IRI("urn:p:named"), name="Named"))
-    noname = URIRef("urn:p:noname")
-    person_type = URIRef("https://schema.org/Person")
-    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-    session.graph.add((noname, rdf_type, person_type))
+    noname = "urn:p:noname"
+    person_type = "https://schema.org/Person"
+    session.graph.add((noname, RDF_TYPE, person_type))
     default_bindings = session.execute(
         session.query(Person).where(Person.name != "Named")._compile()
     )

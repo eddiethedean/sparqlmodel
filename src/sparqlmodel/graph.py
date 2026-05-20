@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from rdflib import BNode, Graph, URIRef
-from rdflib.term import Node
+from pyoxigraph import BlankNode, Literal, NamedNode
+from triplemodel import Store
+from triplemodel.config import RDF_TYPE as RDF_TYPE_URI
+from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.types import IRI, expand_iri
@@ -14,7 +16,7 @@ from sparqlmodel.types import IRI, expand_iri
 if TYPE_CHECKING:
     from sparqlmodel.model import SPARQLModel
 
-RDF_TYPE = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+RDF_TYPE = RDF_TYPE_URI
 
 
 def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
@@ -22,49 +24,63 @@ def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
     return expand_iri(str(iri), prefixes)
 
 
+def _is_resource_term(term: object) -> bool:
+    return isinstance(term, (NamedNode, BlankNode))
+
+
+def _term_subject_key(
+    term: QuadSubject | str | Literal,
+    prefixes: dict[str, str],
+) -> str:
+    if isinstance(term, Literal):
+        return term_str(term)
+    if isinstance(term, BlankNode):
+        raw = str(term)
+        return raw if raw.startswith("_:") else f"_:{raw}"
+    if isinstance(term, NamedNode):
+        return _expanded_iri_key(term.value, prefixes)
+    raw = str(term)
+    if raw.startswith("_:"):
+        return raw
+    return _expanded_iri_key(raw, prefixes)
+
+
 def subject_has_rdf_type(
     model_cls: type[SPARQLModel],
     subject_iri: str | IRI,
-    graph: Graph,
+    graph: Store,
 ) -> bool:
     """Return True if the graph subject has the expected ``rdf:type`` for ``model_cls``."""
     prefixes = model_cls.get_prefixes()
-    subject = _subject_ref(subject_iri, prefixes)
+    subject = _subject_pattern(subject_iri, prefixes)
     types = list(graph.objects(subject, RDF_TYPE))
     if not types:
         return False
     expected = expand_iri(model_cls.rdf_type, prefixes)
-    return any(str(t) == expected for t in types)
+    return any(term_str(t) == expected for t in types)
 
 
-def _graph_subject_key(node: Node, prefixes: dict[str, str]) -> str:
-    """Stable subject key for cascade/orphan set lookups (expanded IRIs and ``_:id`` BNodes)."""
-    if isinstance(node, BNode):
-        return f"_:{node}"
-    if isinstance(node, URIRef):
-        return _expanded_iri_key(str(node), prefixes)
-    return str(node)
-
-
-def _subject_ref(iri: str | IRI, prefixes: dict[str, str]) -> URIRef | BNode:
+def _subject_pattern(iri: str | IRI, prefixes: dict[str, str]) -> str | BlankNode:
     raw = str(iri)
     if raw.startswith("_:"):
-        return BNode(raw[2:])
+        return BlankNode(raw[2:])
     expanded = expand_iri(raw, prefixes)
-    if expanded.startswith("urn:") or expanded.startswith("http"):
-        return URIRef(expanded)
     if expanded.startswith("_:"):
-        return BNode(expanded[2:])
-    return URIRef(expanded)
+        return BlankNode(expanded[2:])
+    return expanded
 
 
-def _predicate_ref(predicate: str, prefixes: dict[str, str]) -> URIRef:
-    return URIRef(expand_iri(predicate, prefixes))
+def _predicate_pattern(predicate: str, prefixes: dict[str, str]) -> str:
+    return expand_iri(predicate, prefixes)
 
 
-def triples_to_graph(triples: Iterable[tuple[Node, Node, Node]]) -> Graph:
-    """Build an rdflib Graph from triples."""
-    g = Graph()
+def triples_to_graph(
+    triples: Iterable[tuple[QuadSubject | str, QuadPredicate | str, OxTerm | str]],
+    *,
+    target: Store | None = None,
+) -> Store:
+    """Build a :class:`~triplemodel.Store` from triple patterns."""
+    g = target or Store()
     for s, p, o in triples:
         g.add((s, p, o))
     return g
@@ -100,24 +116,24 @@ def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
 
 def _object_referenced_from_outside(
     obj_key: str,
-    graph: Graph,
+    graph: Store,
     exclude_subject_keys: set[str],
     prefixes: dict[str, str],
 ) -> bool:
     """Return True if a subject outside ``exclude_subject_keys`` links to ``obj_key``."""
     for s, _p, o in graph:
-        if not isinstance(o, (URIRef, BNode)):
+        if not _is_resource_term(o):
             continue
-        if _graph_subject_key(o, prefixes) != obj_key:
+        if _term_subject_key(o, prefixes) != obj_key:
             continue
-        if _graph_subject_key(s, prefixes) not in exclude_subject_keys:
+        if _term_subject_key(s, prefixes) not in exclude_subject_keys:
             return True
     return False
 
 
 def orphaned_embedded_targets(
     model: SPARQLModel,
-    graph: Graph,
+    graph: Store,
     *,
     exclude_subject_keys: set[str] | None = None,
 ) -> list[tuple[type[SPARQLModel], str]]:
@@ -126,7 +142,7 @@ def orphaned_embedded_targets(
     nested_iris = {
         _expanded_iri_key(m.ensure_id(), m.get_prefixes()) for m in iter_nested_models(model)
     }
-    subject = _subject_ref(model.ensure_id(), prefixes)
+    subject = _subject_pattern(model.ensure_id(), prefixes)
     orphans: list[tuple[type[SPARQLModel], str]] = []
     cascade_keys = exclude_subject_keys if exclude_subject_keys is not None else nested_iris
 
@@ -142,10 +158,10 @@ def orphaned_embedded_targets(
             protected.add(_expanded_iri_key(value, prefixes))
         elif isinstance(value, _SPARQLModel):
             protected.add(_expanded_iri_key(value.ensure_id(), value.get_prefixes()))
-        pred = _predicate_ref(meta.predicate, prefixes)
+        pred = _predicate_pattern(meta.predicate, prefixes)
         for obj in graph.objects(subject, pred):
-            if isinstance(obj, (URIRef, BNode)):
-                obj_key = _graph_subject_key(obj, prefixes)
+            if _is_resource_term(obj):
+                obj_key = _term_subject_key(obj, prefixes)
                 if obj_key not in protected:
                     if _object_referenced_from_outside(obj_key, graph, cascade_keys, prefixes):
                         continue
@@ -155,7 +171,7 @@ def orphaned_embedded_targets(
 
 def cascade_subjects_for_removal(
     model: SPARQLModel,
-    graph: Graph,
+    graph: Store,
     *,
     for_put: bool = False,
 ) -> list[tuple[type[SPARQLModel], str]]:
@@ -193,15 +209,16 @@ def cascade_subjects_for_removal(
 
 def owned_triples_for_subjects(
     subjects: Iterable[tuple[type[SPARQLModel], str | IRI]],
-    graph: Graph,
-) -> list[tuple[Node, Node, Node]]:
+    graph: Store,
+) -> list[tuple[QuadSubject, QuadPredicate, OxTerm]]:
     """Union of owned triples for multiple subjects (deduplicated)."""
-    triples: list[tuple[Node, Node, Node]] = []
-    seen: set[tuple[Node, Node, Node]] = set()
+    triples: list[tuple[QuadSubject, QuadPredicate, OxTerm]] = []
+    seen: set[tuple[str, str, str]] = set()
     for model_cls, iri in subjects:
         for triple in owned_triples_for_subject(model_cls, iri, graph):
-            if triple not in seen:
-                seen.add(triple)
+            key = (term_str(triple[0]), term_str(triple[1]), term_str(triple[2]))
+            if key not in seen:
+                seen.add(key)
                 triples.append(triple)
     return triples
 
@@ -209,19 +226,26 @@ def owned_triples_for_subjects(
 def owned_triples_for_subject(
     model_cls: type[SPARQLModel],
     subject_iri: str | IRI,
-    graph: Graph,
-) -> list[tuple[Node, Node, Node]]:
+    graph: Store,
+) -> list[tuple[QuadSubject, QuadPredicate, OxTerm]]:
     """Return triples owned by a subject for declared predicates + rdf:type."""
     prefixes = model_cls.get_prefixes()
-    subject = _subject_ref(subject_iri, prefixes)
-    predicates = {_predicate_ref("rdf:type", prefixes)}
+    subject = _subject_pattern(subject_iri, prefixes)
+    predicates = {_predicate_pattern("rdf:type", prefixes)}
     for _, field_info in model_cls.get_scalar_fields():
         meta = get_field_metadata(field_info)
         if meta:
-            predicates.add(_predicate_ref(meta.predicate, prefixes))
+            predicates.add(_predicate_pattern(meta.predicate, prefixes))
     for _, field_info, _ in model_cls.get_relationship_fields():
         meta = get_field_metadata(field_info)
         if meta:
-            predicates.add(_predicate_ref(meta.predicate, prefixes))
+            predicates.add(_predicate_pattern(meta.predicate, prefixes))
 
-    return [(s, p, o) for s, p, o in graph if s == subject and p in predicates]
+    return [
+        (s, p, o) for s, p, o in graph.triples((subject, None, None)) if term_str(p) in predicates
+    ]
+
+
+# Internal aliases (tests, transitional imports)
+_subject_ref = _subject_pattern
+_graph_subject_key = _term_subject_key

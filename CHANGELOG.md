@@ -7,20 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Hydration DAGs** — `load_from_graph` no longer treats shared embedded resources as cycles
-- **Session identity** — canonical identity per IRI with per-depth hydration cache; deep loads upgrade identity, shallow reloads do not replace eager identity
-- **Query compiler** — absolute `urn:` / `http(s)://` strings on IRI-typed fields compile as IRIs
-- **Session** — pending `put` invalidates cascade caches; dedupes pending queue by subject; `__exit__` preserves original exception when `rollback_on_error=False`
-- **`put`** — cascade cache invalidation runs after successful store update
+## [0.5.0] - 2026-05-18
 
 ### Added
 
-- `Query.use_optional_for_comparisons()` — enables NOT EXISTS semantics for `!=`
-- `OrExpr.__and__` / `__rand__` for `(A | B) & C` style filters
-- `FieldRef.in_` accepts any sequence (not only tuples)
-- `Query.first()` no longer mutates the query’s `limit`
+- **Pyoxigraph engine** — `triplemodel>=0.10.0,<2`, `pyoxigraph>=0.5,<0.6`; session graphs are `triplemodel.Store`
+- **`sparqlmodel.rdf_n3`** — N3 formatting for compiler filters and HTTP UPDATE bodies
+- **`sparqlmodel.stores.sparql_json`** — SPARQL Results JSON parser (no rdflib)
+
+### Changed
+
+- **Breaking:** `Store.graph` and `SPARQLSession.graph` return `triplemodel.Store`, not `rdflib.Graph`
+- **Breaking:** `Store.update_graph` accepts `Store` deltas; custom store implementations must migrate
+- **`MemoryStore` / `HttpStore`** — pyoxigraph-backed mirror; SELECT bindings use term `.value` strings
+- **`serializers`** — `export_graph` / `import_graph` delegate to TripleModel `dump_graph` / `load_graph`
+- **`compiler`** — literal/IRI formatting via `rdf_n3` (not RDFLib `.n3()`)
+- **FastAPI** — Turtle/JSON-LD responses via `export_graph`
+- **ROADMAP** — async ORM milestone renumbered to **0.6**; file I/O delegation **0.7**
+
+### Removed
+
+- **rdflib** as a required dependency
+
+### Fixed
+
+- **Hydration DAGs** — `load_from_graph` no longer treats shared embedded resources as cycles
+- **Session identity** — canonical identity per IRI with per-depth hydration cache
+- **Query compiler** — absolute `urn:` / `http(s)://` strings on IRI-typed fields compile as IRIs; escaped newlines in string literals
+- **Session** — pending `put` invalidates cascade caches; dedupes pending queue; `__exit__` exception handling
+- `Query.use_optional_for_comparisons()`, `OrExpr` chaining, `FieldRef.in_` sequences, `Query.first()` limit behavior
 
 ## [0.4.0] - 2026-05-18
 

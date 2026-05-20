@@ -23,18 +23,16 @@ def test_hydrate_from_bindings_wrong_type(session, acme: Organization) -> None:
 
 
 def test_hydrate_cycle_raises(session) -> None:
-    from rdflib import URIRef
-
     from sparqlmodel.graph import expand_iri
+    from tests.rdf_helpers import RDF_TYPE
 
     lone = Person(id=IRI("urn:person:lone"), name="Lone", works_for=None)
     session.put(lone)
-    person_uri = URIRef(str(lone.id.expand(Person.get_prefixes())))
-    works_for = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
-    org_type = URIRef(expand_iri("schema:Organization", Person.get_prefixes()))
+    person_uri = str(lone.id.expand(Person.get_prefixes()))
+    works_for = expand_iri("schema:worksFor", Person.get_prefixes())
+    org_type = expand_iri("schema:Organization", Person.get_prefixes())
     session.graph.add((person_uri, works_for, person_uri))
-    rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-    session.graph.add((person_uri, rdf_type, org_type))
+    session.graph.add((person_uri, RDF_TYPE, org_type))
     bindings = [{"person": str(lone.id)}]
     with pytest.raises(ConfigurationError, match="Cycle detected"):
         hydrate_from_bindings(Person, bindings, session.store, depth=1)

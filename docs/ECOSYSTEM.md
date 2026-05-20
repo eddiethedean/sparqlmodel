@@ -46,7 +46,7 @@ Both SparqlModel and TripleModel are **Pydantic v2** stacks: validated Python ob
 └────────────────────┬─────────────────────┘
                      │
 ┌────────────────────▼─────────────────────┐
-│  rdflib · pydantic                       │
+│  pyoxigraph · triplemodel · pydantic     │
 └──────────────────────────────────────────┘
 ```
 
@@ -152,7 +152,8 @@ SparqlModel keeps a stable SQLModel-style surface on a unified base class:
 ```text
 # pyproject.toml (SparqlModel)
 dependencies = [
-    "triplemodel>=0.9.0,<2",
+    "triplemodel>=0.10.0,<2",
+    "pyoxigraph>=0.5,<0.6",
 ]
 ```
 
@@ -171,9 +172,10 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 | **0.2** | `_triple.py` adapter (interim), contract tests | `sync_to_graph`, namespaces, nested embeds |
 | **0.3** | Shipped — session I/O via interim adapter | `put`/`get` via `_triple.py` |
 | **0.4** | **Option A** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |
-| **0.5** | Async ORM (`AsyncSPARQLSession`, async stores, FastAPI) | — |
-| **0.6** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
-| **0.7+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
+| **0.5** | Pyoxigraph engine (`triplemodel.Store`, no core rdflib) | — |
+| **0.6** | Async ORM (`AsyncSPARQLSession`, async stores, FastAPI) | — |
+| **0.7** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
+| **0.8+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
 
 Track upstream: [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md) · **SM-6** (SparqlModel 0.4 unified model)
 

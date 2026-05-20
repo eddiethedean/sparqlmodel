@@ -6,7 +6,7 @@ import re
 from types import TracebackType
 from typing import Any, cast
 
-from rdflib import Graph
+from triplemodel import Store
 from typing_extensions import Self
 
 from sparqlmodel.graph import (
@@ -23,7 +23,7 @@ from sparqlmodel.session_state import (
     SessionState,
     identity_key_for_iri,
 )
-from sparqlmodel.stores.base import Store
+from sparqlmodel.stores.base import StoreProtocol
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI, NamespaceRegistry
 
@@ -53,14 +53,14 @@ class SPARQLSession:
 
     def __init__(
         self,
-        store: Store | None = None,
+        store: StoreProtocol | None = None,
         *,
         prefixes: dict[str, str] | None = None,
         autoflush: bool = True,
         close_on_exit: bool = True,
         rollback_on_error: bool = True,
     ) -> None:
-        self._store: Store = store or MemoryStore(prefixes=prefixes)
+        self._store: StoreProtocol = store or MemoryStore(prefixes=prefixes)
         store_prefixes = getattr(self._store, "namespaces", None)
         store_pfx = store_prefixes.prefixes if store_prefixes else {}
         merged_prefixes = {**store_pfx, **(prefixes or {})}
@@ -73,7 +73,7 @@ class SPARQLSession:
         self._closed = False
 
     @property
-    def store(self) -> Store:
+    def store(self) -> StoreProtocol:
         return self._store
 
     @property
@@ -81,7 +81,7 @@ class SPARQLSession:
         return self._namespaces
 
     @property
-    def graph(self) -> Graph:
+    def graph(self) -> Store:
         return self._store.graph
 
     def _check_open(self) -> None:
@@ -331,19 +331,19 @@ class SPARQLSession:
         model.ensure_id()
         subject = model.id
         assert subject is not None
-        from sparqlmodel.graph import _subject_ref
+        from sparqlmodel.graph import _predicate_pattern, _subject_pattern
 
-        subj_ref = _subject_ref(subject, model.get_prefixes())
+        prefixes = model.get_prefixes()
+        subj_ref = _subject_pattern(subject, prefixes)
         if not any(self._store.graph.triples((subj_ref, None, None))):
             return
         for _name, field_info in model.get_scalar_fields():
             from sparqlmodel.fields import get_field_metadata
-            from sparqlmodel.graph import _predicate_ref
 
             meta = get_field_metadata(field_info)
             if meta is None:
                 continue
-            pred = _predicate_ref(meta.predicate, model.get_prefixes())
+            pred = _predicate_pattern(meta.predicate, prefixes)
             if any(self._store.graph.triples((subj_ref, pred, None))):
                 warnings.warn(
                     f"add() on {type(model).__name__} subject {subject!s} may leave stale "

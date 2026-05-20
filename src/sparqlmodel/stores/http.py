@@ -4,47 +4,36 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Mapping
-from io import BytesIO
 from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-from rdflib import Graph
-from rdflib.plugins.sparql.results.jsonresults import JSONResultParser
-from rdflib.query import ResultRow
+from triplemodel import Store
 
 from sparqlmodel.exceptions import QueryError
+from sparqlmodel.rdf_n3 import triple_to_n3
+from sparqlmodel.stores.sparql_json import parse_sparql_json_bindings
 from sparqlmodel.types import NamespaceRegistry
 
 _CLOSED_STORE_MSG = "Cannot use a closed HttpStore"
 
 
-def _graph_to_insert_data(graph: Graph) -> str:
+def _graph_to_insert_data(graph: Store) -> str:
     if len(graph) == 0:
         return ""
-    lines: list[str] = []
-    for s, p, o in graph:
-        lines.append(f"  {s.n3()} {p.n3()} {o.n3()} .")
+    lines = [f"  {triple_to_n3(s, p, o)} ." for s, p, o in graph]
     return "INSERT DATA {\n" + "\n".join(lines) + "\n}"
 
 
-def _graph_to_delete_data(graph: Graph) -> str:
+def _graph_to_delete_data(graph: Store) -> str:
     if len(graph) == 0:
         return ""
-    lines: list[str] = []
-    for s, p, o in graph:
-        lines.append(f"  {s.n3()} {p.n3()} {o.n3()} .")
+    lines = [f"  {triple_to_n3(s, p, o)} ." for s, p, o in graph]
     return "DELETE DATA {\n" + "\n".join(lines) + "\n}"
 
 
-def _term_value(term: Any) -> Any:
-    if term is None:
-        return None
-    return str(term)
-
-
 class HttpStore:
-    """SPARQL 1.1 endpoint store with a local rdflib graph mirror.
+    """SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
 
     ``update_graph`` pushes ``INSERT DATA`` / ``DELETE DATA`` to the remote endpoint
     and applies the same delta to the mirror on success. ``graph`` reads the mirror
@@ -65,7 +54,7 @@ class HttpStore:
         self,
         endpoint: str,
         *,
-        graph: Graph | None = None,
+        graph: Store | None = None,
         prefixes: dict[str, str] | None = None,
         auth: tuple[str, str] | None = None,
         bearer_token: str | None = None,
@@ -74,7 +63,7 @@ class HttpStore:
         client: httpx.Client | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
-        self._graph = graph or Graph()
+        self._graph = graph or Store()
         self._registry = NamespaceRegistry(prefixes)
         self._registry.bind(self._graph)
         self._timeout = timeout
@@ -103,7 +92,7 @@ class HttpStore:
             raise RuntimeError(_CLOSED_STORE_MSG)
 
     @property
-    def graph(self) -> Graph:
+    def graph(self) -> Store:
         return self._graph
 
     @property
@@ -168,21 +157,11 @@ class HttpStore:
             raise QueryError(f"SPARQL query failed: {exc}") from exc
 
         try:
-            parser = JSONResultParser()
-            result = parser.parse(BytesIO(response.content))
+            return parse_sparql_json_bindings(response.content)
         except Exception as exc:
             raise QueryError(f"Failed to parse SPARQL JSON results: {exc}") from exc
 
-        if result.type != "SELECT":
-            raise QueryError(f"Expected SELECT query, got {result.type}")
-
-        bindings: list[dict[str, Any]] = []
-        for row in result:
-            if isinstance(row, ResultRow):
-                bindings.append({str(k): _term_value(row[k]) for k in row.labels})
-        return bindings
-
-    def update_graph(self, add: Graph | None = None, remove: Graph | None = None) -> None:
+    def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""
         self._check_open()
         parts: list[str] = []

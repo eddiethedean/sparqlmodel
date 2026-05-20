@@ -1,12 +1,12 @@
 # SparqlModel Roadmap
 
-SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel** (`triplemodel>=0.9`, required) is the mapping engine. This roadmap covers **ORM features**, **Option A** (`SPARQLModel` subclasses `TripleModel`), and retiring interim integration code (`_triple.py`, duplicate serializers).
+SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel** (`triplemodel>=0.10`, required) is the mapping engine on **pyoxigraph**. This roadmap covers **ORM features**, **Option A** (`SPARQLModel` subclasses `TripleModel`), and retiring interim integration code (duplicate serializers).
 
 - [ORM guide](ORM.md) — application developers
 - [SPECS.md](SPECS.md) — technical spec
 - [ECOSYSTEM.md](ECOSYSTEM.md) — boundaries
 - [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md) — upstream
-- [ASYNC_RDF_RUST_PLAN.md](ASYNC_RDF_RUST_PLAN.md) — optional Rust async I/O package (companion to **0.5**)
+- [ASYNC_RDF_RUST_PLAN.md](ASYNC_RDF_RUST_PLAN.md) — optional Rust async I/O package (companion to **0.6** async)
 
 ---
 
@@ -23,11 +23,11 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 | **SparqlModel** | `SPARQLSession`, query DSL, compiler, stores, cascade, hydration `depth` |
 | **TripleModel** | Terms, `sync_to_graph`, `from_graph`, `parse`, `serialize`, Dataset |
 
-**Dependency:** `triplemodel>=0.9.0,<2` is **shipped** in `pyproject.toml`.
+**Dependency:** `triplemodel>=0.10.0,<2`, `pyoxigraph>=0.5,<0.6` — **shipped** in **0.5.0** (`pyproject.toml`). Core install has **no rdflib**.
 
-**Integration debt:** `serializers.py` still duplicates some TripleModel file I/O — thin wrappers in **0.6**. Interim `_triple.py` adapter (0.3) is **superseded by 0.4** Option A. `graph.py` is cascade/orphan policy only.
+**Integration debt:** `serializers.py` delegates to TripleModel `load_graph` / `dump_graph` — full retirement of duplicate format tables in **0.7**. `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **0.5 — async end-to-end**. Unified model (Option A) shipped in **0.4.0**.
+**Current focus (next release):** **0.6 — async end-to-end**. Pyoxigraph engine shipped in **0.5.0**; unified model (Option A) in **0.4.0**.
 
 ---
 
@@ -66,7 +66,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 |---------|--------|
 | `triplemodel>=0.9.0,<2` required dependency | Done |
 | Interim mapping in `graph.py` | **Removed 0.3.0** — cascade-only |
-| Interim `serializers.py` (to retire) | Present — thin wrappers in **0.6** |
+| Interim `serializers.py` (to retire) | Thin wrappers over TripleModel I/O — full retirement **0.7** |
 
 ---
 
@@ -184,9 +184,30 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.5 — Async end-to-end
+## 0.5 — Pyoxigraph + TripleModel 0.10
 
-**Status:** planned (after **0.4**).
+**Status:** shipped as **0.5.0**.
+
+**Goal:** one RDF engine for session graphs, cascade, mirror, and `rdf_bridge` — **pyoxigraph** via `triplemodel.Store`, not rdflib.
+
+### Engine and stores
+
+- [x] `pyoxigraph>=0.5,<0.6`, `triplemodel>=0.10.0,<2`; remove rdflib from core
+- [x] `Store` protocol — `graph: triplemodel.Store`, `update_graph(add|remove: Store)`
+- [x] `MemoryStore` / `HttpStore` mirror on `Store`; SPARQL JSON bindings without rdflib
+- [x] `graph.py`, `rdf_bridge`, compiler N3 formatting on pyoxigraph terms
+- [x] FastAPI responses via `export_graph` / TripleModel serialize
+- [x] CHANGELOG breaking notes for `Store` / `session.graph` types
+
+**Exit criteria:** No required rdflib in core; contract tests and full pytest suite green on TM 0.10.
+
+**Out of scope for 0.5:** async session (**0.6**), disk-backed default store, `aio-rdf` crate.
+
+---
+
+## 0.6 — Async end-to-end
+
+**Status:** planned (after **0.5**).
 
 **Goal:** first-class **async** ORM for FastAPI and asyncio apps — no blocking the event loop on `HttpStore` I/O. The **sync** API (`SPARQLSession`, `MemoryStore`, `HttpStore`, `SessionDep`) remains supported and unchanged.
 
@@ -214,17 +235,17 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 - [ ] Contract tests: async session `put` / `get` / `query` parity with sync on `MemoryStore` and `AsyncHttpStore` (mock or testcontainers endpoint)
 - [ ] [ORM.md](ORM.md) async section; [PRODUCTION.md](PRODUCTION.md) concurrency (async tasks vs threads)
-- [ ] [SPECS.md](SPECS.md) async checklist — P0 for **0.5**, not deferred to 1.0+
+- [ ] [SPECS.md](SPECS.md) async checklist — P0 for **0.6**, not deferred to 1.0+
 
 **Exit criteria:** A FastAPI app can use `AsyncSessionDep` + `AsyncHttpStore` end-to-end without sync `httpx` on the hot path; SPECS async items checked.
 
-**Out of scope for 0.5:** async TripleModel APIs (unified model stays sync; async session calls sync mapping on the event loop for in-memory work).
+**Out of scope for 0.6:** async TripleModel APIs (unified model stays sync; async session calls sync mapping on the event loop for in-memory work).
 
 **Pydantic:** unchanged — `model_validate` on load paths; async does not change validation rules.
 
 ---
 
-## 0.6 — File I/O delegated
+## 0.7 — File I/O delegated
 
 **Goal:** no format logic in SparqlModel.
 
@@ -240,7 +261,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.7 — Query production
+## 0.8 — Query production
 
 **Goal:** SQLModel-grade list APIs over SPARQL.
 
@@ -256,7 +277,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.8 — Session lifecycle
+## 0.9 — Session lifecycle
 
 **Goal:** SQLAlchemy session parity for app code.
 
@@ -271,7 +292,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 0.9 — HttpStore production
+## 1.0 — HttpStore production
 
 **Goal:** safe remote SPARQL for multi-instance apps (within documented constraints).
 
@@ -284,7 +305,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 1.0 — RDF modeling
+## 1.1 — RDF modeling
 
 **Goal:** SPARQLMojo-class field coverage via TripleModel.
 
@@ -301,7 +322,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 1.1 — Ops and quality
+## 1.2 — Ops and quality
 
 **Goal:** production operability.
 
@@ -314,7 +335,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## 1.2 — Production ORM GA
+## 1.3 — Production ORM GA
 
 **Goal:** **SQLModel of SPARQL** for backend teams — feature-complete per [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
 
@@ -328,7 +349,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ---
 
-## Future (post-1.2)
+## Future (post-1.3)
 
 | Theme | Owner |
 |-------|--------|
@@ -386,11 +407,10 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities
 
-1. **0.5 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep`.
-2. **0.5 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep` (sync API unchanged).
-3. **Do not expand** interim mapping — retire `serializers.py` in **0.6**.
-4. **P0 query + HttpStore** for production APIs (**0.7–0.9**).
-5. **P1 session lifecycle + RDF types** (**0.8–1.0**).
+1. **0.6 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep` (sync API unchanged).
+2. **Do not expand** interim mapping — retire duplicate serializer tables in **0.7**.
+3. **P0 query + HttpStore** for production APIs (**0.8–1.0**).
+4. **P1 session lifecycle + RDF types** (**0.9–1.1**).
 6. Keep sync `SPARQLSession` / `Field` / `session.put` stable; add async counterparts in parallel.
 7. Contract tests on every integration PR; SPECS checklist drives **1.2** GA.
 8. Document behavior in [ORM.md](ORM.md) and [PRODUCTION.md](PRODUCTION.md).

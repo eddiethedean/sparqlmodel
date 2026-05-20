@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from rdflib import XSD, Graph, Literal, URIRef
+from pyoxigraph import Literal, NamedNode
+from triplemodel import Store
 from triplemodel._typing import TripleRow
-from triplemodel.config import RDF_TYPE, get_rdf_config
+from triplemodel.config import RDF_TYPE, XSD, get_rdf_config
 from triplemodel.fields.metadata import lang_for_field, literal_datatype_for_field
 from triplemodel.io.export import _field_values_for_export, model_to_triples
 from triplemodel.io.sync import remove_owned_triples
@@ -19,6 +20,9 @@ from sparqlmodel.fields import get_field_metadata, relationship_allows_iri
 from sparqlmodel.graph import iter_nested_models, subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.types import IRI, expand_iri
+
+_XSD_STRING = NamedNode(f"{XSD}string")
+_XSD_GYEAR = NamedNode(f"{XSD}gYear")
 
 
 def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
@@ -65,6 +69,8 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
         if predicate is None or name in rel_names:
             continue
         field_info = cls.model_fields[name]
+        if get_field_metadata(field_info) is None:
+            continue
         raise_if_nested_collection(field_info)
         value = getattr(instance, name)
         card = field_cardinality(field_info)
@@ -78,14 +84,14 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
             if lang and isinstance(obj, str):
                 obj = LangString(obj, lang)
             elif dt_raw is not None and isinstance(item, int):
-                if dt_raw in ("gYear", "xsd:gYear") or dt_raw == str(XSD.gYear):
-                    obj = Literal(str(item), datatype=XSD.gYear)
+                if dt_raw in ("gYear", "xsd:gYear") or dt_raw == _XSD_GYEAR:
+                    obj = Literal(str(item), datatype=_XSD_GYEAR)
                 else:
                     dt_uri = resolve_predicate(dt_raw, prefixes)
-                    obj = Literal(str(item), datatype=URIRef(dt_uri))
+                    obj = Literal(str(item), datatype=NamedNode(dt_uri))
             triples.append((subject, predicate, obj))
 
-    for name, field_info, _related_cls in cls.get_relationship_fields():
+    for name, field_info, _related_cls in instance.get_relationship_fields():
         meta = get_field_metadata(field_info)
         if meta is None:
             continue
@@ -104,7 +110,7 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
 
 def sync_sparql_to_graph(
     instance: SPARQLModel,
-    graph: Graph,
+    graph: Store,
     *,
     uri: str | None = None,
     mode: str = "replace",
@@ -117,31 +123,28 @@ def sync_sparql_to_graph(
     apply_triple_rows(graph, triples)
 
 
-def adapter_graph(root: SPARQLModel) -> Graph:
-    """Build an rdflib graph for nested cascade models (one sync per nested node)."""
+def adapter_graph(root: SPARQLModel) -> Store:
+    """Build a graph for nested cascade models (one sync per nested node)."""
     assert_no_embed_cycles(root, set())
-    g = Graph()
+    g = Store()
     for nested in iter_nested_models(root):
         sync_sparql_to_graph(nested, g, uri=nested.subject_uri(), mode="replace")
     return g
 
 
-_XSD_STRING = URIRef("http://www.w3.org/2001/XMLSchema#string")
-
-
-def _normalize_graph(graph: Graph) -> Graph:
+def _normalize_graph(graph: Store) -> Store:
     """Normalize XSD string literals to plain literals for comparison."""
-    normalized = Graph()
+    normalized = Store()
     for subject, pred, obj in graph:
         if isinstance(obj, Literal) and obj.datatype == _XSD_STRING:
-            normalized.add((subject, pred, Literal(str(obj))))
+            normalized.add((subject, pred, Literal(str(obj.value))))
         else:
             normalized.add((subject, pred, obj))
     return normalized
 
 
-def model_to_graph(model: SPARQLModel) -> Graph:
-    """Serialize a model to an rdflib Graph."""
+def model_to_graph(model: SPARQLModel) -> Store:
+    """Serialize a model to a :class:`~triplemodel.Store`."""
     g = _normalize_graph(adapter_graph(model))
     model.namespace_registry().bind(g)
     return g
@@ -154,14 +157,13 @@ def _iri_like(value: str) -> bool:
 def load_from_graph(
     model_cls: type[SPARQLModel],
     subject_iri: str | IRI,
-    graph: Graph,
+    graph: Store,
     *,
     depth: int = 0,
     path: set[str] | None = None,
     visited: set[str] | None = None,
 ) -> SPARQLModel:
     """Hydrate a SPARQLModel from graph data via TripleModel ``from_graph``."""
-    # ``path`` detects cycles on the current branch; shared DAG leaves are allowed.
     path = path if path is not None else (visited or set())
     prefixes = model_cls.get_prefixes()
     subject_key = _expanded_iri_key(subject_iri, prefixes)
@@ -222,19 +224,17 @@ def load_from_graph(
 def sparql_from_graph(
     model_cls: type[SPARQLModel],
     subject_iri: str | IRI,
-    graph: Graph,
+    graph: Store,
     *,
     depth: int = 0,
     path: set[str] | None = None,
     visited: set[str] | None = None,
 ) -> SPARQLModel:
     """Alias for :func:`load_from_graph` (hydration and tests)."""
-    return load_from_graph(
-        model_cls, subject_iri, graph, depth=depth, path=path, visited=visited
-    )
+    return load_from_graph(model_cls, subject_iri, graph, depth=depth, path=path, visited=visited)
 
 
-def graphs_isomorphic(left: Graph, right: Graph) -> bool:
+def graphs_isomorphic(left: Store, right: Store) -> bool:
     """Return whether two graphs are isomorphic (after literal normalization)."""
     return _normalize_graph(left).isomorphic(_normalize_graph(right))
 

@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) (Pydantic ↔ RDF) · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#040---2026-05-18) (0.4.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#050---2026-05-18) (0.5.0)
 
 ---
 
@@ -97,7 +97,7 @@ class Person(SPARQLModel):
 
 - **`extra="forbid"`** — unknown fields on a model raise at validation time (safer for APIs).
 - **FastAPI** — reuse the same `SPARQLModel` classes for request/response bodies (see [FastAPI](#fastapi) below).
-- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers are thin wrappers until 0.6; prefer TripleModel for file I/O long term).
+- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers delegate to TripleModel; prefer TripleModel `load_graph` / `dump_graph` for file I/O).
 
 Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md#pydantic-integration)
 
@@ -148,7 +148,7 @@ Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` (also accep
 
 ## Stores
 
-**MemoryStore** (default) — local `rdflib` graph; tests and single-process apps:
+**MemoryStore** (default) — in-memory `triplemodel.Store` (pyoxigraph); tests and single-process apps:
 
 ```python
 with SPARQLSession() as session:

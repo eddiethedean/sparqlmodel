@@ -96,6 +96,19 @@ class AndExpr:
         return OrExpr((self, other))
 
 
+def _flatten_and_parts(
+    parts: tuple[CompareExpr | AndExpr, ...],
+) -> tuple[CompareExpr, ...]:
+    """Flatten nested ``AndExpr`` nodes into a single AND tuple of comparisons."""
+    out: list[CompareExpr] = []
+    for part in parts:
+        if isinstance(part, AndExpr):
+            out.extend(part.expressions)
+        else:
+            out.append(part)
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class OrExpr:
     """OR combination of comparison or AND expressions."""
@@ -104,8 +117,8 @@ class OrExpr:
 
     def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
         if isinstance(other, AndExpr):
-            return AndExpr(other.expressions + self.expressions)
-        return AndExpr((other,) + self.expressions)
+            return AndExpr(_flatten_and_parts(other.expressions + self.expressions))
+        return AndExpr(_flatten_and_parts((other,) + self.expressions))
 
     def __rand__(self, other: CompareExpr | AndExpr) -> AndExpr:
         return self.__and__(other)

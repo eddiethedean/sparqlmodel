@@ -60,9 +60,7 @@ def test_compile_iri_field_absolute_strings() -> None:
 
     registry = NamespaceRegistry(Person.get_prefixes())
     ann = Person.model_fields["works_for"].annotation
-    assert (
-        _format_object("urn:org:acme", registry, field_annotation=ann) == "<urn:org:acme>"
-    )
+    assert _format_object("urn:org:acme", registry, field_annotation=ann) == "<urn:org:acme>"
     assert (
         _format_object(
             "https://example.org/org/acme",

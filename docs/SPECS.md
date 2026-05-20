@@ -38,18 +38,18 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] FastAPI `SessionDep`, `init_app`, `http_store_lifespan`
 - [x] Session I/O via TripleModel (`put` / `get` / hydrate) — **0.3.0**
 - [x] **Option A** — `SPARQLModel(TripleModel)`; `_triple.py` removed; `rdf_bridge` + direct `from_graph` — **0.4.0**
-- [ ] `AsyncSPARQLSession` — async CRUD, `async with`, `async def execute` — **0.5**
-- [ ] `AsyncStore` + `AsyncHttpStore` (`httpx.AsyncClient`) + `AsyncMemoryStore` — **0.5**
-- [ ] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.5**
-- [ ] FastAPI `AsyncSessionDep` + async lifespan wiring for shared async store — **0.5**
-- [ ] Async/sync parity contract tests on memory and HTTP stores — **0.5**
+- [ ] `AsyncSPARQLSession` — async CRUD, `async with`, `async def execute` — **0.6**
+- [ ] `AsyncStore` + `AsyncHttpStore` (`httpx.AsyncClient`) + `AsyncMemoryStore` — **0.6**
+- [ ] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.6**
+- [ ] FastAPI `AsyncSessionDep` + async lifespan wiring for shared async store — **0.6**
+- [ ] Async/sync parity contract tests on memory and HTTP stores — **0.6**
 - [ ] `Query.offset(n)` — **0.7**
 - [ ] `Query.order_by(...)` — **0.7**
 - [ ] `Query.count()` — **0.7**
 - [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.7**
 - [ ] HttpStore mirror sync or remote-authoritative `get` contract — **0.9**
 - [ ] Scoped session pattern documented (FastAPI + scripts) — **0.8**
-- [ ] Threading / asyncio concurrency model documented — **0.5** (async) + **0.8** (threads)
+- [ ] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
 ## P1 — SQLModel / SPARQLMojo parity
 
@@ -103,7 +103,7 @@ On clean exit: `flush()` if the pending queue is non-empty. On exception: `rollb
 ## Properties
 
 - `store` — backing store
-- `graph` — rdflib `Graph` (`MemoryStore` graph, or `HttpStore` local mirror — not the remote dataset)
+- `graph` — `triplemodel.Store` (`MemoryStore` graph, or `HttpStore` local mirror — not the remote dataset)
 - `namespaces` — `NamespaceRegistry` for compiler and serialization
 
 ## Session lifecycle (target API)
@@ -349,7 +349,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 # Security (SPARQL generation)
 
-**Current (0.2):** Filter values serialized via RDFLib `Literal(...).n3()` and `URIRef(...).n3()`. IRIs with invalid characters raise `QueryError`. Predicates come from model metadata (trusted code).
+**Current (0.5+):** Filter values serialized via SparqlModel N3 helpers (`rdf_n3`) on pyoxigraph terms and string IRIs. IRIs with invalid characters raise `QueryError`. Predicates come from model metadata (trusted code).
 
 **Target (1.2):**
 
@@ -360,11 +360,11 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 ---
 
-# Async API (target 0.5)
+# Async API (target 0.6)
 
 Parallel to the sync stack; sync API remains supported.
 
-| Component | Sync (shipped) | Async (0.5) |
+| Component | Sync (shipped) | Async (0.6) |
 |-----------|----------------|-------------|
 | Session | `SPARQLSession` | `AsyncSPARQLSession` |
 | Store | `Store`, `MemoryStore`, `HttpStore` | `AsyncStore`, `AsyncMemoryStore`, `AsyncHttpStore` |
@@ -373,7 +373,7 @@ Parallel to the sync stack; sync API remains supported.
 
 **Semantics:** Same identity map, cascade, compiler, and hydration rules as sync. One session per asyncio task (not shared across concurrent tasks). `HttpStore` uses `httpx.Client`; `AsyncHttpStore` uses `httpx.AsyncClient` with the same mirror contract.
 
-**Non-goals for 0.5:** Replacing sync session; async TripleModel mapping APIs (unified model stays sync; in-memory graph work stays on the event loop thread).
+**Non-goals for 0.6:** Replacing sync session; async TripleModel mapping APIs (unified model stays sync; in-memory graph work stays on the event loop thread).
 
 ---
 
@@ -385,12 +385,12 @@ Parallel to the sync stack; sync API remains supported.
 |------|----------|
 | Dual model types | 0.3 uses interim `_triple.py` dynamic adapter; **0.4** unifies on `SPARQLModel(TripleModel)` |
 
-## Until 0.5 (async)
+## Until 0.6 (async)
 
 | Area | Behavior |
 |------|----------|
 | Async session / store | Not shipped; sync `SPARQLSession` and `httpx.Client` only |
-| FastAPI async routes | Use sync `SessionDep` (blocking I/O) or `run_in_executor` until **0.5** |
+| FastAPI async routes | Use sync `SessionDep` (blocking I/O) or `run_in_executor` until **0.6** |
 
 ## Until 0.7 (query)
 
@@ -510,7 +510,8 @@ sparqlmodel/
 
 ```
 pydantic>=2.5,<3
-rdflib>=7.0,<8
+pyoxigraph>=0.5,<0.6
+triplemodel>=0.10.0,<2
 triplemodel>=0.9.0,<2
 typing-extensions>=4.8
 ```
@@ -524,5 +525,5 @@ Optional: `httpx`, `fastapi`
 | Project | Role |
 |---------|------|
 | **TripleModel** | Required mapping engine |
-| **RDFLib** | Graphs and SPARQL execution |
+| **Pyoxigraph / TripleModel** | In-process graphs and SPARQL execution (`Store`) |
 | **semantic-sqlmodel** | Optional future backend |

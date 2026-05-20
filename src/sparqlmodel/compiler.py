@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Any, get_args, get_origin
 
-from rdflib import Literal, URIRef
-
 from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
+from sparqlmodel.rdf_n3 import term_to_n3
 from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_absolute_iri, is_compact_iri
+
+_XSD_INTEGER = "http://www.w3.org/2001/XMLSchema#integer"
+_XSD_DOUBLE = "http://www.w3.org/2001/XMLSchema#double"
 
 
 def _model_var_name(model_cls: type[SPARQLModel]) -> str:
@@ -30,16 +32,24 @@ def _format_literal(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
-        return Literal(value).n3()
+        return f'"{value}"^^{term_to_n3(_XSD_INTEGER)}'
     if isinstance(value, float):
-        return Literal(value).n3()
-    return Literal(str(value)).n3()
+        return f'"{value}"^^{term_to_n3(_XSD_DOUBLE)}'
+    s = str(value)
+    escaped = (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return f'"{escaped}"'
 
 
 def _format_iri(iri: str) -> str:
     if not iri or any(c in iri for c in " \n\r\t<>"):
         raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
-    return URIRef(iri).n3()
+    return term_to_n3(iri)
 
 
 def _format_object(

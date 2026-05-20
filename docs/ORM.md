@@ -22,7 +22,7 @@ Your app
   → SPARQLModel(TripleModel) — one class (Option A; 0.4+)
   → SPARQLSession.put / .query / .get
   → sync_to_graph / from_graph + graph.py (cascade policy)
-  → rdflib Graph in a Store
+  → triplemodel.Store in a Store
 ```
 
 **0.4.0+:** session I/O uses `sparqlmodel.rdf_bridge` on unified `SPARQLModel(TripleModel)` instances.
@@ -162,7 +162,7 @@ Loading scalars and relationships uses `hydration.py` over TripleModel `from_gra
 
 ## HttpStore and the local mirror
 
-`HttpStore` (`sparqlmodel[http]`) sends updates to a SPARQL 1.1 endpoint and keeps a **local rdflib mirror** for `session.graph`, `get`, cascade, and orphan logic.
+`HttpStore` (`sparqlmodel[http]`) sends updates to a SPARQL 1.1 endpoint and keeps a **local `triplemodel.Store` mirror** for `session.graph`, `get`, cascade, and orphan logic.
 
 | Operation | Reads / writes |
 |-----------|----------------|
@@ -220,7 +220,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** unified model Option A (**0.4**), async session and stores (**0.5**), `offset` / `order_by` / `count` on queries (**0.7**), `merge` / `refresh` / `expunge` (**0.8**), production HttpStore sync (**0.9**), multi-valued and language-tagged fields (**1.0**).
+**Not yet available (planned):** async session and stores (**0.6**), `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**).
 
 ---
 

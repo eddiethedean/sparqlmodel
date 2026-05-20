@@ -1,6 +1,6 @@
 """Tests for nested resource cascade on put/delete."""
 
-from rdflib import BNode, URIRef
+from pyoxigraph import BlankNode
 
 from sparqlmodel import IRI
 from sparqlmodel.graph import expand_iri
@@ -9,7 +9,7 @@ from tests.models import Location, Organization, Person
 
 def test_delete_cascades_embedded_org_triples(session, odos: Person, acme: Organization) -> None:
     session.put(odos)
-    org_ref = URIRef(str(acme.id.expand(acme.get_prefixes())))
+    org_ref = str(acme.id.expand(acme.get_prefixes()))
     assert len(list(session.graph.triples((org_ref, None, None)))) >= 1
 
     session.delete(odos)
@@ -22,7 +22,7 @@ def test_put_changing_works_for_removes_old_org(session, acme: Organization) -> 
     person = Person(id=IRI("urn:person:p1"), name="Pat", works_for=acme)
     session.put(person)
 
-    old_org_ref = URIRef(str(acme.id.expand(acme.get_prefixes())))
+    old_org_ref = str(acme.id.expand(acme.get_prefixes()))
     assert len(list(session.graph.triples((old_org_ref, None, None)))) >= 1
 
     person.works_for = other
@@ -40,7 +40,7 @@ def test_put_embedded_to_iri_removes_old_org_triples(session) -> None:
     person = Person(id=IRI("urn:person:p1"), name="Pat", works_for=old_org)
     session.put(person)
 
-    old_org_ref = URIRef(str(old_org.id.expand(old_org.get_prefixes())))
+    old_org_ref = str(old_org.id.expand(old_org.get_prefixes()))
     assert len(list(session.graph.triples((old_org_ref, None, None)))) >= 1
 
     person.works_for = new_org.id
@@ -55,7 +55,7 @@ def test_delete_does_not_cascade_iri_only_reference(session, acme: Organization)
     person = Person(id=IRI("urn:person:ref"), name="Ref", works_for=acme.id)
     session.put(person)
 
-    org_ref = URIRef(str(acme.id.expand(acme.get_prefixes())))
+    org_ref = str(acme.id.expand(acme.get_prefixes()))
     session.delete(person)
     assert session.get(Person, person.id) is None
     assert len(list(session.graph.triples((org_ref, None, None)))) >= 1
@@ -67,7 +67,7 @@ def test_put_nested_location_orphan_removed(session) -> None:
     odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
     session.put(odos)
 
-    hq_ref = URIRef(str(hq.id.expand(hq.get_prefixes())))
+    hq_ref = str(hq.id.expand(hq.get_prefixes()))
     assert len(list(session.graph.triples((hq_ref, None, None)))) >= 1
 
     acme.located_in = Location(id=IRI("urn:loc:new"), name="New HQ")
@@ -81,9 +81,9 @@ def test_put_nested_location_orphan_removed(session) -> None:
 def test_put_removes_stale_bnode_relationship_target(session) -> None:
     person = Person(id=IRI("urn:person:bnode"), name="Pat", works_for=None)
     session.put(person)
-    subj = URIRef(str(person.id.expand(Person.get_prefixes())))
-    pred = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
-    bnode = BNode()
+    subj = str(person.id.expand(Person.get_prefixes()))
+    pred = expand_iri("schema:worksFor", Person.get_prefixes())
+    bnode = BlankNode()
     session.graph.add((subj, pred, bnode))
     assert len(list(session.graph.triples((subj, pred, bnode)))) == 1
 
@@ -102,10 +102,10 @@ def test_add_same_id_leaves_stale_literals(session) -> None:
     session.add(person)
     loaded = session.get(Person, person.id)
     assert loaded is not None
-    from sparqlmodel.graph import expand_iri
+    pred = expand_iri("schema:name", Person.get_prefixes())
+    subj = str(person.id.expand(Person.get_prefixes()))
+    from triplemodel.store.terms import term_str
 
-    pred = URIRef(expand_iri("schema:name", Person.get_prefixes()))
-    subj = URIRef(str(person.id.expand(Person.get_prefixes())))
-    names = [str(o) for o in session.graph.objects(subj, pred)]
+    names = [term_str(o) for o in session.graph.objects(subj, pred)]
     assert "First" in names
     assert "Second" in names

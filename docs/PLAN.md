@@ -114,7 +114,7 @@ SPARQLSession · Compiler · Stores · graph.py (cascade only)   ← SparqlModel
     ↓
 sync_to_graph · from_graph · terms · files                    ← TripleModel (same instance type)
     ↓
-rdflib · pydantic
+pyoxigraph · triplemodel · pydantic
 ```
 
 **Never in SparqlModel:** duplicate `python_to_term`, new RDF format parsers, dynamic shadow `TripleModel` classes (`exec` adapter), or session-free mapping APIs.
@@ -133,8 +133,9 @@ SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify t
 | **0.2** | `HttpStore`, identity map, `_triple` adapter (interim) | Contract tests |
 | **0.3** | Session I/O via adapter (interim bridge) | `sync_to_graph` / `from_graph`; cascade-only `graph.py` |
 | **0.4** | **Unified model (Option A)** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |
-| **0.5** | **Async end-to-end** (`AsyncSPARQLSession`, `AsyncHttpStore`, FastAPI) | — |
-| **0.6** | Thin `serializers.py` | `parse` / `serialize` only |
+| **0.5** | **Pyoxigraph + TM 0.10** (`triplemodel.Store`, no core rdflib) | — |
+| **0.6** | **Async end-to-end** (`AsyncSPARQLSession`, `AsyncHttpStore`, FastAPI) | — |
+| **0.7** | Thin `serializers.py` | `parse` / `serialize` only |
 | **0.7** | Query production (`offset`, `order_by`, `count`, OPTIONAL) | — |
 | **0.8** | Session lifecycle (`merge`, `refresh`, `expunge`, scoped session) | — |
 | **0.9** | HttpStore production (read/write URLs, mirror sync) | — |
@@ -149,7 +150,8 @@ SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify t
 **P0 (production APIs):**
 
 - **Unified model (Option A)** — `SPARQLModel(TripleModel)`; one mapping path (**0.4**)
-- **Async ORM** — `AsyncSPARQLSession`, async stores, FastAPI `AsyncSessionDep` (**0.5**)
+- **Pyoxigraph engine** — `triplemodel.Store` for session graphs (**0.5**, shipped)
+- **Async ORM** — `AsyncSPARQLSession`, async stores, FastAPI `AsyncSessionDep` (**0.6**)
 - Typed SPARQL persistence with explicit `add` / `put` / `delete` semantics
 - Pythonic filters compiled to SPARQL (including pagination and sorting)
 - Relationship hydration with `depth`; nullable relationship filters
@@ -180,7 +182,7 @@ SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify t
 
 # Technology stack
 
-**Required:** `pydantic>=2.5,<3`, `rdflib>=7.0,<8`, **`triplemodel>=0.9.0,<2`**, `typing-extensions`
+**Required:** `pydantic>=2.5,<3`, `pyoxigraph>=0.5,<0.6`, **`triplemodel>=0.10.0,<2`**, `typing-extensions`
 
 **Optional extras:** `httpx` (HTTP store), `fastapi`
 
@@ -198,8 +200,9 @@ SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify t
 | **0.2** | HttpStore, identity map, compiler 0.2, FastAPI |
 | **0.3** | TripleModel session I/O via interim adapter (shipped) |
 | **0.4** | Unified model (Option A) |
-| **0.5** | Async end-to-end |
-| **0.6** | Delegated file I/O |
+| **0.5** | Pyoxigraph + TripleModel 0.10 |
+| **0.6** | Async end-to-end |
+| **0.7** | Delegated file I/O |
 | **0.7–0.9** | Production query + session + HttpStore |
 | **1.0–1.1** | RDF modeling + ops |
 | **1.2** | Production GA |
@@ -224,7 +227,7 @@ Detail: [ROADMAP.md](ROADMAP.md)
 
 1. **TripleModel first** for any mapping, literal, or format bug
 2. **SparqlModel first** for session, compiler, cascade, stores
-3. **Option A before async** — unified model (**0.4**), then async (**0.5**), then pagination and HttpStore
+3. **Option A before async** — unified model (**0.4**), pyoxigraph engine (**0.5**), then async (**0.6**), then pagination and HttpStore
 4. Preserve ORM public API (`Field`, `Relationship`, `session.put`); change internals on unified `SPARQLModel(TripleModel)` base
 5. Document semantics in [ORM.md](ORM.md), [SPECS.md](SPECS.md), [PRODUCTION.md](PRODUCTION.md)
 6. Contract tests: SparqlModel `put` triple sets align with TripleModel `sync_to_graph` + cascade rules

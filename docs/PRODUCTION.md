@@ -89,7 +89,7 @@ Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 
 - Use HTTPS for remote endpoints; configure `bearer_token` or `auth` on `HttpStore`.
 - Do not pass user-controlled strings into raw `execute()` without parameterization patterns supported by your endpoint.
-- Filter values in the query DSL are serialized via RDFLib (`Literal.n3()`, `URIRef.n3()`).
+- Filter values in the query DSL are serialized via SparqlModel N3 helpers (`rdf_n3`) for pyoxigraph-compatible SPARQL.
 
 ---
 

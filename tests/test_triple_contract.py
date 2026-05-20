@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from rdflib import URIRef
-
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
 from sparqlmodel.rdf_bridge import (
     adapter_graph,
@@ -106,7 +104,7 @@ def test_relationship_cascade_false_inferred_skips_nested_put() -> None:
     person = PersonNoCascadeInferred(id=IRI("urn:p:inf"), name="Solo", works_for=org)
     session = SPARQLSession()
     session.put(person)
-    org_ref = URIRef("urn:org:inf")
+    org_ref = "urn:org:inf"
     assert not any(session.store.graph.triples((org_ref, None, None)))
 
 
@@ -116,5 +114,5 @@ def test_relationship_cascade_false_skips_nested_put() -> None:
     session = SPARQLSession()
     session.put(person)
     g = session.store.graph
-    org_ref = URIRef("urn:org:nc")
+    org_ref = "urn:org:nc"
     assert not any(g.triples((org_ref, None, None)))

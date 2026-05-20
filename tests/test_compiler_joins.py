@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from rdflib import URIRef
-
 from sparqlmodel import IRI, Field, Relationship, SPARQLModel, SPARQLSession
 from sparqlmodel.compiler import compile_where
 from sparqlmodel.types import NamespaceRegistry, expand_iri
@@ -99,9 +97,9 @@ def test_same_relationship_path_and_no_false_positive_with_two_employers() -> No
     session = SPARQLSession()
     session.put(pat)
     g = session.graph
-    person_subj = URIRef(expand_iri(str(pat.id), Person.get_prefixes()))
-    works_for = URIRef(expand_iri("schema:worksFor", Person.get_prefixes()))
-    other_subj = URIRef(expand_iri(str(other.id), Organization.get_prefixes()))
+    person_subj = expand_iri(str(pat.id), Person.get_prefixes())
+    works_for = expand_iri("schema:worksFor", Person.get_prefixes())
+    other_subj = expand_iri(str(other.id), Organization.get_prefixes())
     g.add((person_subj, works_for, other_subj))
 
     results = (
