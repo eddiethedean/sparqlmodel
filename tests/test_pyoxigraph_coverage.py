@@ -60,6 +60,12 @@ def test_triple_to_n3() -> None:
     assert "urn:s" in n3 and "urn:p" in n3
 
 
+def test_term_to_n3_literal_escapes_newline() -> None:
+    lit = Literal("line\nbreak")
+    n3 = term_to_n3(lit)
+    assert r'"line\nbreak"' in n3
+
+
 def test_parse_sparql_json_bindings_errors() -> None:
     with pytest.raises(ValueError, match="missing head"):
         parse_sparql_json_bindings(b"{}")

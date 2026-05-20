@@ -71,7 +71,7 @@ Or use `(A & B) | C` when OR should bind less tightly than AND.
 
 **Symptom:** Resources with no value for a field still match or fail unexpectedly.
 
-**Fix:** Try `.use_not_exists_for_ne()` or `.use_optional_for_comparisons()` on the query for NOT EXISTS semantics.
+**Fix:** Default ``!=`` uses NOT EXISTS since 0.5.2. For pre-0.5.2 inequality (excludes unbound), use `.use_inequality_for_ne()`.
 
 ## URL strings become IRIs
 

@@ -109,6 +109,22 @@ def test_evaluate_forward_ref_retries_on_typeerror() -> None:
     assert calls >= 2
 
 
+def test_evaluate_forward_ref_legacy_nameerror_returns_none() -> None:
+    from sparqlmodel.fields import _evaluate_forward_ref
+
+    class _Ref:
+        pass
+
+    ref = _Ref()
+
+    def _evaluate(*_args: object, **_kwargs: object) -> None:
+        raise NameError("missing")
+
+    ref._evaluate = _evaluate
+
+    assert _evaluate_forward_ref(ref) is None
+
+
 def test_evaluate_forward_ref_all_attempts_typeerror() -> None:
     from sparqlmodel.fields import _evaluate_forward_ref
 

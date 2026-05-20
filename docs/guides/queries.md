@@ -13,7 +13,7 @@ with SPARQLSession() as session:
 | Operator | SPARQL style | Notes |
 |----------|--------------|-------|
 | `==` | BIND / pattern match | Strings compile as literals unless field is `IRI` |
-| `!=` | inequality | See `use_not_exists_for_ne()` below |
+| `!=` | NOT EXISTS (default since 0.5.2) | See `use_inequality_for_ne()` for legacy inequality |
 | `&` | AND | Use parentheses: `(A & B) \| C` |
 | `\|` | OR | `(A & B) \| C` compiles with correct precedence (0.2+) |
 | `<`, `>`, `<=`, `>=` | comparison | Typed numeric literals use XSD datatypes |
@@ -55,15 +55,13 @@ The related resource must have the expected `rdf:type` in the graph. Unknown com
 
 ## Negation semantics
 
-Default `!=` uses inequality filters and **excludes** resources with no value for the field. For SQL-style “no matching triple” semantics (implemented with ``FILTER NOT EXISTS``, not SPARQL ``OPTIONAL``):
+Default ``!=`` uses ``FILTER NOT EXISTS`` (since 0.5.2): resources with no value for the field match, and multi-valued predicates are handled correctly. For pre-0.5.2 inequality semantics (excludes unbound values):
 
 ```python
-session.query(Person).where(Person.name != "X").use_not_exists_for_ne().all()
-# equivalent convenience:
-session.query(Person).where(Person.name != "X").use_optional_for_comparisons().all()
+session.query(Person).where(Person.name != "X").use_inequality_for_ne().all()
 ```
 
-Call ``use_optional_for_comparisons(False)`` to turn that behavior off again.
+``.use_optional_for_comparisons()`` enables NOT EXISTS explicitly (historical name; no SPARQL ``OPTIONAL`` blocks). Disabling it restores the default NOT EXISTS mode unless ``use_inequality_for_ne()`` was set.
 
 Ordering (`<`, `>`, …) and `in_` still require a bound predicate value (SPARQL-native). Unique variables are generated per `!=` inside AND branches of OR expressions (0.2+).
 

@@ -142,7 +142,8 @@ with SPARQLSession() as session:
 
 - `.where(*expr)` — `CompareExpr`, `AndExpr`, or top-level `OrExpr`
 - `.limit(n)` — non-negative integer
-- `.use_not_exists_for_ne()` — compile `!=` with `NOT EXISTS`
+- `.use_not_exists_for_ne()` — compile `!=` with `NOT EXISTS` (default since 0.5.2)
+- `.use_inequality_for_ne()` — legacy inequality `!=` (pre-0.5.2 default)
 - `.all(*, depth=0)` / `.first(*, depth=0)` — execute and hydrate
 
 ## Query builder (target API)
@@ -170,7 +171,7 @@ with SPARQLSession() as session:
 | Operator | Semantics |
 |----------|-----------|
 | `==` | Pattern match |
-| `!=` | Inequality filter (or `Query.use_not_exists_for_ne()` for `NOT EXISTS`) |
+| `!=` | `NOT EXISTS` by default (or `Query.use_inequality_for_ne()` for legacy inequality) |
 | `&` | Conjoin patterns (`AndExpr` or multiple `.where`) |
 | `\|` | Disjunction via `FILTER` + `EXISTS` branches (`OrExpr`) |
 | `<`, `>`, `<=`, `>=` | Ordering on bound literal variables |

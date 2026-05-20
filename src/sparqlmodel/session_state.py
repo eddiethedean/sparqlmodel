@@ -42,7 +42,7 @@ class SessionState:
     def set_identity(self, model: SPARQLModel) -> None:
         key = identity_key(model)
         self._identity[key] = model
-        self.invalidate_hydration_for(key[0], key[1])
+        self.invalidate_hydration_for_iri(key[1])
 
     def pop_identity(self, key: IdentityKey) -> None:
         self._identity.pop(key, None)
@@ -60,6 +60,12 @@ class SessionState:
 
     def invalidate_hydration_for(self, model_cls: type[SPARQLModel], iri_key: str) -> None:
         to_drop = [k for k in self._hydration if k[0] is model_cls and k[1] == iri_key]
+        for k in to_drop:
+            del self._hydration[k]
+
+    def invalidate_hydration_for_iri(self, iri_key: str) -> None:
+        """Drop hydration cache entries for all model classes at ``iri_key``."""
+        to_drop = [k for k in self._hydration if k[1] == iri_key]
         for k in to_drop:
             del self._hydration[k]
 
@@ -88,12 +94,12 @@ class SessionState:
     def expire_model(self, model: SPARQLModel) -> None:
         key = identity_key(model)
         self.pop_identity(key)
-        self.invalidate_hydration_for(key[0], key[1])
+        self.invalidate_hydration_for_iri(key[1])
 
     def expire_keys(self, keys: list[IdentityKey]) -> None:
         for model_cls, iri_key in keys:
             self.evict_identity_prefix(model_cls, iri_key)
-            self.invalidate_hydration_for(model_cls, iri_key)
+            self.invalidate_hydration_for_iri(iri_key)
 
 
 class _HydrationMiss:

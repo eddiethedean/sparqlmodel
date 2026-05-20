@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from sparqlmodel import SPARQLSession
 from sparqlmodel.compiler import compile_compare, compile_where
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.expressions import AndExpr, OrExpr
+from sparqlmodel.query import Query
 from sparqlmodel.types import NamespaceRegistry
 from tests.models import Location, Organization, Person
 
@@ -171,7 +173,7 @@ def test_or_query_integration() -> None:
     assert names == {"Odos", "Ada"}
 
 
-def test_ne_default_excludes_missing_name(session) -> None:
+def test_ne_default_includes_missing_name(session) -> None:
     from sparqlmodel import IRI
     from tests.rdf_helpers import RDF_TYPE
 
@@ -182,14 +184,32 @@ def test_ne_default_excludes_missing_name(session) -> None:
     default_bindings = session.execute(
         session.query(Person).where(Person.name != "Named")._compile()
     )
-    assert not any("urn:p:noname" in str(b.get("person", "")) for b in default_bindings)
-    optional_bindings = session.execute(
-        session.query(Person)
-        .where(Person.name != "Named")
-        .use_optional_for_comparisons()
-        ._compile()
+    assert any("urn:p:noname" in str(v) for b in default_bindings for v in b.values())
+    inequality_bindings = session.execute(
+        session.query(Person).where(Person.name != "Named").use_inequality_for_ne()._compile()
     )
-    assert any("urn:p:noname" in str(v) for b in optional_bindings for v in b.values())
+    assert not any("urn:p:noname" in str(b.get("person", "")) for b in inequality_bindings)
+
+
+def test_ne_multi_valued_uses_not_exists(session) -> None:
+    from pyoxigraph import Literal
+
+    from sparqlmodel import IRI
+    from tests.rdf_helpers import RDF_TYPE
+
+    person_type = "https://schema.org/Person"
+    name_pred = "https://schema.org/name"
+    multi = "urn:p:multi"
+    session.graph.add((multi, RDF_TYPE, person_type))
+    session.graph.add((multi, name_pred, Literal("Other")))
+    session.graph.add((multi, name_pred, Literal("Odos")))
+    session.put(Person(id=IRI("urn:p:only"), name="Ada"))
+    results = session.query(Person).where(Person.name != "Other").all()
+    names = {str(p.id) for p in results}
+    assert multi not in names
+    assert "urn:p:only" in names
+    inequality = session.query(Person).where(Person.name != "Other").use_inequality_for_ne().all()
+    assert any(str(p.id) == multi for p in inequality)
 
 
 def test_or_expr_and_chaining_raises() -> None:
@@ -231,6 +251,21 @@ def test_in_list_accepted() -> None:
     assert '"A"' in sparql and '"B"' in sparql
 
 
+def test_use_inequality_for_ne_disable_restores_not_exists() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(
+        Person,
+        (Person.name != "X",),
+        registry,
+        use_not_exists_for_ne=False,
+    )
+    assert "NOT EXISTS" not in sparql
+    q = Query(SPARQLSession(), Person)
+    q.use_inequality_for_ne().use_inequality_for_ne(False)
+    sparql2 = q.where(Person.name != "X")._compile()
+    assert "NOT EXISTS" in sparql2
+
+
 def test_query_use_not_exists_for_ne() -> None:
     from sparqlmodel import IRI, SPARQLSession
 
@@ -261,7 +296,15 @@ def test_use_optional_for_comparisons_disable(session) -> None:
         ._compile()
     )
     assert toggled_bindings == default_bindings
-    assert not any("urn:p:noname" in str(b.get("person", "")) for b in toggled_bindings)
+    assert any("urn:p:noname" in str(v) for b in toggled_bindings for v in b.values())
+    inequality_bindings = session.execute(
+        session.query(Person)
+        .where(Person.name != "Named")
+        .use_optional_for_comparisons(False)
+        .use_inequality_for_ne()
+        ._compile()
+    )
+    assert not any("urn:p:noname" in str(b.get("person", "")) for b in inequality_bindings)
 
 
 def test_compile_in_non_tuple_raises_type_error() -> None:

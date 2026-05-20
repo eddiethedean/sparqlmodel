@@ -26,7 +26,8 @@ class Query:
         self._model_cls = model_cls
         self._expressions: list[CompareExpr | AndExpr | OrExpr] = []
         self._limit: int | None = None
-        self._use_not_exists_for_ne = False
+        self._use_not_exists_for_ne = True
+        self._use_inequality_for_ne = False
         self._use_optional_for_comparisons = False
 
     def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> Query:
@@ -35,23 +36,36 @@ class Query:
         return self
 
     def use_not_exists_for_ne(self, enabled: bool = True) -> Query:
-        """Compile ``!=`` filters with ``FILTER NOT EXISTS`` instead of inequality."""
+        """Compile ``!=`` filters with ``FILTER NOT EXISTS`` (default since 0.5.2)."""
         self._use_not_exists_for_ne = enabled
+        if enabled:
+            self._use_inequality_for_ne = False
+        return self
+
+    def use_inequality_for_ne(self, enabled: bool = True) -> Query:
+        """Compile ``!=`` with inequality (pre-0.5.2 default; excludes unbound values)."""
+        self._use_inequality_for_ne = enabled
+        if enabled:
+            self._use_not_exists_for_ne = False
+        else:
+            self._use_not_exists_for_ne = True
         return self
 
     def use_optional_for_comparisons(self, enabled: bool = True) -> Query:
         """Treat missing predicates like SQL NULL for ``!=`` (via ``FILTER NOT EXISTS``).
 
         Despite the name, this does not emit SPARQL ``OPTIONAL`` blocks; it enables
-        :meth:`use_not_exists_for_ne` so ``!=`` matches resources with no value for the
-        field. Ordering (``<``, ``>``, …) and ``in_`` still require a bound predicate
-        value (SPARQL-native semantics).
+        NOT EXISTS semantics for ``!=`` so resources with no value for the field match.
+        Ordering (``<``, ``>``, …) and ``in_`` still require a bound predicate value.
+        Disabling restores the default NOT EXISTS mode unless
+        :meth:`use_inequality_for_ne` was set.
         """
         self._use_optional_for_comparisons = enabled
         if enabled:
             self._use_not_exists_for_ne = True
-        else:
-            self._use_not_exists_for_ne = False
+            self._use_inequality_for_ne = False
+        elif not self._use_inequality_for_ne:
+            self._use_not_exists_for_ne = True
         return self
 
     def limit(self, n: int) -> Query:

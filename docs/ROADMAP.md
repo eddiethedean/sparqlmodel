@@ -212,6 +212,16 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [x] `use_optional_for_comparisons(False)` restores default `!=` semantics
 - [x] Docs — nitpicky Sphinx build, troubleshooting for OR/AND and session exit
 
+### 0.5.2 patch
+
+**Status:** shipped as **0.5.2** (2026-05-20).
+
+- [x] `delete()` clears pending `put` queue for root and cascade subjects
+- [x] Hydration cache — no negative cache; IRI-wide invalidation on session writes
+- [x] Default `!=` → NOT EXISTS; `Query.use_inequality_for_ne()` for legacy semantics
+- [x] `rdf_n3` / shared `sparql_escape` for UPDATE literal escaping
+- [x] `load_from_graph` non-cascade embed coercion / `HydrationError`
+
 ---
 
 ## 0.6 — Async end-to-end

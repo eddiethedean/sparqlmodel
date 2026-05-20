@@ -1,5 +1,6 @@
 """Tests for SPARQLSession CRUD."""
 
+from sparqlmodel import SPARQLSession
 from tests.models import Organization, Person
 
 
@@ -49,3 +50,35 @@ def test_auto_id(session) -> None:
 def test_get_wrong_model_type(session, odos: Person) -> None:
     session.put(odos)
     assert session.get(Organization, odos.id) is None
+
+
+def test_delete_drops_pending_put(session: SPARQLSession, odos: Person) -> None:
+    session.autoflush = False
+    session.put(odos, flush=False)
+    session.delete(odos)
+    session.flush()
+    assert session.get(Person, odos.id) is None
+
+
+def test_get_miss_then_put_returns_instance(session: SPARQLSession) -> None:
+    from sparqlmodel import IRI
+
+    iri = IRI("urn:person:late")
+    session.autoflush = False
+    assert session.get(Person, iri) is None
+    person = Person(id=iri, name="Late")
+    session.put(person, flush=False)
+    session.flush()
+    loaded = session.get(Person, iri)
+    assert loaded is not None
+    assert loaded.name == "Late"
+
+
+def test_put_invalidates_cross_type_hydration_miss(session: SPARQLSession) -> None:
+    from sparqlmodel import IRI
+
+    iri = IRI("urn:person:cross")
+    assert session.get(Organization, iri) is None
+    session.put(Person(id=iri, name="Cross"))
+    assert session.get(Person, iri) is not None
+    assert session.get(Person, iri).name == "Cross"

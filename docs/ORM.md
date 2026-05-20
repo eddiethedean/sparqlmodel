@@ -136,7 +136,7 @@ with SPARQLSession() as session:
 ```
 
 - **`==`** — triple pattern match
-- **`!=`** — inequality filter; optional `.use_not_exists_for_ne()` for `NOT EXISTS` semantics
+- **`!=`** — default `NOT EXISTS` (0.5.2+); optional `.use_inequality_for_ne()` for legacy inequality
 - **`&`** / **`|`** — `AndExpr` / `OrExpr`
 - **`<`, `>`, `<=`, `>=`**, **`.in_(tuple)`** — ordering and membership filters
 - **`None`** → `QueryError`

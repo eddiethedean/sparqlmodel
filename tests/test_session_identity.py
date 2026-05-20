@@ -167,6 +167,11 @@ def test_session_state_unit() -> None:
     state.set_identity(p)
     assert state.get_identity(identity_key(p)) is p
     state.invalidate_all_hydration()
+    from sparqlmodel.session_state import _HYDRATION_MISS
+
+    state.set_hydration((Person, "urn:p:1", 0), p)
+    state.invalidate_hydration_for_iri("urn:p:1")
+    assert state.get_hydration((Person, "urn:p:1", 0)) is _HYDRATION_MISS
     state.add_pending(p)
     assert state.pending == [p]
     state.clear_pending()

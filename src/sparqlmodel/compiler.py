@@ -9,6 +9,7 @@ from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, O
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_n3 import term_to_n3
+from sparqlmodel.sparql_escape import escape_sparql_string
 from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_absolute_iri, is_compact_iri
 
 _XSD_INTEGER = "http://www.w3.org/2001/XMLSchema#integer"
@@ -35,15 +36,7 @@ def _format_literal(value: object) -> str:
         return f'"{value}"^^{term_to_n3(_XSD_INTEGER)}'
     if isinstance(value, float):
         return f'"{value}"^^{term_to_n3(_XSD_DOUBLE)}'
-    s = str(value)
-    escaped = (
-        s.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-    )
-    return f'"{escaped}"'
+    return f'"{escape_sparql_string(str(value))}"'
 
 
 def _format_iri(iri: str) -> str:

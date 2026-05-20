@@ -1,13 +1,15 @@
 """Tests for hydration."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
+from triplemodel import Store
 
-from sparqlmodel import IRI
+from sparqlmodel import IRI, Field, Relationship, SPARQLModel
 from sparqlmodel.exceptions import HydrationError
 from sparqlmodel.hydration import hydrate_one
+from sparqlmodel.rdf_bridge import load_from_graph
 from tests.models import Organization, Person
 
 
@@ -52,6 +54,29 @@ def test_hydration_depth_2(session, acme: Organization) -> None:
     assert loaded.works_for is not None
     assert loaded.works_for.located_in is not None
     assert loaded.works_for.located_in.name == "HQ"
+
+
+def test_load_from_graph_non_cascade_embed_without_iri_raises() -> None:
+    class PersonNC(SPARQLModel):
+        rdf_type = "ex:PersonNC"
+        __prefixes__ = {"schema": "https://schema.org/", "ex": "http://example.org/ns/"}
+        name: str = Field("schema:name")
+        works_for: Organization | None = Relationship(
+            "schema:worksFor",
+            model=Organization,
+            cascade=False,
+        )
+
+    nested_org = Organization(id=IRI("urn:org:nc"), name="O", located_in=None)
+    raw_nc = MagicMock()
+    raw_nc.subject_uri.return_value = "urn:p:nc"
+    raw_nc.name = "Solo"
+    raw_nc.works_for = nested_org
+    with (
+        patch.object(PersonNC, "from_graph", return_value=raw_nc),
+        pytest.raises(HydrationError, match="Non-cascade relationship"),
+    ):
+        load_from_graph(PersonNC, IRI("urn:p:nc"), Store(), depth=1)
 
 
 def test_missing_related(session, odos: Person) -> None:

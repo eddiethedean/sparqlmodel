@@ -5,6 +5,8 @@ from __future__ import annotations
 from pyoxigraph import BlankNode, Literal, NamedNode, Triple
 from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
+from sparqlmodel.sparql_escape import escape_sparql_string
+
 
 def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
     """Format a pyoxigraph term as an N3 term for SPARQL UPDATE."""
@@ -20,8 +22,7 @@ def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
         raw = str(term)
         return raw if raw.startswith("_:") else f"_:{raw}"  # pragma: no cover
     if isinstance(term, Literal):
-        escaped = str(term.value).replace("\\", "\\\\").replace('"', '\\"')
-        out = f'"{escaped}"'
+        out = f'"{escape_sparql_string(str(term.value))}"'
         if term.datatype is not None:
             out += f"^^{term_to_n3(term.datatype)}"
         elif term.language is not None:

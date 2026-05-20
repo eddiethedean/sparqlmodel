@@ -134,6 +134,8 @@ def _evaluate_forward_ref(ref: ForwardRef) -> Any:
                 localns={},
                 recursive_guard=frozenset(),
             )
+        except NameError:
+            return None
     legacy = getattr(ref, "_evaluate", None)
     if not callable(legacy):
         return None  # pragma: no cover

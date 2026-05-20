@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-20
+
+### Fixed
+
+- **`delete()`** — drops pending `put(..., flush=False)` for the root and cascade subjects (no resurrection on `flush()`)
+- **Hydration cache** — `get()` no longer caches permanent “not found”; IRI-wide invalidation on `put`/`add`/`delete` clears cross-type stale misses
+- **`!=` query default** — uses `FILTER NOT EXISTS` (correct for multi-valued predicates; includes resources with no value for the field)
+- **`rdf_n3`** — literal escaping aligned with the query compiler (`\n`, `\r`, `\t` in HttpStore UPDATE bodies)
+- **`load_from_graph`** — non-cascade relationships with embedded models raise `HydrationError` instead of passing nested instances into validation
+- **`use_optional_for_comparisons(False)`** — restores default NOT EXISTS mode without overriding a separate `.use_not_exists_for_ne()` choice
+
+### Changed
+
+- **Breaking (query):** default `Person.field != value` matches former `.use_not_exists_for_ne()`; use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics (excludes unbound values; incorrect for multi-valued predicates)
+
+### Added
+
+- **`Query.use_inequality_for_ne()`** — opt-in legacy `!=` compilation (pattern + `FILTER(?v != obj)`)
+
 ## [0.5.1] - 2026-05-19
 
 ### Fixed

@@ -146,9 +146,8 @@ class SPARQLSession:
                 try:
                     self.close()
                 except RuntimeError:
-                    if exc_type is not None and not self.rollback_on_error:
-                        return
-                    raise
+                    if exc_type is None or self.rollback_on_error:
+                        raise
 
     def expire(self, model_cls: type[SPARQLModel], iri: str | IRI) -> None:
         """Remove a resource from the identity map and hydration cache."""
@@ -193,6 +192,13 @@ class SPARQLSession:
         if self.autoflush and self._state.pending:
             self.flush()
 
+    def _remove_pending_for_subjects(
+        self, subjects: list[tuple[type[SPARQLModel], str | IRI]]
+    ) -> None:
+        for model_cls, subj_iri in subjects:
+            key = identity_key_for_iri(model_cls, subj_iri)
+            self._state.remove_pending_for(key[0], key[1])
+
     def _invalidate_cascade_keys(self, model: SPARQLModel, *, for_put: bool) -> None:
         subjects = cascade_subjects_for_removal(model, self._store.graph, for_put=for_put)
         keys = [identity_key_for_iri(cls, iri) for cls, iri in subjects]
@@ -232,7 +238,7 @@ class SPARQLSession:
         key = identity_key_for_iri(type(model), model.id)
         self._state.evict_identity_prefix(key[0], key[1])
         self._state.add_pending(model)
-        self._state.invalidate_hydration_for(key[0], key[1])
+        self._state.invalidate_hydration_for_iri(key[1])
         return model
 
     def delete(self, model: SPARQLModel) -> None:
@@ -240,8 +246,9 @@ class SPARQLSession:
         self._check_open()
         self._maybe_autoflush()
         model.ensure_id()
-        self._invalidate_cascade_keys(model, for_put=False)
         subjects = cascade_subjects_for_removal(model, self._store.graph, for_put=False)
+        self._remove_pending_for_subjects(subjects)
+        self._invalidate_cascade_keys(model, for_put=False)
         remove_g = triples_to_graph(owned_triples_for_subjects(subjects, self._store.graph))
         if len(remove_g):
             self._store.update_graph(remove=remove_g)
@@ -277,8 +284,6 @@ class SPARQLSession:
             existing = self._state.get_identity(id_key)
             if existing is None or depth > 0 or not self._relationships_materialized(existing):
                 self._state.set_identity(model)
-            self._state.set_hydration(hkey, model)
-        else:
             self._state.set_hydration(hkey, model)
         return model
 

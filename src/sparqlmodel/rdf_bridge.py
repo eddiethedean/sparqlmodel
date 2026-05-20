@@ -203,7 +203,15 @@ def load_from_graph(
                         path=branch_path.copy(),
                     )
                 else:
-                    data[name] = IRI(value.subject_uri()) if allows_iri else value
+                    if allows_iri:
+                        data[name] = IRI(value.subject_uri())
+                    else:
+                        from sparqlmodel.exceptions import HydrationError
+
+                        raise HydrationError(
+                            f"Non-cascade relationship {name!r} on {model_cls.__name__} "
+                            f"resolved to embedded model; use cascade=False with IRI annotation"
+                        )
             elif isinstance(value, str) and _iri_like(value):
                 if subject_has_rdf_type(related_cls, value, graph):
                     data[name] = load_from_graph(
