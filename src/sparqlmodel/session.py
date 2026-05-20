@@ -222,6 +222,7 @@ class SPARQLSession:
     ) -> list[SPARQLModel]:
         """Hydrate query results with identity map and session cache."""
         self._check_open()
+        self._maybe_autoflush()
         return session_core.hydrate_bindings_impl(
             self._state,
             self._store,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, get_args, get_origin
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
@@ -35,6 +36,8 @@ def _format_literal(value: object) -> str:
     if isinstance(value, int):
         return f'"{value}"^^{term_to_n3(_XSD_INTEGER)}'
     if isinstance(value, float):
+        if not math.isfinite(value):
+            raise QueryError(f"Non-finite float cannot be used in SPARQL filter: {value!r}")
         return f'"{value}"^^{term_to_n3(_XSD_DOUBLE)}'
     return f'"{escape_sparql_string(str(value))}"'
 

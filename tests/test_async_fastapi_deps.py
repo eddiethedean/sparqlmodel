@@ -199,3 +199,71 @@ def test_async_session_dependency_init_app_close_override() -> None:
 
     with TestClient(app) as client:
         assert client.get("/n").json() >= 2
+
+
+def test_async_session_dependency_close_on_exit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sparqlmodel.async_session import AsyncSPARQLSession
+    from sparqlmodel.fastapi import deps as async_deps
+
+    captured: list[dict[str, object]] = []
+
+    class RecordingSession(AsyncSPARQLSession):
+        def __init__(self, **kwargs: object) -> None:
+            captured.append(dict(kwargs))
+            super().__init__(**kwargs)
+
+    monkeypatch.setattr(async_deps, "AsyncSPARQLSession", RecordingSession)
+    app = FastAPI()
+    app.state.sparql_async_store_factory = AsyncMemoryStore
+    dep = async_session_dependency(close_on_exit=True)
+    app.dependency_overrides[get_async_session] = dep
+
+    @app.get("/n")
+    async def touch(session: AsyncSessionDep) -> bool:
+        return session.autoflush
+
+    with TestClient(app) as client:
+        client.get("/n")
+    assert captured[-1]["close_on_exit"] is True
+
+
+def test_async_session_dependency_does_not_close_shared_http_store() -> None:
+    from unittest.mock import patch
+
+    import httpx
+
+    from sparqlmodel.stores.async_http import AsyncHttpStore
+
+    close_calls = 0
+    real_aclose = AsyncHttpStore.aclose
+
+    async def counting_aclose(self: AsyncHttpStore) -> None:
+        nonlocal close_calls
+        close_calls += 1
+        await real_aclose(self)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="")
+
+    http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = AsyncHttpStore("http://example.invalid/sparql", client=http_client)
+
+    app = FastAPI()
+    init_async_app(app, store)
+    app.dependency_overrides[get_async_session] = async_session_dependency(close_on_exit=True)
+
+    with patch.object(AsyncHttpStore, "aclose", counting_aclose):
+
+        @app.get("/touch")
+        async def touch(session: AsyncSessionDep) -> str:
+            if await session.get(Person, IRI("urn:p:async-http")) is None:
+                await session.put(Person(id=IRI("urn:p:async-http"), name="Http"))
+                return "created"
+            return "found"
+
+        with TestClient(app) as client:
+            assert client.get("/touch").json() == "created"
+            assert client.get("/touch").json() == "found"
+    assert close_calls == 0

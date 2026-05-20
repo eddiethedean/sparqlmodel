@@ -16,6 +16,14 @@ Common issues when running SparqlModel in development or production.
 
 See {doc}`PRODUCTION` — HttpStore mirror model.
 
+## `query().all()` returns fewer rows than the remote SELECT
+
+**Symptom:** `session.query(Person).where(...).all()` is empty or shorter than the same filter run in a SPARQL client against the endpoint.
+
+**Cause:** On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, the query compiler runs a remote SELECT, then each binding is hydrated with `get()`. `get()` reads the **local mirror**, not the remote dataset. Rows whose subject IRI was never written through this store instance are dropped silently.
+
+**Mitigations:** Same as for `execute` + `get` above — `put` through the session first, use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps, or use raw `execute()` and handle bindings without `query().all()` until mirror sync ships (**1.0**).
+
 ## Stale data after `put`
 
 **Symptom:** Old predicate values still appear in queries.

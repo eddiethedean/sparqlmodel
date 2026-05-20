@@ -45,6 +45,17 @@ def relationships_materialized(model: SPARQLModel) -> bool:
     return False
 
 
+def _subject_exists_in_store(
+    store_graph: Store,
+    model_cls: type[SPARQLModel],
+    iri: str | IRI,
+) -> bool:
+    """Return whether ``iri`` still has any triples in ``store_graph``."""
+    prefixes = model_cls.get_prefixes()
+    subj_ref = _subject_pattern(iri, prefixes)
+    return any(store_graph.triples((subj_ref, None, None)))
+
+
 def depth_satisfied(model: SPARQLModel, depth: int) -> bool:
     """Return whether ``model`` has relationships loaded through ``depth``."""
     if depth <= 0:
@@ -144,15 +155,24 @@ def get_impl(
     hkey = (model_cls, id_key[1], depth)
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
-        return cast("SPARQLModel | None", hydrated)
+        if hydrated is None:
+            if not _subject_exists_in_store(store.graph, model_cls, iri):
+                return None
+        elif _subject_exists_in_store(store.graph, model_cls, iri):
+            return cast("SPARQLModel | None", hydrated)
+        state.evict_identity_prefix(id_key[0], id_key[1])
+        state.invalidate_hydration_for(id_key[0], id_key[1])
 
     identity = state.get_identity(id_key)
     if identity is not None and depth_satisfied(identity, depth):
         if depth == 0 and relationships_materialized(identity):
             pass
-        else:
+        elif _subject_exists_in_store(store.graph, model_cls, iri):
             state.set_hydration(hkey, identity)
             return identity
+        else:
+            state.evict_identity_prefix(id_key[0], id_key[1])
+            state.invalidate_hydration_for(id_key[0], id_key[1])
 
     model = hydrate_one(model_cls, iri, store, depth=depth)
     if model is not None:
@@ -277,15 +297,24 @@ async def get_impl_async(
     hkey = (model_cls, id_key[1], depth)
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
-        return cast("SPARQLModel | None", hydrated)
+        if hydrated is None:
+            if not _subject_exists_in_store(store.graph, model_cls, iri):
+                return None
+        elif _subject_exists_in_store(store.graph, model_cls, iri):
+            return cast("SPARQLModel | None", hydrated)
+        state.evict_identity_prefix(id_key[0], id_key[1])
+        state.invalidate_hydration_for(id_key[0], id_key[1])
 
     identity = state.get_identity(id_key)
     if identity is not None and depth_satisfied(identity, depth):
         if depth == 0 and relationships_materialized(identity):
             pass
-        else:
+        elif _subject_exists_in_store(store.graph, model_cls, iri):
             state.set_hydration(hkey, identity)
             return identity
+        else:
+            state.evict_identity_prefix(id_key[0], id_key[1])
+            state.invalidate_hydration_for(id_key[0], id_key[1])
 
     model = hydrate_one(model_cls, iri, reader, depth=depth)
     if model is not None:

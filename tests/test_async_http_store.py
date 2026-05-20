@@ -7,8 +7,17 @@ import pytest
 from pyoxigraph import Literal
 from triplemodel import Store
 
+from sparqlmodel import IRI, AsyncSPARQLSession, Field, SPARQLModel
 from sparqlmodel.stores.async_http import AsyncHttpStore
 from sparqlmodel.stores.http_common import graph_to_delete_data, graph_to_insert_data
+
+
+class Person(SPARQLModel):
+    rdf_type = "schema:Person"
+    __prefixes__ = {"schema": "https://schema.org/"}
+
+    id: IRI
+    name: str = Field("schema:name")
 
 
 async def test_async_http_insert_delete_helpers() -> None:
@@ -72,3 +81,33 @@ async def test_async_http_store_closed_raises() -> None:
     await store.aclose()
     with pytest.raises(RuntimeError, match="closed"):
         await store.query("SELECT * WHERE { ?s ?p ?o }")
+
+
+async def test_async_http_store_query_all_drops_remote_only_rows() -> None:
+    """Async query().all() hydrates via get(); mirror misses become empty results."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") == "application/sparql-query":
+            return httpx.Response(
+                200,
+                json={
+                    "head": {"vars": ["person"]},
+                    "results": {
+                        "bindings": [
+                            {"person": {"type": "uri", "value": "urn:person:remote"}},
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+        )
+        async with AsyncSPARQLSession(store=store) as session:
+            results = await session.query(Person).all()
+            assert results == []

@@ -77,6 +77,10 @@ q.limit(10).all()
 q.limit(10).all(depth=1)
 ```
 
+```{warning}
+On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `.all()` and `.first()` run a remote SELECT but hydrate each row with `get()` from the **local mirror**. Rows for IRIs this store has not written are omitted. See {doc}`../troubleshooting` — `query().all()` returns fewer rows.
+```
+
 ```{note}
 `offset`, `order_by`, and `count()` are planned for **0.7–0.8**. Until then use `.limit()` only or raw `session.execute`.
 ```

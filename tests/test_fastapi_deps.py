@@ -127,6 +127,66 @@ def test_session_dependency_uses_init_app_store() -> None:
         assert client.get("/touch").json() == "found"
 
 
+def test_session_dependency_close_on_exit_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[dict[str, object]] = []
+
+    class RecordingSession(SPARQLSession):
+        def __init__(self, **kwargs: object) -> None:
+            captured.append(dict(kwargs))
+            super().__init__(**kwargs)
+
+    monkeypatch.setattr(fastapi_deps, "SPARQLSession", RecordingSession)
+    app = FastAPI()
+    app.state.sparql_store_factory = MemoryStore
+    dep = session_dependency(close_on_exit=True)
+    app.dependency_overrides[get_session] = dep
+
+    @app.get("/n")
+    def touch(session: SessionDep) -> bool:
+        return session.autoflush
+
+    with TestClient(app) as client:
+        client.get("/n")
+    assert captured[-1]["close_on_exit"] is True
+
+
+def test_session_dependency_does_not_close_shared_http_store() -> None:
+    from sparqlmodel.stores.http import HttpStore
+
+    close_calls = 0
+    real_close = HttpStore.close
+
+    def counting_close(self: HttpStore) -> None:
+        nonlocal close_calls
+        close_calls += 1
+        real_close(self)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="")
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.invalid/sparql", client=http_client)
+
+    app = FastAPI()
+    init_app(app, store)
+    app.dependency_overrides[get_session] = session_dependency(close_on_exit=True)
+
+    with patch.object(HttpStore, "close", counting_close):
+
+        @app.get("/touch")
+        def touch(session: SessionDep) -> str:
+            if session.get(Person, IRI("urn:p:http")) is None:
+                session.put(Person(id=IRI("urn:p:http"), name="Http"))
+                return "created"
+            return "found"
+
+        with TestClient(app) as client:
+            assert client.get("/touch").json() == "created"
+            assert client.get("/touch").json() == "found"
+    assert close_calls == 0
+    store.close()
+
+
 def test_session_dependency_store_factory_close_on_exit() -> None:
     app = FastAPI()
     app.dependency_overrides[get_session] = session_dependency(

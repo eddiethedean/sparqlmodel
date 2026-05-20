@@ -159,6 +159,15 @@ def test_autoflush_before_query(session: SPARQLSession, odos: Person) -> None:
     assert found.name == "Odos"
 
 
+def test_autoflush_before_hydrate_bindings(session: SPARQLSession, odos: Person) -> None:
+    session.autoflush = True
+    session.put(odos, flush=False)
+    bindings = [{"person": str(odos.id)}]
+    results = session.hydrate_bindings(Person, bindings)
+    assert len(results) == 1
+    assert results[0].name == "Odos"
+
+
 def test_expire_evicts_cache(session: SPARQLSession, odos: Person) -> None:
     session.put(odos)
     first = session.get(Person, odos.id)
@@ -278,6 +287,55 @@ def test_get_none_expires_identity_when_removed_from_graph(
     session.store.update_graph(remove=remove_g)
     assert session.get(Person, odos.id) is None
     assert session._state.get_identity(key) is None
+
+
+def test_get_same_depth_not_stale_after_graph_remove(session: SPARQLSession, odos: Person) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+
+    session.put(odos)
+    loaded = session.get(Person, odos.id, depth=1)
+    assert loaded is not None
+    subjects = cascade_subjects_for_removal(odos, session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    session.store.update_graph(remove=remove_g)
+    assert session.get(Person, odos.id, depth=1) is None
+
+
+def test_get_cached_none_when_subject_still_missing(session: SPARQLSession) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    plain = Person(id=IRI("urn:p:gone"), name="Gone")
+    session.put(plain)
+    subjects = cascade_subjects_for_removal(plain, session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    session.store.update_graph(remove=remove_g)
+    id_key = identity_key_for_iri(Person, plain.id)
+    session._state.set_hydration((Person, id_key[1], 0), None)
+    assert session.get(Person, plain.id) is None
+
+
+def test_get_iri_ref_identity_not_stale_after_graph_remove(session: SPARQLSession) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+
+    by_ref = Person(id=IRI("urn:p:ref-only"), name="Ref", works_for=IRI("urn:org:acme"))
+    session.put(by_ref)
+    subjects = cascade_subjects_for_removal(by_ref, session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    session.store.update_graph(remove=remove_g)
+    assert session.get(Person, by_ref.id) is None
 
 
 def test_depth_satisfied_leaf_and_iri_branches() -> None:

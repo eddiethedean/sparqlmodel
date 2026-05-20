@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+import re
+
 from pyoxigraph import BlankNode, Literal, NamedNode, Triple
 from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.sparql_escape import escape_sparql_string
 
+_INVALID_IRI_CHARS = frozenset(' \n\r\t<>"\\')
+_LANGUAGE_TAG_RE = re.compile(r"^[a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*$")
+
 
 def validate_iri_token(iri: str) -> str:
     """Reject IRIs that would break angle-bracket tokens in SPARQL."""
-    if not iri or any(c in iri for c in " \n\r\t<>"):
+    if not iri or any(c in _INVALID_IRI_CHARS for c in iri) or any(ord(c) < 0x20 for c in iri):
         raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
     return iri
+
+
+def validate_language_tag(tag: str) -> str:
+    """Reject language tags that would break SPARQL literal syntax."""
+    if not _LANGUAGE_TAG_RE.match(tag):
+        raise QueryError(f"Invalid language tag for SPARQL: {tag!r}")
+    return tag
 
 
 def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
@@ -35,7 +47,7 @@ def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
         if term.datatype is not None:
             out += f"^^{term_to_n3(term.datatype)}"
         elif term.language is not None:
-            out += f"@{term.language}"
+            out += f"@{validate_language_tag(term.language)}"
         return out
     if isinstance(term, Triple):
         s, p, o = term_to_n3(term.subject), term_to_n3(term.predicate), term_to_n3(term.object)

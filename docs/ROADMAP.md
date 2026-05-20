@@ -7,6 +7,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 - [ECOSYSTEM.md](ECOSYSTEM.md) — boundaries
 - [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md) — upstream
 - [ASYNC_RDF_RUST_PLAN.md](ASYNC_RDF_RUST_PLAN.md) — optional Rust async I/O package (companion to **0.6** async)
+- [Pyoxigraph 0.5 docs](https://pyoxigraph.readthedocs.io/en/stable/) — RDF engine reference for this audit
 
 ---
 
@@ -203,6 +204,40 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 **Out of scope for 0.5:** async session (**0.6**), disk-backed default store, `aio-rdf` crate.
 
+### Pyoxigraph utilization (audit vs [0.5.8 docs](https://pyoxigraph.readthedocs.io/en/stable/))
+
+SparqlModel does **not** import `pyoxigraph.Store` in application code. In-process graphs go through **`triplemodel.Store`** (pyoxigraph-backed). Direct `pyoxigraph` imports in this repo are limited to **term types** (`NamedNode`, `BlankNode`, `Literal`, `Triple`) and **N3 formatting** for SPARQL UPDATE bodies.
+
+#### In use today (keep)
+
+| Pyoxigraph area | SparqlModel use |
+|-----------------|-----------------|
+| [RDF model](https://pyoxigraph.readthedocs.io/en/stable/model.html) — `NamedNode`, `BlankNode`, `Literal`, `Triple` | `rdf_n3`, `graph.py`, `MemoryStore._term_value`, tests |
+| [Store](https://pyoxigraph.readthedocs.io/en/stable/store.html) — in-memory `add` / `remove` / `query` | Via `triplemodel.Store` in `MemoryStore`, `HttpStore` mirror, `rdf_bridge` |
+| RDF-star quoted triples in UPDATE | `term_to_n3` emits `<< s p o >>` |
+| SPARQL SELECT | `MemoryStore.query` → `Store.query`; compiler + session `execute` |
+| File parse/serialize (Turtle, JSON-LD, N-Triples, …) | Via TripleModel `load_graph` / `dump_graph` (`serializers.py` wrappers until **0.7**) |
+
+#### Gaps — add to roadmap (by owner)
+
+| Gap | Pyoxigraph API | Owner | Target |
+|-----|----------------|-------|--------|
+| SELECT-only `execute` / `MemoryStore.query` (ASK raises `QueryError`) | `QueryBoolean`, `bool(store.query("ASK …"))` | SparqlModel | **1.2** (see SPECS P2) |
+| No CONSTRUCT / DESCRIBE on session | `QueryTriples`, `.serialize(RdfFormat.*)` | SparqlModel | **1.2** |
+| Hand-rolled SPARQL Results JSON parser | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results), `QuerySolutions` | SparqlModel `stores/` | **1.0** (`HttpStore` / `AsyncHttpStore`) |
+| HttpStore UPDATE as string templates only | Remote endpoints need HTTP; local mirror could use `Store.update()` for dev tooling | SparqlModel | **1.0** (optional helper) |
+| No disk-backed store | `Store(path)`, `backup`, `optimize`, `flush`, `read_only` | SparqlModel `stores/` | **1.2** (`OxigraphStore` backend) |
+| Large imports iterate `add` per triple | `bulk_load`, `bulk_extend`, `extend` | SparqlModel session + TripleModel | **1.2** (bulk `put`) |
+| Cascade / orphan scans graph broadly | `quads_for_pattern` | SparqlModel `graph.py` | **1.2** (perf) |
+| Default graph only (no named graphs) | `Quad`, `Dataset`, `add_graph`, `named_graphs` | TripleModel Dataset + SparqlModel session scope | **post-1.3** |
+| Blank-node merge on import | `parse(..., rename_blank_nodes=True)`, `Dataset.canonicalize` | TripleModel | **1.1** / **0.7** docs |
+| Directional literals | `Literal.direction` | TripleModel | **1.1** |
+| Full RDF-star in models (not just UPDATE N3) | `RdfFormat.supports_rdf_star`, quoted triple fields | TripleModel + SparqlModel | **post-1.3** |
+| Negotiated export uses string format names | `RdfFormat.from_media_type`, `QueryResultsFormat` | TripleModel + FastAPI extra | **0.7** / **1.2** |
+| `pyoxigraph.Variable` in compiler | `Variable` | SparqlModel (optional) | **post-1.3** |
+
+**Intentionally delegated (not SparqlModel gaps):** `parse` / `serialize` / TriG / N-Quads / N3 parsers live in **TripleModel** per [ECOSYSTEM.md](ECOSYSTEM.md). SparqlModel **0.7** retires duplicate format tables; verify TripleModel passes through pyoxigraph `lenient`, `rename_blank_nodes`, and `without_named_graphs` where appropriate.
+
 ### 0.5.1 patch
 
 **Status:** shipped as **0.5.1** (2026-05-19).
@@ -266,6 +301,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [ ] `serializers.py` → thin wrappers over TripleModel `parse` / `serialize`
 - [ ] Examples and docs use TripleModel for file round-trip
 - [ ] Delete duplicate format tables and parsers from SparqlModel
+- [ ] TripleModel exposes pyoxigraph `RdfFormat` / `from_media_type` for FastAPI `negotiated_response` (no parallel format tables in SparqlModel)
 
 **Exit criteria:** All format round-trips go through TripleModel; SparqlModel export helpers are thin wrappers only.
 
@@ -314,6 +350,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [ ] Mirror sync strategy (GSP GET, selective hydrate, or explicit remote-authoritative `get`)
 - [ ] Batched UPDATE / size limits; retries and timeouts
 - [ ] [PRODUCTION.md](PRODUCTION.md) deployment patterns
+- [ ] Replace `stores/sparql_json.py` with `pyoxigraph.parse_query_results` (JSON/XML) for remote SELECT bindings — typed terms, less custom JSON code
 
 **Exit criteria:** Documented mirror contract; integration tests for read/write split; SPECS P0 HttpStore item checked.
 
@@ -341,7 +378,10 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 **Goal:** production operability.
 
 - [ ] Optional SHACL validation hook on `put` (`triplemodel[shacl]`) — runs after Pydantic validation passes
-- [ ] Bulk `put` / `delete` helpers for large imports
+- [ ] Bulk `put` / `delete` helpers for large imports — use pyoxigraph `bulk_load` / `bulk_extend` on `MemoryStore.graph` where applicable
+- [ ] `session.execute` / store layer: ASK (`QueryBoolean`) and CONSTRUCT (`QueryTriples`) via pyoxigraph result types, not SELECT-only
+- [ ] `OxigraphStore` backend — disk `pyoxigraph.Store(path)`, optional `read_only`, `backup` / `optimize` for single-node deployments
+- [ ] `graph.py` cascade/orphan hot paths — prefer `quads_for_pattern` over full-graph iteration where measurable
 - [ ] Structured query logging (SPARQL + timing)
 - [ ] Performance guidelines (identity map, query shape, HttpStore batching)
 
@@ -357,7 +397,8 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [ ] Document supported Pydantic features matrix (constraints, unions, `ForwardRef`, JSON Schema for OpenAPI)
 - [ ] Security review on SPARQL generation
 - [ ] Stable public API; migration guide from 0.3.x
-- [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, Oxigraph)
+- [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, Oxigraph disk store)
+- [ ] Pyoxigraph utilization table above — P0/P1 rows closed; P2 rows either shipped or explicitly deferred
 
 **Out of scope for 1.2:** OWL editor, built-in reasoner, mapping-only features in SparqlModel.
 
@@ -367,10 +408,12 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 | Theme | Owner |
 |-------|--------|
-| Named graphs in apps | TripleModel Dataset; SparqlModel session scope |
+| Named graphs in apps | TripleModel `Dataset` / `Quad`; SparqlModel session graph scope (`add_graph`, `named_graphs`) |
+| RDF-star entity fields | TripleModel + SparqlModel compiler/hydration |
+| `pyoxigraph.Variable` in query compiler | SparqlModel (optional; string SPARQL generation is sufficient today) |
 | semantic-sqlmodel backend | SparqlModel |
 | SPARQL federation | SparqlModel |
-| Oxigraph / other stores | SparqlModel `stores/` |
+| Other store backends (Jena native, etc.) | SparqlModel `stores/` — Oxigraph disk covered in **1.2** |
 | Reasoning hooks | Optional; not core ORM |
 
 ---
@@ -421,10 +464,11 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities
 
-1. **0.7 file I/O delegated** — serializers → TripleModel `serialize` / `load_graph`.
+1. **0.7 file I/O delegated** — serializers → TripleModel `serialize` / `load_graph`; align media types with pyoxigraph `RdfFormat`.
 2. **Do not expand** interim mapping — retire duplicate serializer tables in **0.7**.
-3. **P0 query + HttpStore** for production APIs (**0.8–1.0**).
+3. **P0 query + HttpStore** for production APIs (**0.8–1.0**); **1.0** — `parse_query_results` for HTTP SELECT.
 4. **P1 session lifecycle + RDF types** (**0.9–1.1**).
+5. **Pyoxigraph depth** — ASK/CONSTRUCT, disk store, `bulk_load`, `quads_for_pattern` (**1.2**); named graphs / RDF-star (**post-1.3**).
 6. Keep sync `SPARQLSession` / `Field` / `session.put` stable; add async counterparts in parallel.
 7. Contract tests on every integration PR; SPECS checklist drives **1.2** GA.
 8. Document behavior in [ORM.md](ORM.md) and [PRODUCTION.md](PRODUCTION.md).

@@ -234,6 +234,18 @@ async def test_async_autoflush_before_query(
     assert found is not None
 
 
+async def test_async_autoflush_before_hydrate_bindings(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+) -> None:
+    async_session.autoflush = True
+    await async_session.put(odos, flush=False)
+    bindings = [{"person": str(odos.id)}]
+    results = await async_session.hydrate_bindings(Person, bindings)
+    assert len(results) == 1
+    assert results[0].name == "Odos"
+
+
 async def test_async_exit_suppresses_close_error_when_not_rollback() -> None:
     with pytest.raises(ValueError, match="boom"):
         async with AsyncSPARQLSession(
@@ -256,6 +268,61 @@ async def test_async_get_shallow_after_deep_updates_identity_map(
     assert shallow.works_for is None
     key = identity_key_for_iri(Person, odos.id)
     assert async_session._state.get_identity(key) is shallow
+
+
+async def test_async_get_same_depth_not_stale_after_graph_remove(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+
+    loaded = await async_session.get(Person, odos.id, depth=1)
+    assert loaded is not None
+    subjects = cascade_subjects_for_removal(odos, async_session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, async_session.graph))
+    await async_session.store.update_graph(remove=remove_g)
+    assert await async_session.get(Person, odos.id, depth=1) is None
+
+
+async def test_async_get_cached_none_when_subject_still_missing(
+    async_session: AsyncSPARQLSession,
+) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    plain = Person(id=IRI("urn:p:async-gone"), name="Gone")
+    await async_session.put(plain)
+    subjects = cascade_subjects_for_removal(plain, async_session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, async_session.graph))
+    await async_session.store.update_graph(remove=remove_g)
+    id_key = identity_key_for_iri(Person, plain.id)
+    async_session._state.set_hydration((Person, id_key[1], 0), None)
+    assert await async_session.get(Person, plain.id) is None
+
+
+async def test_async_get_iri_ref_identity_not_stale_after_graph_remove(
+    async_session: AsyncSPARQLSession,
+) -> None:
+    from sparqlmodel.graph import (
+        cascade_subjects_for_removal,
+        owned_triples_for_subjects,
+        triples_to_graph,
+    )
+
+    by_ref = Person(id=IRI("urn:p:async-ref"), name="Ref", works_for=IRI("urn:org:acme"))
+    await async_session.put(by_ref)
+    subjects = cascade_subjects_for_removal(by_ref, async_session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, async_session.graph))
+    await async_session.store.update_graph(remove=remove_g)
+    assert await async_session.get(Person, by_ref.id) is None
 
 
 async def test_async_query_options(async_session: AsyncSPARQLSession) -> None:

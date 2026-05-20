@@ -145,7 +145,9 @@ def session_dependency(
             close = True if close_on_exit is None else close_on_exit
         else:
             resolved, close = _resolve_store(request.app)
-            if close_on_exit is not None:
+            if getattr(request.app.state, "sparql_store", None) is resolved:
+                close = False
+            elif close_on_exit is not None:
                 close = close_on_exit
         kwargs: dict[str, Any] = {
             "prefixes": prefixes,
@@ -257,7 +259,9 @@ def async_session_dependency(
             close = True if close_on_exit is None else close_on_exit
         else:
             resolved, close = _resolve_async_store(request.app)
-            if close_on_exit is not None:
+            if getattr(request.app.state, "sparql_async_store", None) is resolved:
+                close = False
+            elif close_on_exit is not None:
                 close = close_on_exit
         kwargs: dict[str, Any] = {
             "prefixes": prefixes,

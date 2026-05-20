@@ -7,19 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.6.0] - 2026-05-20
+
+### Fixed (maintenance)
 
 - **`compile_where` / `compile_compare`** — default `!=` compilation uses `NOT EXISTS` (matches `Query` and 0.5.2 docs); pass `use_not_exists_for_ne=False` for inequality mode
 - **`get()` identity map** — shallow `depth=0` reload updates identity; graph miss evicts stale identity/hydration without dropping pending `put` queue (sync and async)
+- **`get()` cache** — hydration and identity entries invalidated when the backing graph no longer contains the subject (including direct `store.update_graph` bypassing the session)
+- **`hydrate_bindings`** — autoflush pending `put` before hydrating (sync and async)
 - **Session context manager** — `__exit__` / `__aexit__` preserve flush errors instead of masking them with pending-close `RuntimeError`
-- **SPARQL IRI safety** — validate predicate/type IRIs and `term_to_n3` NamedNode values; reject field-to-field comparisons in the query compiler
+- **SPARQL IRI safety** — validate predicate/type IRIs and `term_to_n3` NamedNode values; reject `"` and control characters in IRI tokens; validate RDF language tags; escape additional control characters in literals
+- **Query compiler** — reject non-finite `float` filter values
 - **`close()`** — mark session closed only after store teardown succeeds; `AsyncSPARQLSession.close` skips `aclose` when the store has no `aclose` (sync parity)
+- **FastAPI** — `session_dependency` / `async_session_dependency` no longer close shared `init_app` / `http_store_lifespan` stores when `close_on_exit=True`
 
-### Documentation
+### Documentation (maintenance)
 
 - Troubleshooting, SPECS, README, and query guide — OPTIONAL/pagination milestones and `==` operator description aligned with 0.6/0.7 roadmap
-
-## [0.6.0] - 2026-05-20
+- HttpStore `query().all()` mirror behavior; FastAPI `sparql_store` lifecycle notes
 
 ### Added
 

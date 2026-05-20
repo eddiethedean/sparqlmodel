@@ -274,6 +274,40 @@ def test_http_store_get_uses_mirror_not_remote_select() -> None:
     store.close()
 
 
+def test_http_store_query_all_drops_remote_only_rows() -> None:
+    """query().all() hydrates via get(); remote SELECT rows absent from mirror are skipped."""
+    state: dict[str, object] = {"select_count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") == "application/sparql-query":
+            state["select_count"] = int(state["select_count"]) + 1
+            return httpx.Response(
+                200,
+                json={
+                    "head": {"vars": ["person"]},
+                    "results": {
+                        "bindings": [
+                            {"person": {"type": "uri", "value": "urn:person:remote"}},
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=transport)
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
+    session = SPARQLSession(store=store)
+    results = session.query(Person).all()
+    assert results == []
+    assert int(state["select_count"]) >= 1
+    store.close()
+
+
 def test_session_with_http_store_put_and_query() -> None:
     state: dict[str, object] = {"updates": [], "select_count": 0}
 

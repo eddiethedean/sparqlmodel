@@ -63,13 +63,15 @@ def health(session: SessionDep):
 
 ## Request lifecycle
 
-1. Dependency opens `with SPARQLSession(store=app.state.store, close_on_exit=False)`.
+1. Dependency opens `with SPARQLSession(store=app.state.sparql_store, close_on_exit=False)` (or `sparql_async_store` for async apps).
 2. Route handler runs `put` / `query` / `get`.
 3. On success: pending `put(..., flush=False)` is flushed.
 4. On error: pending queue is rolled back (flushed data remains).
 
 ```{warning}
 Do not share one `SPARQLSession` across concurrent requests. Inject `SessionDep` per handler.
+
+With `init_app` / `http_store_lifespan`, prefer `SessionDep` or `get_session` (they keep `close_on_exit=False` on the shared store). Do not override with `session_dependency(close_on_exit=True)` when using a shared `HttpStore` — that would close the HTTP client after the first request.
 ```
 
 ## Content negotiation

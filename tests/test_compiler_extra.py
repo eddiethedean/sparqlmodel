@@ -80,7 +80,42 @@ def test_term_to_n3_rejects_invalid_iri() -> None:
 
     with pytest.raises(QueryError, match="Invalid IRI"):
         validate_iri_token("http://x> . ?hack <urn:y>")
+    with pytest.raises(QueryError, match="Invalid IRI"):
+        validate_iri_token('urn:foo"}')
     with pytest.raises((QueryError, ValueError), match="Invalid IRI|>"):
         term_to_n3(NamedNode("http://x> . ?hack <urn:y>"))
     with pytest.raises(QueryError, match="Invalid IRI"):
         term_to_n3("<http://x> . ?hack <urn:y>>")
+
+
+def test_validate_language_tag_rejects_invalid() -> None:
+    from sparqlmodel.rdf_n3 import validate_language_tag
+
+    with pytest.raises(QueryError, match="Invalid language tag"):
+        validate_language_tag("toolongggggg")
+    with pytest.raises(QueryError, match="Invalid language tag"):
+        validate_language_tag("9bad")
+
+
+def test_escape_sparql_string_control_chars() -> None:
+    from sparqlmodel.sparql_escape import escape_sparql_string
+
+    assert "\\u0000" in escape_sparql_string("\x00")
+    assert escape_sparql_string("a\x01b") == "a\\u0001b"
+    assert escape_sparql_string('a"b') == 'a\\"b'
+    assert escape_sparql_string("a\\b") == "a\\\\b"
+    assert escape_sparql_string("a\rb") == "a\\rb"
+    assert escape_sparql_string("a\tb") == "a\\tb"
+
+
+def test_compile_where_rejects_non_finite_float() -> None:
+    from sparqlmodel import Field, SPARQLModel
+
+    class ScorePerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        score: float = Field("schema:value")
+
+    registry = NamespaceRegistry(ScorePerson.get_prefixes())
+    with pytest.raises(QueryError, match="Non-finite"):
+        compile_where(ScorePerson, (ScorePerson.score == float("nan"),), registry)

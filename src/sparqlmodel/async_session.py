@@ -213,7 +213,7 @@ class AsyncSPARQLSession:
     ) -> list[SPARQLModel]:
         """Hydrate query results with identity map and session cache."""
         self._check_open()
-
+        await self._maybe_autoflush()
         return await session_core.hydrate_bindings_impl_async(
             self._state,
             self._store,
