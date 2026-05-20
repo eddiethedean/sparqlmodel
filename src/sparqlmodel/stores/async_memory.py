@@ -10,7 +10,9 @@ from sparqlmodel.stores.memory import MemoryStore
 
 
 class AsyncMemoryStore:
-    """In-memory RDF store with async methods delegating to :class:`~sparqlmodel.stores.memory.MemoryStore`."""
+    """In-memory RDF store with async methods delegating to sync
+    :class:`~sparqlmodel.stores.memory.MemoryStore`.
+    """
 
     def __init__(
         self,
