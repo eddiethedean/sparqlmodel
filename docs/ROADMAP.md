@@ -203,6 +203,15 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 **Out of scope for 0.5:** async session (**0.6**), disk-backed default store, `aio-rdf` crate.
 
+### 0.5.1 patch
+
+**Status:** shipped as **0.5.1** (2026-05-19).
+
+- [x] Query DSL — reject `((A | B) & C)` with `QueryError`; use `.where((A | B), C)` for OR + AND
+- [x] Session — recursive `_depth_satisfied` for `get(..., depth=2)` with multiple relationships
+- [x] `use_optional_for_comparisons(False)` restores default `!=` semantics
+- [x] Docs — nitpicky Sphinx build, troubleshooting for OR/AND and session exit
+
 ---
 
 ## 0.6 — Async end-to-end

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-19
+
 ### Fixed
 
 - **Query DSL** — `((A | B) & C)` raises `QueryError` instead of silently compiling as `A ∧ B ∧ C`; use `.where((A | B), C)` for OR combined with AND
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Query guide — OR/AND composition, `first()` vs `limit()`, `use_optional_for_comparisons` naming; pagination milestone aligned to **0.7–0.8**
 - Troubleshooting — OR/AND `QueryError`, session `__exit__` with pending queue and `rollback_on_error=False`
+- Sphinx — nitpicky cross-ref checking; docs build clean with `-W`
 
 ## [0.5.0] - 2026-05-18
 
