@@ -84,7 +84,6 @@ napoleon_use_param = True
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "pydantic": ("https://docs.pydantic.dev/latest/", None),
-    "rdflib": ("https://rdflib.readthedocs.io/en/stable/", None),
     "fastapi": ("https://fastapi.tiangolo.com/", None),
 }
 

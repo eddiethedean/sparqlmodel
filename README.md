@@ -218,18 +218,19 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 | [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
 | [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-12-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
-| [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.3–1.0 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
+| [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.5–1.3 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
 | [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
 | [Ecosystem](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ECOSYSTEM.md) | SparqlModel vs TripleModel boundaries |
 
 ---
 
-## Known limitations (0.4)
+## Known limitations (0.5)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade (mirror sync planned **0.9**)
-- No async session or `AsyncHttpStore` yet — planned **0.5** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
-- Query: `limit` only — `offset` / `order_by` / `count` planned **0.7** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade (production mirror sync planned **1.0**)
+- No async session or `AsyncHttpStore` yet — planned **0.6** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- Query: `limit` only — `offset` / `order_by` / `count` planned **0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` excludes resources with no value for the field; use `.use_not_exists_for_ne()` or `.use_optional_for_comparisons()`
 - Sessions are not thread-safe; one session per request/task
 - Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition

@@ -67,7 +67,7 @@ SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **composi
 
 ## TripleModel (required dependency)
 
-- PyPI: `triplemodel` · pinned in SparqlModel as `>=0.9.0,<2`
+- PyPI: `triplemodel` · pinned in SparqlModel as `>=0.10.0,<2` (with `pyoxigraph>=0.5,<0.6`)
 - Stateless Pydantic ↔ RDF; API frozen from TripleModel 0.9 until 1.0
 - SparqlModel routes new mapping features through TripleModel first
 
@@ -125,7 +125,7 @@ pyoxigraph · triplemodel · pydantic
 
 # Integration strategy
 
-SparqlModel **already depends** on `triplemodel>=0.9`. Remaining work: **unify the model layer (0.4)**, then async, file I/O, and production features.
+SparqlModel **depends** on `triplemodel>=0.10` and **pyoxigraph** (0.5+). Remaining work: async sessions, file I/O consolidation, and production features.
 
 | Phase | SparqlModel | TripleModel usage |
 |-------|-------------|-------------------|

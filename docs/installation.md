@@ -6,7 +6,8 @@
 |-------------|---------|
 | Python | 3.10, 3.11, 3.12, or 3.13 |
 | SparqlModel | {{ version }} (current release) |
-| TripleModel | `>=0.9.0,<2` (installed automatically) |
+| TripleModel | `>=0.10.0,<2` (installed automatically) |
+| Pyoxigraph | `>=0.5,<0.6` (installed automatically) |
 
 ## PyPI
 
@@ -61,7 +62,8 @@ For reproducible deployments:
 
 ```text
 sparqlmodel=={{ version }}
-triplemodel>=0.9.0,<2
+triplemodel>=0.10.0,<2
+pyoxigraph>=0.5,<0.6
 ```
 
 Track releases on [PyPI](https://pypi.org/project/sparqlmodel/#history) and the {doc}`changelog`.

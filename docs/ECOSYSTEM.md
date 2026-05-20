@@ -1,6 +1,6 @@
 # SparqlModel (ORM) + TripleModel (mapping engine)
 
-SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** (`triplemodel>=0.9.0,<2`). This document defines boundaries for contributors and maintainers of both packages.
+SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** (`triplemodel>=0.10.0,<2`); in-process graphs use **pyoxigraph** via `triplemodel.Store`. This document defines boundaries for contributors and maintainers of both packages.
 
 **Architecture (Option A, shipped 0.4.0):** `SPARQLModel` **subclasses** `TripleModel` — one class, one mapping path. Session I/O uses `rdf_bridge` (`model_to_graph`, `load_from_graph`) on the same instances. The 0.3 `_triple.py` adapter was **removed in 0.4**.
 
@@ -39,7 +39,7 @@ Both SparqlModel and TripleModel are **Pydantic v2** stacks: validated Python ob
 │  SparqlModel                             │
 │  SPARQLModel(TripleModel) · Session · … │
 └────────────────────┬─────────────────────┘
-                     │  triplemodel>=0.9.0,<2  (required)
+                     │  triplemodel>=0.10.0,<2  (required)
 ┌────────────────────▼─────────────────────┐
 │  TripleModel (Pydantic)                  │
 │  sync_to_graph · from_graph · parse · …  │
@@ -52,7 +52,7 @@ Both SparqlModel and TripleModel are **Pydantic v2** stacks: validated Python ob
 
 ### Rules
 
-1. SparqlModel **must** depend on `triplemodel>=0.9`; **must not** grow parallel mapping implementations or dynamic shadow `TripleModel` classes.
+1. SparqlModel **must** depend on `triplemodel>=0.10`; **must not** grow parallel mapping implementations or dynamic shadow `TripleModel` classes.
 2. TripleModel **must not** import SparqlModel.
 3. Mapping / literal / format bugs → **TripleModel** first, then wire SparqlModel.
 4. Session / compiler / cascade bugs → **SparqlModel**.
@@ -168,7 +168,7 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 
 | Milestone | SparqlModel | TripleModel usage |
 |-----------|-------------|-------------------|
-| **Done** | `triplemodel>=0.9` on PyPI install | Package available to all installs |
+| **Done** | `triplemodel>=0.10` + pyoxigraph on PyPI install | Package available to all installs |
 | **0.2** | `_triple.py` adapter (interim), contract tests | `sync_to_graph`, namespaces, nested embeds |
 | **0.3** | Shipped — session I/O via interim adapter | `put`/`get` via `_triple.py` |
 | **0.4** | **Option A** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |

@@ -64,9 +64,7 @@ def test_parse_sparql_json_bindings_errors() -> None:
     with pytest.raises(ValueError, match="missing head"):
         parse_sparql_json_bindings(b"{}")
     with pytest.raises(ValueError, match="head must be an object"):
-        parse_sparql_json_bindings(
-            json.dumps({"head": [], "results": {"bindings": []}}).encode()
-        )
+        parse_sparql_json_bindings(json.dumps({"head": [], "results": {"bindings": []}}).encode())
     with pytest.raises(ValueError, match="head.vars must be a list"):
         parse_sparql_json_bindings(
             json.dumps({"head": {"vars": {}}, "results": {"bindings": []}}).encode()
@@ -181,7 +179,8 @@ def test_session_exit_suppresses_close_error_when_original_exception(
 def test_session_exit_reraises_close_error() -> None:
     with (
         patch.object(SPARQLSession, "close", side_effect=RuntimeError("close failed")),
-        pytest.raises(RuntimeError, match="close failed"),SPARQLSession()
+        pytest.raises(RuntimeError, match="close failed"),
+        SPARQLSession(),
     ):
         pass
 

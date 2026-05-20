@@ -84,7 +84,7 @@ Do not keep a session reference past request teardown when using FastAPI `Sessio
 |-------|-----|
 | `No module named 'httpx'` | `pip install "sparqlmodel[http]"` |
 | `No module named 'fastapi'` | `pip install "sparqlmodel[fastapi]"` |
-| `triplemodel` version conflict | `pip install "triplemodel>=0.9.0,<2"` |
+| `triplemodel` version conflict | `pip install "triplemodel>=0.10.0,<2" "pyoxigraph>=0.5,<0.6"` |
 
 ## Getting help
 

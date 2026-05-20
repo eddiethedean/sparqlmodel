@@ -3,7 +3,7 @@
 The SQLModel of SPARQL: typed models, :class:`~sparqlmodel.session.SPARQLSession`
 as the main entry point, and Python queries that compile to SPARQL.
 
-Requires ``triplemodel>=0.9`` for Pydantic ↔ RDF mapping; SparqlModel owns the
+Requires ``triplemodel>=0.10`` and ``pyoxigraph`` for in-process graphs; SparqlModel owns the
 session, query compiler, stores, and cascade policy.
 """
 

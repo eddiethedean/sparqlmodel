@@ -296,9 +296,9 @@ Remove owned triples for cascade subject set (no re-add).
 
 # Mapping integration (TripleModel)
 
-**Dependency:** `triplemodel>=0.9.0,<2` in `pyproject.toml`.
+**Dependencies (0.5+):** `triplemodel>=0.10.0,<2`, `pyoxigraph>=0.5,<0.6` in `pyproject.toml` (no core `rdflib`).
 
-**Today (0.3.x):** `graph.py` holds cascade/orphan policy; mapping is in interim `_triple.py`. **0.4 (Option A):** `SPARQLModel(TripleModel)`; delete `_triple.py`. `serializers.py` remains interim until **0.6**. **Do not extend** interim serializers — fix upstream in TripleModel.
+**Today (0.5+):** `SPARQLModel(TripleModel)`; session graphs are `triplemodel.Store`; `graph.py` holds cascade/orphan policy; `rdf_bridge` owns graph I/O. `serializers.py` delegates to TripleModel file I/O; full retirement planned **0.7**.
 
 **Target wiring (0.4+):**
 
@@ -512,7 +512,6 @@ sparqlmodel/
 pydantic>=2.5,<3
 pyoxigraph>=0.5,<0.6
 triplemodel>=0.10.0,<2
-triplemodel>=0.9.0,<2
 typing-extensions>=4.8
 ```
 

@@ -2,7 +2,7 @@
 
 **SparqlModel — the SQLModel of SPARQL:** typed models, a persistent session, and Python queries that compile to SPARQL.
 
-This guide is for **application developers**. SparqlModel is the ORM; **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.9`, installed automatically) is the mapping engine underneath.
+This guide is for **application developers**. SparqlModel is the ORM; **[TripleModel](https://github.com/eddiethedean/triplemodel)** (`triplemodel>=0.10`, installed automatically) is the mapping engine underneath. In-process graphs use **pyoxigraph** via `triplemodel.Store`.
 
 Related: {doc}`guides/index` · {doc}`SPECS` · {doc}`ECOSYSTEM` · {doc}`ROADMAP` · {doc}`troubleshooting`
 
@@ -15,7 +15,7 @@ Related: {doc}`guides/index` · {doc}`SPECS` · {doc}`ECOSYSTEM` · {doc}`ROADMA
 | **Role** | ORM — run apps on graphs | Mapping — correct triples from Pydantic |
 | **Metaphor** | SQLModel / SQLAlchemy ORM | SQLAlchemy Core / serde |
 | **Entry point** | `with SPARQLSession() as session:` | `model.to_graph()` / `TripleModel.parse()` |
-| **Dependency** | Requires `triplemodel>=0.9` | Standalone library |
+| **Dependency** | Requires `triplemodel>=0.10` and `pyoxigraph` | Standalone library |
 
 ```text
 Your app
