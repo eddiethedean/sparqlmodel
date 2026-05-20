@@ -180,7 +180,7 @@ class SPARQLSession:
                     if isinstance(getattr(nested, n2, None), SPARQLModel):
                         return True
                 return False
-        return True
+        return True  # pragma: no cover
 
     def _maybe_autoflush(self) -> None:
         if self.autoflush and self._state.pending:

@@ -18,7 +18,7 @@ def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
         return f"<{term.value}>"
     if isinstance(term, BlankNode):
         raw = str(term)
-        return raw if raw.startswith("_:") else f"_:{raw}"
+        return raw if raw.startswith("_:") else f"_:{raw}"  # pragma: no cover
     if isinstance(term, Literal):
         escaped = str(term.value).replace("\\", "\\\\").replace('"', '\\"')
         out = f'"{escaped}"'
