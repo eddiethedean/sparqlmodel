@@ -8,6 +8,7 @@ session, query compiler, stores, and cascade policy.
 """
 
 from sparqlmodel._version import __version__
+from sparqlmodel.async_session import AsyncSPARQLSession
 from sparqlmodel.exceptions import (
     ConfigurationError,
     HydrationError,
@@ -18,11 +19,16 @@ from sparqlmodel.exceptions import (
 from sparqlmodel.fields import Field, Relationship
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.session import SPARQLSession
+from sparqlmodel.stores.async_http import AsyncHttpStore
+from sparqlmodel.stores.async_memory import AsyncMemoryStore
 from sparqlmodel.stores.http import HttpStore
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI
 
 __all__ = [
+    "AsyncHttpStore",
+    "AsyncMemoryStore",
+    "AsyncSPARQLSession",
     "ConfigurationError",
     "Field",
     "HydrationError",

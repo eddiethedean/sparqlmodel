@@ -7,10 +7,15 @@ from typing import TYPE_CHECKING, Any
 from triplemodel import Store
 
 from sparqlmodel.fastapi.deps import (
+    AsyncSessionDep,
     SessionDep,
+    async_http_store_lifespan,
+    async_session_dependency,
+    get_async_session,
     get_session,
     http_store_lifespan,
     init_app,
+    init_async_app,
     session_dependency,
 )
 from sparqlmodel.model import SPARQLModel
@@ -18,10 +23,15 @@ from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.serializers import export_graph
 
 __all__ = [
+    "AsyncSessionDep",
     "SessionDep",
+    "async_http_store_lifespan",
+    "async_session_dependency",
+    "get_async_session",
     "get_session",
     "http_store_lifespan",
     "init_app",
+    "init_async_app",
     "jsonld_response",
     "negotiated_response",
     "session_dependency",

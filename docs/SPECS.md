@@ -38,18 +38,18 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] FastAPI `SessionDep`, `init_app`, `http_store_lifespan`
 - [x] Session I/O via TripleModel (`put` / `get` / hydrate) — **0.3.0**
 - [x] **Option A** — `SPARQLModel(TripleModel)`; `_triple.py` removed; `rdf_bridge` + direct `from_graph` — **0.4.0**
-- [ ] `AsyncSPARQLSession` — async CRUD, `async with`, `async def execute` — **0.6**
-- [ ] `AsyncStore` + `AsyncHttpStore` (`httpx.AsyncClient`) + `AsyncMemoryStore` — **0.6**
-- [ ] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.6**
-- [ ] FastAPI `AsyncSessionDep` + async lifespan wiring for shared async store — **0.6**
-- [ ] Async/sync parity contract tests on memory and HTTP stores — **0.6**
+- [x] `AsyncSPARQLSession` — async CRUD, `async with`, `async def execute` — **0.6.0**
+- [x] `AsyncStoreProtocol` + `AsyncHttpStore` (`httpx.AsyncClient`) + `AsyncMemoryStore` — **0.6.0**
+- [x] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.6.0**
+- [x] FastAPI `AsyncSessionDep` + `async_http_store_lifespan` — **0.6.0**
+- [x] Async/sync parity contract tests on memory and HTTP stores — **0.6.0**
 - [ ] `Query.offset(n)` — **0.7**
 - [ ] `Query.order_by(...)` — **0.7**
 - [ ] `Query.count()` — **0.7**
 - [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.7**
 - [ ] HttpStore mirror sync or remote-authoritative `get` contract — **0.9**
 - [ ] Scoped session pattern documented (FastAPI + scripts) — **0.8**
-- [ ] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
+- [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
 ## P1 — SQLModel / SPARQLMojo parity
 
@@ -365,7 +365,7 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 Parallel to the sync stack; sync API remains supported.
 
-| Component | Sync (shipped) | Async (0.6) |
+| Component | Sync (shipped) | Async (0.6.0) |
 |-----------|----------------|-------------|
 | Session | `SPARQLSession` | `AsyncSPARQLSession` |
 | Store | `Store`, `MemoryStore`, `HttpStore` | `AsyncStore`, `AsyncMemoryStore`, `AsyncHttpStore` |
@@ -385,13 +385,6 @@ Parallel to the sync stack; sync API remains supported.
 | Area | Behavior |
 |------|----------|
 | Dual model types | 0.3 uses interim `_triple.py` dynamic adapter; **0.4** unifies on `SPARQLModel(TripleModel)` |
-
-## Until 0.6 (async)
-
-| Area | Behavior |
-|------|----------|
-| Async session / store | Not shipped; sync `SPARQLSession` and `httpx.Client` only |
-| FastAPI async routes | Use sync `SessionDep` (blocking I/O) or `run_in_executor` until **0.6** |
 
 ## Until 0.7 (query)
 

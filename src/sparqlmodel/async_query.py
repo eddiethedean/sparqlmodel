@@ -1,4 +1,4 @@
-"""ORM query builder; compiles Python filters to SPARQL."""
+"""Async ORM query builder; compiles Python filters to SPARQL."""
 
 from __future__ import annotations
 
@@ -17,58 +17,58 @@ from sparqlmodel.query_common import (
 )
 
 if TYPE_CHECKING:
-    from sparqlmodel.session import SPARQLSession
+    from sparqlmodel.async_session import AsyncSPARQLSession
 
 
-class Query:
-    """ORM query builder for a :class:`~sparqlmodel.model.SPARQLModel` class."""
+class AsyncQuery:
+    """Async ORM query builder for a :class:`~sparqlmodel.model.SPARQLModel` class."""
 
     def __init__(
         self,
-        session: SPARQLSession,
+        session: AsyncSPARQLSession,
         model_cls: type[SPARQLModel],
     ) -> None:
         self._session = session
         self._state = QueryState(model_cls=model_cls)
 
-    def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> Query:
+    def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> AsyncQuery:
         apply_where(self._state, *expressions)
         return self
 
-    def use_not_exists_for_ne(self, enabled: bool = True) -> Query:
+    def use_not_exists_for_ne(self, enabled: bool = True) -> AsyncQuery:
         apply_use_not_exists_for_ne(self._state, enabled)
         return self
 
-    def use_inequality_for_ne(self, enabled: bool = True) -> Query:
+    def use_inequality_for_ne(self, enabled: bool = True) -> AsyncQuery:
         apply_use_inequality_for_ne(self._state, enabled)
         return self
 
-    def use_optional_for_comparisons(self, enabled: bool = True) -> Query:
+    def use_optional_for_comparisons(self, enabled: bool = True) -> AsyncQuery:
         apply_use_optional_for_comparisons(self._state, enabled)
         return self
 
-    def limit(self, n: int) -> Query:
+    def limit(self, n: int) -> AsyncQuery:
         apply_limit(self._state, n)
         return self
 
     def _compile(self, *, limit: int | None = None) -> str:
         return self._state.compile(self._session.namespaces, limit=limit)
 
-    def all(self, *, depth: int = 0) -> list[SPARQLModel]:
+    async def all(self, *, depth: int = 0) -> list[SPARQLModel]:
         validate_depth(depth)
         sparql = self._state.compile(self._session.namespaces)
-        bindings = self._session.execute(sparql)
-        return self._session.hydrate_bindings(
+        bindings = await self._session.execute(sparql)
+        return await self._session.hydrate_bindings(
             self._state.model_cls,
             bindings,
             depth=depth,
         )
 
-    def first(self, *, depth: int = 0) -> SPARQLModel | None:
+    async def first(self, *, depth: int = 0) -> SPARQLModel | None:
         validate_depth(depth)
         sparql = self._state.compile(self._session.namespaces, limit=1)
-        bindings = self._session.execute(sparql)
-        results = self._session.hydrate_bindings(
+        bindings = await self._session.execute(sparql)
+        results = await self._session.hydrate_bindings(
             self._state.model_cls,
             bindings,
             depth=depth,

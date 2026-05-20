@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-20
+
+### Added
+
+- **`AsyncSPARQLSession`** — `async with`, `await put` / `get` / `delete` / `add`, `flush`, `rollback_pending`, `execute`, `query` → **`AsyncQuery`** with `await .all()` / `.first()` (same expression DSL as sync)
+- **`AsyncMemoryStore`**, **`AsyncHttpStore`** — `httpx.AsyncClient` mirror semantics matching sync `HttpStore`; shared helpers in `stores/http_common.py`
+- **`session_core`** — shared CRUD/hydration for sync and async sessions (sync API unchanged)
+- **FastAPI** — `init_async_app`, `get_async_session`, `AsyncSessionDep`, `async_http_store_lifespan`, `async_session_dependency`
+- **`pytest-asyncio`** in dev extras; `asyncio_mode = auto` for tests
+
+### Notes
+
+- Async HTTP uses existing **`sparqlmodel[http]`** (`httpx`); no separate `[async]` extra
+- Sync `SPARQLSession`, `HttpStore`, and `SessionDep` are unchanged
+- **`aio-rdf`** Rust async I/O remains out of scope (see `docs/ASYNC_RDF_RUST_PLAN.md`)
+
 ## [0.5.2] - 2026-05-20
 
 ### Fixed

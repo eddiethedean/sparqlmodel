@@ -6,7 +6,10 @@ from collections.abc import AsyncIterator, Callable, Generator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
+from sparqlmodel.async_session import AsyncSPARQLSession
 from sparqlmodel.session import SPARQLSession
+from sparqlmodel.stores.async_base import AsyncStoreProtocol
+from sparqlmodel.stores.async_memory import AsyncMemoryStore
 from sparqlmodel.stores.base import Store
 from sparqlmodel.stores.memory import MemoryStore
 
@@ -151,6 +154,118 @@ def session_dependency(
             "close_on_exit": close,
         }
         with SPARQLSession(store=resolved, **kwargs) as session:
+            yield session
+
+    return _get
+
+
+def init_async_app(
+    app: FastAPI,
+    store: AsyncStoreProtocol,
+    *,
+    prefixes: dict[str, str] | None = None,
+    autoflush: bool = True,
+    rollback_on_error: bool = True,
+) -> None:
+    """Attach a shared async store and session options to ``app.state``."""
+    _require_fastapi_depends()
+    app.state.sparql_async_store = store
+    app.state.sparql_async_session_options = {
+        "prefixes": prefixes,
+        "autoflush": autoflush,
+        "rollback_on_error": rollback_on_error,
+        "close_on_exit": False,
+    }
+
+
+def _async_session_options(app: FastAPI) -> dict[str, Any]:
+    options = getattr(app.state, "sparql_async_session_options", None)
+    if isinstance(options, dict):
+        return dict(options)
+    return {}
+
+
+def _resolve_async_store(app: FastAPI) -> tuple[AsyncStoreProtocol, bool]:
+    shared = getattr(app.state, "sparql_async_store", None)
+    if shared is not None:
+        return shared, False
+    factory = getattr(app.state, "sparql_async_store_factory", None)
+    if callable(factory):
+        return factory(), True
+    return AsyncMemoryStore(), True
+
+
+async def get_async_session(request: Request) -> AsyncIterator[AsyncSPARQLSession]:
+    """Yield one :class:`~sparqlmodel.async_session.AsyncSPARQLSession` per request."""
+    _require_fastapi_depends()
+    store, should_close_store = _resolve_async_store(request.app)
+    options = _async_session_options(request.app)
+    options.setdefault("close_on_exit", should_close_store)
+    async with AsyncSPARQLSession(store=store, **options) as session:
+        yield session
+
+
+if Depends is not None:
+    AsyncSessionDep = Annotated[AsyncSPARQLSession, Depends(get_async_session)]
+else:  # pragma: no cover
+    AsyncSessionDep = AsyncSPARQLSession  # type: ignore[assignment,misc]
+
+
+@asynccontextmanager
+async def async_http_store_lifespan(
+    app: FastAPI,
+    endpoint: str,
+    *,
+    auth: tuple[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    prefixes: dict[str, str] | None = None,
+    **http_kwargs: Any,
+) -> AsyncIterator[None]:
+    """AsyncHttpStore lifespan: :func:`init_async_app` on startup, ``aclose`` on shutdown."""
+    _require_fastapi_depends()
+    from sparqlmodel.stores.async_http import AsyncHttpStore
+
+    async with AsyncHttpStore(
+        endpoint,
+        auth=auth,
+        headers=headers,
+        prefixes=prefixes,
+        **http_kwargs,
+    ) as store:
+        init_async_app(app, store, prefixes=prefixes)
+        yield
+
+
+def async_session_dependency(
+    store: AsyncStoreProtocol | None = None,
+    *,
+    store_factory: Callable[[], AsyncStoreProtocol] | None = None,
+    prefixes: dict[str, str] | None = None,
+    autoflush: bool = True,
+    rollback_on_error: bool = True,
+    close_on_exit: bool | None = None,
+) -> Callable[[Request], AsyncIterator[AsyncSPARQLSession]]:
+    """Build a custom async ``get_session`` for dependency overrides."""
+    _require_fastapi_depends()
+
+    async def _get(request: Request) -> AsyncIterator[AsyncSPARQLSession]:
+        if store is not None:
+            resolved = store
+            close = False if close_on_exit is None else close_on_exit
+        elif store_factory is not None:
+            resolved = store_factory()
+            close = True if close_on_exit is None else close_on_exit
+        else:
+            resolved, close = _resolve_async_store(request.app)
+            if close_on_exit is not None:
+                close = close_on_exit
+        kwargs: dict[str, Any] = {
+            "prefixes": prefixes,
+            "autoflush": autoflush,
+            "rollback_on_error": rollback_on_error,
+            "close_on_exit": close,
+        }
+        async with AsyncSPARQLSession(store=resolved, **kwargs) as session:
             yield session
 
     return _get

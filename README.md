@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#052---2026-05-20) (0.5.2)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#060---2026-05-20) (0.6.0)
 
 ---
 
@@ -19,10 +19,10 @@ Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with 
 |------|----------------|
 | **Models** | `SPARQLModel`, `Field`, `Relationship`, `IRI` — **Pydantic v2** validation (`model_validate`, constraints, `extra="forbid"`) |
 | **RDF mapping** | `rdf_type`, compact predicates, TripleModel `sync_to_graph` / `from_graph` under the hood |
-| **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue |
+| **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue (sync and **async** since 0.6) |
 | **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, comparisons, multi-hop) |
-| **Stores** | `MemoryStore` (default), `HttpStore` for Fuseki/Jena-style endpoints |
-| **FastAPI** | `SessionDep`, `http_store_lifespan`, Turtle/JSON-LD responses |
+| **Stores** | `MemoryStore` / `AsyncMemoryStore`; `HttpStore` / `AsyncHttpStore` for Fuseki/Jena (`[http]`) |
+| **FastAPI** | `SessionDep` or `AsyncSessionDep`, lifespan helpers, Turtle/JSON-LD responses |
 | **Cascade** | Composition on `put`/`delete`; `Relationship(..., cascade=False)` for references |
 
 ---
@@ -34,7 +34,7 @@ pip install sparqlmodel
 ```
 
 ```bash
-pip install "sparqlmodel[http]"      # HttpStore (httpx)
+pip install "sparqlmodel[http]"      # HttpStore + AsyncHttpStore (httpx)
 pip install "sparqlmodel[fastapi]"   # FastAPI session + RDF responses
 pip install -e ".[dev,http,fastapi]" # development
 ```
@@ -224,11 +224,10 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 ---
 
-## Known limitations (0.5.2)
+## Known limitations (0.6.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore`: mirror may lag behind the remote dataset for `get` / cascade (production mirror sync planned **1.0**)
-- No async session or `AsyncHttpStore` yet — planned **0.6** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade (production mirror sync planned **1.0**)
 - Query: `limit` only — `offset` / `order_by` / `count` planned **0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics

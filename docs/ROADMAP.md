@@ -27,7 +27,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` delegates to TripleModel `load_graph` / `dump_graph` — full retirement of duplicate format tables in **0.7**. `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **0.6 — async end-to-end**. Pyoxigraph engine shipped in **0.5.0**; unified model (Option A) in **0.4.0**.
+**Current focus (next release):** **0.7 — file I/O delegated**. **0.6** async end-to-end shipped **2026-05-20**; Pyoxigraph engine in **0.5.0**; unified model (Option A) in **0.4.0**.
 
 ---
 
@@ -226,41 +226,36 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 
 ## 0.6 — Async end-to-end
 
-**Status:** planned (after **0.5**).
+**Status:** shipped as **0.6.0** (2026-05-20).
 
 **Goal:** first-class **async** ORM for FastAPI and asyncio apps — no blocking the event loop on `HttpStore` I/O. The **sync** API (`SPARQLSession`, `MemoryStore`, `HttpStore`, `SessionDep`) remains supported and unchanged.
 
 ### Store layer
 
-- [ ] `AsyncStore` protocol — `async def query`, `async def update_graph`, `async def close` (mirror sync `Store`)
-- [ ] `AsyncHttpStore` — `httpx.AsyncClient`, same mirror semantics as sync `HttpStore`
-- [ ] `AsyncMemoryStore` — in-process graph; async methods (no network) for API symmetry and tests
-- [ ] Optional extra `sparqlmodel[async]` or fold into `[http]` (document choice in SPECS)
+- [x] `AsyncStoreProtocol` — `async def query`, `async def update_graph`, `async def aclose`
+- [x] `AsyncHttpStore` — `httpx.AsyncClient`, same mirror semantics as sync `HttpStore`; shared `http_common` helpers
+- [x] `AsyncMemoryStore` — in-process graph; async methods for API symmetry and tests
+- [x] Async HTTP folded into **`sparqlmodel[http]`** (no separate `[async]` extra)
 
 ### Session layer
 
-- [ ] `AsyncSPARQLSession` — `async with`, `async def put` / `get` / `delete` / `add`, `async def flush` / `rollback_pending`, `async def execute`
-- [ ] `async def query(Model)` → `AsyncQuery` with `async def all()` / `first()` (same expression DSL as sync)
-- [ ] Identity map + hydration cache — same semantics as sync; **one session per asyncio task** (documented)
-- [ ] Shared compiler + hydration; only I/O and session entry points are async
+- [x] `AsyncSPARQLSession` — `async with`, async CRUD, `flush` / `rollback_pending`, `execute`
+- [x] `AsyncQuery` — `await .all()` / `.first()`; same expression DSL as sync
+- [x] `session_core` — shared identity map, cascade, hydration with sync session
+- [x] **One session per asyncio task** — documented in ORM / PRODUCTION
 
 ### FastAPI
 
-- [ ] `AsyncSessionDep` — async generator dependency (`async with AsyncSPARQLSession(...) as session: yield session`)
-- [ ] `async with http_store_lifespan(...)` wires `AsyncHttpStore` when app uses async session
-- [ ] Guides: async routes with `await session.put` / `await session.query(...).all()`; when to keep sync session in `run_in_executor`
+- [x] `AsyncSessionDep`, `init_async_app`, `get_async_session`, `async_http_store_lifespan`, `async_session_dependency`
+- [x] [FastAPI guide](guides/fastapi.md) — async routes and lifespan
 
 ### Quality
 
-- [ ] Contract tests: async session `put` / `get` / `query` parity with sync on `MemoryStore` and `AsyncHttpStore` (mock or testcontainers endpoint)
-- [ ] [ORM.md](ORM.md) async section; [PRODUCTION.md](PRODUCTION.md) concurrency (async tasks vs threads)
-- [ ] [SPECS.md](SPECS.md) async checklist — P0 for **0.6**, not deferred to 1.0+
+- [x] Async store, session, query, and FastAPI contract tests
+- [x] [ORM.md](ORM.md) async section; [PRODUCTION.md](PRODUCTION.md) concurrency notes
+- [x] [SPECS.md](SPECS.md) async checklist marked for **0.6**
 
-**Exit criteria:** A FastAPI app can use `AsyncSessionDep` + `AsyncHttpStore` end-to-end without sync `httpx` on the hot path; SPECS async items checked.
-
-**Out of scope for 0.6:** async TripleModel APIs (unified model stays sync; async session calls sync mapping on the event loop for in-memory work).
-
-**Pydantic:** unchanged — `model_validate` on load paths; async does not change validation rules.
+**Out of scope for 0.6:** async TripleModel APIs; **`aio-rdf`** Rust crate (optional later).
 
 ---
 
@@ -426,7 +421,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities
 
-1. **0.6 async end-to-end** — `AsyncSPARQLSession`, `AsyncHttpStore`, `AsyncSessionDep` (sync API unchanged).
+1. **0.7 file I/O delegated** — serializers → TripleModel `serialize` / `load_graph`.
 2. **Do not expand** interim mapping — retire duplicate serializer tables in **0.7**.
 3. **P0 query + HttpStore** for production APIs (**0.8–1.0**).
 4. **P1 session lifecycle + RDF types** (**0.9–1.1**).

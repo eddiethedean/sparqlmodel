@@ -1,4 +1,4 @@
-"""HTTP SPARQL 1.1 store with a local graph mirror for ORM cascade reads."""
+"""Async HTTP SPARQL 1.1 store with a local graph mirror for ORM cascade reads."""
 
 from __future__ import annotations
 
@@ -13,29 +13,14 @@ from sparqlmodel.stores import http_common
 from sparqlmodel.stores.sparql_json import parse_sparql_json_bindings
 from sparqlmodel.types import NamespaceRegistry
 
-_CLOSED_STORE_MSG = "Cannot use a closed HttpStore"
-
-# Backward-compatible re-exports for tests and callers.
-_graph_to_insert_data = http_common.graph_to_insert_data
-_graph_to_delete_data = http_common.graph_to_delete_data
+_CLOSED_STORE_MSG = "Cannot use a closed AsyncHttpStore"
 
 
-class HttpStore:
-    """SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
+class AsyncHttpStore:
+    """Async SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
 
-    ``update_graph`` pushes ``INSERT DATA`` / ``DELETE DATA`` to the remote endpoint
-    and applies the same delta to the mirror on success. ``graph`` reads the mirror
-    (for cascade / orphan logic and ``session.get``). ``query`` executes SELECT against
-    the remote endpoint only.
-
-    **Mirror limitations:** Data written outside this store instance (another app,
-    admin UI, or raw SPARQL UPDATE) is visible to ``query`` / ``execute`` but not to
-    ``graph``, ``get``, or cascade/orphan logic until the mirror is updated. Prefer
-    :class:`~sparqlmodel.stores.memory.MemoryStore` for single-process apps and tests.
-    Assume a single writer per endpoint when using ``HttpStore``.
-
-    If both ``auth`` and ``bearer_token`` are set, Basic ``auth`` wins for
-    ``Authorization``.
+    Same mirror semantics as :class:`~sparqlmodel.stores.http.HttpStore`, using
+    ``httpx.AsyncClient`` for non-blocking remote I/O.
     """
 
     def __init__(
@@ -48,7 +33,7 @@ class HttpStore:
         bearer_token: str | None = None,
         headers: Mapping[str, str] | None = None,
         timeout: float = 30.0,
-        client: httpx.Client | None = None,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
         self._graph = graph or Store()
@@ -66,7 +51,7 @@ class HttpStore:
             if req_headers:
                 self._client.headers.update(req_headers)
         else:
-            self._client = httpx.Client(
+            self._client = httpx.AsyncClient(
                 headers=req_headers,
                 timeout=timeout,
                 follow_redirects=True,
@@ -92,26 +77,26 @@ class HttpStore:
     def endpoint(self) -> str:
         return self._endpoint
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         if self._closed:
             return
         self._closed = True
         if self._owns_client:
-            self._client.close()
+            await self._client.aclose()
 
-    def __enter__(self) -> HttpStore:
+    async def __aenter__(self) -> AsyncHttpStore:
         return self
 
-    def __exit__(self, *args: object) -> None:
-        self.close()
+    async def __aexit__(self, *args: object) -> None:
+        await self.aclose()
 
-    def _post_update(self, update: str) -> None:
+    async def _post_update(self, update: str) -> None:
         self._check_open()
         if not update.strip():
             return
         url = http_common.sparql_url(self._endpoint)
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 url,
                 content=update.encode("utf-8"),
                 headers=http_common.SPARQL_UPDATE_HEADERS,
@@ -120,12 +105,12 @@ class HttpStore:
         except httpx.HTTPError as exc:
             raise QueryError(f"SPARQL UPDATE failed: {exc}") from exc
 
-    def query(self, sparql: str) -> list[dict[str, Any]]:
+    async def query(self, sparql: str) -> list[dict[str, Any]]:
         """Execute SPARQL SELECT against the remote endpoint."""
         self._check_open()
         url = http_common.sparql_url(self._endpoint)
         try:
-            response = self._client.post(
+            response = await self._client.post(
                 url,
                 content=sparql.encode("utf-8"),
                 headers=http_common.SPARQL_QUERY_HEADERS,
@@ -139,7 +124,7 @@ class HttpStore:
         except Exception as exc:
             raise QueryError(f"Failed to parse SPARQL JSON results: {exc}") from exc
 
-    def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
+    async def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""
         self._check_open()
         parts: list[str] = []
@@ -148,7 +133,7 @@ class HttpStore:
         if add is not None and len(add):
             parts.append(http_common.graph_to_insert_data(add))
         update = "\n".join(parts)
-        self._post_update(update)
+        await self._post_update(update)
 
         if remove is not None:
             for triple in remove:

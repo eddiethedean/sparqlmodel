@@ -89,6 +89,61 @@ client = TestClient(app)
 
 Seed data with `session.put` inside routes or a fixture that uses `SessionDep` override (standard FastAPI dependency overrides).
 
+## Async routes (0.6+)
+
+Install `sparqlmodel[http]` for `AsyncHttpStore` (uses `httpx.AsyncClient`). Async HTTP shares the **`[http]`** extra — there is no separate `[async]` package.
+
+```python
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from sparqlmodel import IRI, SPARQLModel, Field
+from sparqlmodel.fastapi import AsyncSessionDep, async_http_store_lifespan
+
+class Person(SPARQLModel):
+    rdf_type = "schema:Person"
+    __prefixes__ = {"schema": "https://schema.org/"}
+    id: IRI
+    name: str = Field("schema:name")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with async_http_store_lifespan(app, "http://localhost:3030/ds/sparql"):
+        yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.get("/people/{iri:path}")
+async def get_person(iri: str, session: AsyncSessionDep):
+    return await session.get(Person, IRI(iri), depth=0)
+```
+
+| Symbol | Role |
+|--------|------|
+| `async_http_store_lifespan` | Shared `AsyncHttpStore` on `app.state`, `aclose` on shutdown |
+| `init_async_app` | Register async store for tests / in-memory apps |
+| `AsyncSessionDep` | One `AsyncSPARQLSession` per request (`close_on_exit=False` when store is shared) |
+| `async_session_dependency` | Custom `get_async_session` for dependency overrides |
+
+```{warning}
+Use `async def` route handlers with `AsyncSessionDep`. Keep sync `SessionDep` for sync routes only — mixing blocking `httpx.Client` I/O on the event loop will block other requests.
+```
+
+In-memory async tests:
+
+```python
+from sparqlmodel.fastapi import init_async_app
+from sparqlmodel.stores.async_memory import AsyncMemoryStore
+
+app = FastAPI()
+init_async_app(app, AsyncMemoryStore())
+
+@app.get("/health")
+async def health(session: AsyncSessionDep):
+    await session.put(Person(id=IRI("urn:p:1"), name="OK"))
+    return {"ok": True}
+```
+
 ## Next
 
 - {doc}`sessions` — flush queue and identity map

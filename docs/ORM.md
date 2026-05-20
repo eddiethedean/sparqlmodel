@@ -68,7 +68,8 @@ Task-oriented examples: {doc}`guides/models`. Normative detail: {doc}`SPECS` (va
 
 ```python
 from sparqlmodel import (
-    SPARQLSession,   # start here
+    SPARQLSession,   # sync — start here
+    AsyncSPARQLSession,  # asyncio / FastAPI async routes (0.6+)
     SPARQLModel,
     Field,
     Relationship,
@@ -110,6 +111,30 @@ with SPARQLSession(store=HttpStore("https://example.org/sparql")) as remote:
 ```
 
 On exception, the context manager calls `rollback_pending()` (discard the queue only — already-flushed writes stay). Set `rollback_on_error=False` to keep pending across errors, or `close_on_exit=False` when the store is managed elsewhere.
+
+---
+
+## Async session (0.6+)
+
+For FastAPI and other **asyncio** apps, use **`AsyncSPARQLSession`** with **`AsyncMemoryStore`** or **`AsyncHttpStore`** (`sparqlmodel[http]` — same `httpx` extra as sync). The sync session API is unchanged.
+
+```python
+from sparqlmodel import AsyncSPARQLSession, IRI
+from sparqlmodel.stores.async_http import AsyncHttpStore
+
+async with AsyncSPARQLSession(store=AsyncHttpStore("https://example.org/sparql")) as session:
+    await session.put(person)
+    results = await session.query(Person).where(Person.name == "Odos").all()
+    one = await session.get(Person, person.id, depth=1)
+```
+
+| Topic | Guidance |
+|-------|----------|
+| **When to use async** | Remote SPARQL over the network in async routes; avoid blocking `httpx.Client` on the event loop |
+| **When sync is fine** | Scripts, tests, `MemoryStore`, or sync FastAPI with `SessionDep` |
+| **Concurrency** | One `AsyncSPARQLSession` per asyncio task — do not share across `asyncio.gather` workers |
+| **FastAPI** | `AsyncSessionDep`, `init_async_app`, `async_http_store_lifespan` — see {doc}`guides/fastapi` |
+| **Compiler / hydration** | Same rules as sync; only store I/O and session entry points are `async` |
 
 ---
 
@@ -220,7 +245,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** async session and stores (**0.6**), `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**).
+**Not yet available (planned):** `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Async session and stores** shipped in **0.6.0**.
 
 ---
 

@@ -20,7 +20,7 @@ copyright = "2026, SparqlModel Contributors"
 try:
     from sparqlmodel import __version__ as release
 except ImportError:  # pragma: no cover - docs build without install
-    release = "0.5.2"
+    release = "0.6.0"
 
 version = release
 

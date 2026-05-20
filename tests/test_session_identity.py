@@ -69,13 +69,17 @@ def test_flush_requeues_on_failure(
     session.put(other, flush=False)
     calls = {"n": 0}
 
-    def failing_put(model: Person) -> Person:
+    from sparqlmodel import session_core
+
+    orig = session_core.put_impl
+
+    def failing_put(store: object, state: object, model: Person) -> Person:
         calls["n"] += 1
         if calls["n"] == 2:
             raise RuntimeError("put failed")
-        return SPARQLSession._put_impl(session, model)  # type: ignore[arg-type]
+        return orig(store, state, model)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(session, "_put_impl", failing_put)
+    monkeypatch.setattr(session_core, "put_impl", failing_put)
     with pytest.raises(RuntimeError, match="put failed"):
         session.flush()
     assert len(session._state.pending) == 1
