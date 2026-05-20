@@ -192,16 +192,37 @@ def test_ne_default_excludes_missing_name(session) -> None:
     assert any("urn:p:noname" in str(v) for b in optional_bindings for v in b.values())
 
 
-def test_or_expr_and_chaining() -> None:
+def test_or_expr_and_chaining_raises() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
-    combined = ((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")
-    assert isinstance(combined, AndExpr)
+    with pytest.raises(QueryError, match="Cannot combine OR and AND"):
+        _ = ((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")
     sparql = compile_where(
         Person,
         ((Person.name == "A") | (Person.name == "B"), Person.name != "C"),
         registry,
     )
     assert "FILTER" in sparql
+    assert "||" in sparql
+
+
+def test_or_and_combined_where_separate_args_integration() -> None:
+    from sparqlmodel import IRI, SPARQLSession
+
+    session = SPARQLSession()
+    session.put(Person(id=IRI("urn:p:a"), name="A"))
+    session.put(Person(id=IRI("urn:p:b"), name="B"))
+    session.put(Person(id=IRI("urn:p:c"), name="C"))
+    names = {
+        p.name
+        for p in session.query(Person)
+        .where((Person.name == "A") | (Person.name == "B"), Person.name != "C")
+        .all()
+    }
+    assert names == {"A", "B"}
+    with pytest.raises(QueryError, match="Cannot combine OR and AND"):
+        session.query(Person).where(
+            ((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")
+        ).all()
 
 
 def test_in_list_accepted() -> None:
@@ -219,6 +240,28 @@ def test_query_use_not_exists_for_ne() -> None:
     results = session.query(Person).where(Person.name != "Drop").use_not_exists_for_ne().all()
     assert len(results) == 1
     assert results[0].name == "Keep"
+
+
+def test_use_optional_for_comparisons_disable(session) -> None:
+    from sparqlmodel import IRI
+    from tests.rdf_helpers import RDF_TYPE
+
+    session.put(Person(id=IRI("urn:p:named"), name="Named"))
+    noname = "urn:p:noname"
+    person_type = "https://schema.org/Person"
+    session.graph.add((noname, RDF_TYPE, person_type))
+    default_bindings = session.execute(
+        session.query(Person).where(Person.name != "Named")._compile()
+    )
+    toggled_bindings = session.execute(
+        session.query(Person)
+        .where(Person.name != "Named")
+        .use_optional_for_comparisons()
+        .use_optional_for_comparisons(False)
+        ._compile()
+    )
+    assert toggled_bindings == default_bindings
+    assert not any("urn:p:noname" in str(b.get("person", "")) for b in toggled_bindings)
 
 
 def test_compile_in_non_tuple_raises_type_error() -> None:

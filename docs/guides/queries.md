@@ -34,6 +34,15 @@ session.query(Person).where(
 
 Parenthesize mixed `&` and `|` for clarity — Python binds `&` tighter than `|`, and the compiler follows that precedence (same as `(A & B) | C`).
 
+To AND an OR group with another filter, pass **separate** arguments to `.where()` (not `&` between OR and AND)::
+
+    session.query(Person).where(
+        (Person.name == "Odos") | (Person.name == "Ada"),
+        Person.name != "Other",
+    ).all()
+
+Using `((A | B) & C)` raises {class}`~sparqlmodel.exceptions.QueryError` — it would silently compile as `A ∧ B ∧ C` if allowed.
+
 ## Multi-hop paths
 
 Traverse relationships in filters:
@@ -46,13 +55,15 @@ The related resource must have the expected `rdf:type` in the graph. Unknown com
 
 ## Negation semantics
 
-Default `!=` uses inequality filters and **excludes** resources with no value for the field. For SQL-style “no matching triple” semantics:
+Default `!=` uses inequality filters and **excludes** resources with no value for the field. For SQL-style “no matching triple” semantics (implemented with ``FILTER NOT EXISTS``, not SPARQL ``OPTIONAL``):
 
 ```python
 session.query(Person).where(Person.name != "X").use_not_exists_for_ne().all()
 # equivalent convenience:
 session.query(Person).where(Person.name != "X").use_optional_for_comparisons().all()
 ```
+
+Call ``use_optional_for_comparisons(False)`` to turn that behavior off again.
 
 Ordering (`<`, `>`, …) and `in_` still require a bound predicate value (SPARQL-native). Unique variables are generated per `!=` inside AND branches of OR expressions (0.2+).
 
@@ -62,14 +73,14 @@ Filter values on `IRI` fields (or unions including `IRI`) accept absolute `urn:`
 
 ```python
 q = session.query(Person).where(Person.name == "Odos")
-q.first()                    # one or None
+q.first()                    # one or None (always LIMIT 1, ignores prior .limit())
 q.first(depth=1)             # eager-load one hop
 q.limit(10).all()
 q.limit(10).all(depth=1)
 ```
 
 ```{note}
-`offset`, `order_by`, and `count()` are planned for **0.6**. Until then use `.limit()` only or raw `session.execute`.
+`offset`, `order_by`, and `count()` are planned for **0.7–0.8**. Until then use `.limit()` only or raw `session.execute`.
 ```
 
 ## Raw SPARQL
@@ -89,7 +100,7 @@ Configured namespace prefixes on the session are applied where supported.
 
 ## Security
 
-Filter **values** are serialized with RDFLib `n3()`. **Predicates** and class IRIs come from model metadata (trusted code). Do not pass untrusted strings into raw `execute()` without parameterization patterns appropriate to your endpoint.
+Filter **values** are serialized with SparqlModel N3 helpers (`rdf_n3`). **Predicates** and class IRIs come from model metadata (trusted code). Do not pass untrusted strings into raw `execute()` without parameterization patterns appropriate to your endpoint.
 
 See {doc}`../SPECS` — Security (SPARQL generation).
 

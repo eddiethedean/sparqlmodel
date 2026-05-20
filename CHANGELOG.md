@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Query DSL** — `((A | B) & C)` raises `QueryError` instead of silently compiling as `A ∧ B ∧ C`; use `.where((A | B), C)` for OR combined with AND
+- **Session hydration cache** — `get(..., depth=2)` checks all relationship branches before reusing identity (multi-relationship models)
+- **`use_optional_for_comparisons(False)`** — restores default `!=` semantics after enabling NOT EXISTS mode
+
+### Documentation
+
+- Query guide — OR/AND composition, `first()` vs `limit()`, `use_optional_for_comparisons` naming; pagination milestone aligned to **0.7–0.8**
+- Troubleshooting — OR/AND `QueryError`, session `__exit__` with pending queue and `rollback_on_error=False`
+
 ## [0.5.0] - 2026-05-18
 
 ### Added

@@ -150,14 +150,16 @@ def test_flatten_and_parts_nested_and() -> None:
 
 
 def test_or_expr_and_with_and_expr_and_rand() -> None:
+    from sparqlmodel.exceptions import QueryError
+
     e1 = Person.name == "a"
     e2 = Person.name == "b"
     e3 = Person.name == "c"
     or_expr = OrExpr((e1, e2))
-    combined = or_expr & AndExpr((e3,))
-    assert isinstance(combined, AndExpr)
-    rand = or_expr.__rand__(Person.name == "c")
-    assert isinstance(rand, AndExpr)
+    with pytest.raises(QueryError, match="Cannot combine OR and AND"):
+        _ = or_expr & AndExpr((e3,))
+    with pytest.raises(QueryError, match="Cannot combine OR and AND"):
+        or_expr.__rand__(Person.name == "c")
 
 
 def test_export_graph_bytes_decode() -> None:

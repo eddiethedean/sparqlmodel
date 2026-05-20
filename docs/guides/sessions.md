@@ -1,6 +1,6 @@
 # Sessions and stores
 
-`SPARQLSession` is the unit of work: all reads and writes go through a session bound to a {class}`~sparqlmodel.stores.base.Store`.
+`SPARQLSession` is the unit of work: all reads and writes go through a session bound to a store ({class}`~sparqlmodel.stores.memory.MemoryStore` or {class}`~sparqlmodel.stores.http.HttpStore`).
 
 ## Context manager (recommended)
 

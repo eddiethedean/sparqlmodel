@@ -7,8 +7,15 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from sparqlmodel.exceptions import QueryError
+
 if TYPE_CHECKING:
     from sparqlmodel.model import SPARQLModel
+
+_OR_AND_MSG = (
+    "Cannot combine OR and AND with `&`. Use `.where((A | B), C)` with separate "
+    "arguments, or parenthesize as `(A & B) | C`."
+)
 
 
 class CompareOp(str, Enum):
@@ -116,12 +123,10 @@ class OrExpr:
     expressions: tuple[CompareExpr | AndExpr, ...]
 
     def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
-        if isinstance(other, AndExpr):
-            return AndExpr(_flatten_and_parts(other.expressions + self.expressions))
-        return AndExpr(_flatten_and_parts((other,) + self.expressions))
+        raise QueryError(_OR_AND_MSG)
 
     def __rand__(self, other: CompareExpr | AndExpr) -> AndExpr:
-        return self.__and__(other)
+        raise QueryError(_OR_AND_MSG)
 
     def __or__(self, other: CompareExpr | AndExpr | OrExpr) -> OrExpr:
         if isinstance(other, OrExpr):

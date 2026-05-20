@@ -85,7 +85,28 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "pydantic": ("https://docs.pydantic.dev/latest/", None),
     "fastapi": ("https://fastapi.tiangolo.com/", None),
+    "starlette": ("https://www.starlette.io/", None),
 }
+
+# Fail on broken cross-refs (triplemodel has no published intersphinx inventory).
+nitpicky = True
+nitpick_ignore = [
+    ("py:class", "triplemodel.*"),
+    ("py:class", "triplemodel.store.graph.RdfGraph"),
+    ("py:class", "triplemodel.Store"),
+    ("py:class", "triplemodel.model.TripleModel"),
+    ("py:class", "triplemodel.TripleModel"),
+    ("py:class", "triplemodel.IriId"),
+    ("py:class", "triplemodel.fields.metadata.IriId"),
+    ("py:class", "IriId"),
+    ("py:class", "ConfigDict"),
+    ("py:class", "pydantic.ConfigDict"),
+    ("py:class", "pydantic._internal._model_construction.ModelMetaclass"),
+    ("py:class", "sparqlmodel.serializers.T"),
+    ("py:class", "sparqlmodel.stores.base.Store"),
+    ("py:class", "Response"),
+    ("py:meth", "sparqlmodel.stores.http.HttpStore.close"),
+]
 
 # -- Options for HTML output -------------------------------------------------
 

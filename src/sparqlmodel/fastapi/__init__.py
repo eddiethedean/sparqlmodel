@@ -30,13 +30,13 @@ __all__ = [
 
 if TYPE_CHECKING:
     from fastapi import Request
-    from fastapi.responses import Response
+    from starlette.responses import Response
 
 
 def _require_fastapi() -> tuple[Any, Any]:
     try:
         from fastapi import Request as FastAPIRequest
-        from fastapi.responses import Response as FastAPIResponse
+        from starlette.responses import Response as FastAPIResponse
     except ImportError as exc:
         raise ImportError(
             "FastAPI support requires the optional extra: pip install 'sparqlmodel[fastapi]'"
@@ -92,7 +92,7 @@ def turtle_response(
     *,
     status_code: int = 200,
 ) -> Response:
-    """Return a Turtle ``Response`` for a model or graph."""
+    """Return a Turtle HTTP response for a model or graph."""
     _, ResponseCls = _require_fastapi()
     graph = _graph_from_model(model)
     content = _body_bytes(export_graph(graph, format="turtle"))
@@ -104,7 +104,7 @@ def jsonld_response(
     *,
     status_code: int = 200,
 ) -> Response:
-    """Return a JSON-LD ``Response`` for a model or graph."""
+    """Return a JSON-LD HTTP response for a model or graph."""
     _, ResponseCls = _require_fastapi()
     graph = _graph_from_model(model)
     content = _body_bytes(export_graph(graph, format="json-ld"))

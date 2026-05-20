@@ -9,6 +9,7 @@ from typing import Any, cast
 from triplemodel import Store
 from typing_extensions import Self
 
+from sparqlmodel.fields import relationship_allows_iri
 from sparqlmodel.graph import (
     cascade_subjects_for_removal,
     owned_triples_for_subjects,
@@ -41,7 +42,7 @@ class SPARQLSession:
 
     Use as a context manager to flush pending writes on success, discard the
     pending queue on error, and close the backing store when it supports
-    :meth:`~sparqlmodel.stores.http.HttpStore.close`::
+    ``HttpStore.close()`` when using :class:`~sparqlmodel.stores.http.HttpStore`::
 
         with SPARQLSession(store=HttpStore(endpoint)) as session:
             session.put(model)
@@ -169,18 +170,24 @@ class SPARQLSession:
         """Return whether ``model`` has relationships loaded through ``depth``."""
         if depth <= 0:
             return True
-        if not SPARQLSession._relationships_materialized(model):
-            return False
-        if depth <= 1:
-            return True
-        for _name, _field_info, related_cls in model.get_relationship_fields():
-            nested = getattr(model, _name, None)
-            if isinstance(nested, SPARQLModel):
-                for n2, _, _ in related_cls.get_relationship_fields():
-                    if isinstance(getattr(nested, n2, None), SPARQLModel):
-                        return True
+        rel_fields = list(model.get_relationship_fields())
+        if depth == 1:
+            if not rel_fields:
+                return True
+            return SPARQLSession._relationships_materialized(model)
+        for name, field_info, _related_cls in rel_fields:
+            value = getattr(model, name, None)
+            if value is None:
+                continue
+            if isinstance(value, IRI):
+                if relationship_allows_iri(field_info.annotation):
+                    continue
                 return False
-        return True  # pragma: no cover
+            if not isinstance(value, SPARQLModel):
+                return False
+            if not SPARQLSession._depth_satisfied(value, depth - 1):
+                return False
+        return True
 
     def _maybe_autoflush(self) -> None:
         if self.autoflush and self._state.pending:

@@ -40,14 +40,18 @@ class Query:
         return self
 
     def use_optional_for_comparisons(self, enabled: bool = True) -> Query:
-        """Treat missing predicates like SQL NULL for ``!=`` (via ``NOT EXISTS``).
+        """Treat missing predicates like SQL NULL for ``!=`` (via ``FILTER NOT EXISTS``).
 
-        Ordering (``<``, ``>``, …) and ``in_`` still require a bound predicate value
-        (SPARQL-native semantics). Enables :meth:`use_not_exists_for_ne` when ``enabled``.
+        Despite the name, this does not emit SPARQL ``OPTIONAL`` blocks; it enables
+        :meth:`use_not_exists_for_ne` so ``!=`` matches resources with no value for the
+        field. Ordering (``<``, ``>``, …) and ``in_`` still require a bound predicate
+        value (SPARQL-native semantics).
         """
         self._use_optional_for_comparisons = enabled
         if enabled:
             self._use_not_exists_for_ne = True
+        else:
+            self._use_not_exists_for_ne = False
         return self
 
     def limit(self, n: int) -> Query:

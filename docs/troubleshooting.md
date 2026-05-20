@@ -24,6 +24,14 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Fix:** Use `put()` for upserts. Prefer `add()` only when you know the subject has no conflicting triples.
 
+## Exception in `with` block leaves session open
+
+**Symptom:** After an error inside `with SPARQLSession(...)`, the session still accepts calls or still has a pending queue.
+
+**Cause:** With `rollback_on_error=False`, pending `put(..., flush=False)` entries are kept on error and `close()` is not called (so the original exception is not masked by a pending-queue `RuntimeError`).
+
+**Fix:** Use `rollback_on_error=True` (default), call `rollback_pending()` before handling the error, or discard the session and open a new one.
+
 ## Pending `put` not visible in `get`
 
 **Symptom:** `put(model, flush=False)` then `get` returns old or missing data.
@@ -40,8 +48,24 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 - Comparing a field to `None` (unsupported in DSL)
 - Filtering `Person.name` on a `query(Organization)` chain
+- Combining OR and AND with `&`, e.g. `((A | B) & C)` — use `.where((A | B), C)` instead
 
 **Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.6**.
+
+## `QueryError: Cannot combine OR and AND`
+
+**Symptom:** Building or running a filter like `((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")` raises {class}`~sparqlmodel.exceptions.QueryError`.
+
+**Cause:** Python `&` between an `OrExpr` and a comparison flattens to a flat AND in the expression tree, which would compile incorrectly.
+
+**Fix:** Pass separate `.where()` arguments::
+
+    session.query(Person).where(
+        (Person.name == "A") | (Person.name == "B"),
+        Person.name != "C",
+    ).all()
+
+Or use `(A & B) | C` when OR should bind less tightly than AND.
 
 ## `!=` behaves unexpectedly
 

@@ -197,3 +197,83 @@ def test_get_shallow_after_deep_does_not_replace_identity(
     assert shallow is not deep
     assert shallow.works_for is None
     assert session.get(Person, odos.id, depth=1) is deep
+
+
+def test_depth_satisfied_leaf_and_iri_branches() -> None:
+    from tests.models import DualRelPerson, Location, Organization, Person, TeamLead
+
+    loc = Location(id=IRI("urn:loc:boston"), name="Boston")
+    assert SPARQLSession._depth_satisfied(loc, 1)
+
+    by_ref = Person(id=IRI("urn:p:ref"), name="Ref", works_for=IRI("urn:org:acme"))
+    assert SPARQLSession._depth_satisfied(by_ref, 2)
+
+    loc = Location(id=IRI("urn:loc:2"), name="Here")
+    org = Organization(id=IRI("urn:org:2"), name="Org", located_in=loc)
+    optional_mgr = DualRelPerson(
+        id=IRI("urn:p:opt"),
+        name="Opt",
+        works_for=org,
+        manager=None,
+    )
+    assert SPARQLSession._depth_satisfied(optional_mgr, 2)
+
+    dept_iri = TeamLead(id=IRI("urn:lead:iri"), name="Lead", department=None)
+    object.__setattr__(dept_iri, "department", IRI("urn:org:dept"))
+    assert not SPARQLSession._depth_satisfied(dept_iri, 2)
+
+    bad = TeamLead(id=IRI("urn:lead:bad"), name="Lead", department=None)
+    object.__setattr__(bad, "department", "not-a-model")  # type: ignore[arg-type]
+    assert not SPARQLSession._depth_satisfied(bad, 2)
+
+
+def test_depth_satisfied_requires_all_relationship_branches() -> None:
+    from tests.models import DualRelPerson, Location, Organization, TeamLead
+
+    loc = Location(id=IRI("urn:loc:boston"), name="Boston")
+    org = Organization(id=IRI("urn:org:acme"), name="Acme", located_in=loc)
+    lead = TeamLead(id=IRI("urn:lead:1"), name="Lead", department=org)
+    complete = DualRelPerson(
+        id=IRI("urn:p:dual"),
+        name="Pat",
+        works_for=org,
+        manager=lead,
+    )
+    assert SPARQLSession._depth_satisfied(complete, 2)
+
+    # works_for deep but manager branch not materialized at depth 1
+    shallow_lead = TeamLead(id=IRI("urn:lead:1"), name="Lead", department=None)
+    incomplete = DualRelPerson(
+        id=IRI("urn:p:dual"),
+        name="Pat",
+        works_for=org,
+        manager=shallow_lead,
+    )
+    assert not SPARQLSession._depth_satisfied(incomplete, 2)
+
+
+def test_get_depth_two_multi_relationship_loads_all_branches(
+    session: SPARQLSession,
+) -> None:
+    from tests.models import DualRelPerson, Location, Organization, TeamLead
+
+    loc = Location(id=IRI("urn:loc:boston"), name="Boston")
+    org = Organization(id=IRI("urn:org:acme"), name="Acme", located_in=loc)
+    dept = Organization(id=IRI("urn:org:dept"), name="Dept")
+    lead = TeamLead(id=IRI("urn:lead:1"), name="Lead", department=dept)
+    person = DualRelPerson(
+        id=IRI("urn:p:dual"),
+        name="Pat",
+        works_for=org,
+        manager=lead,
+    )
+    session.put(person)
+    shallow = session.get(DualRelPerson, person.id, depth=1)
+    assert shallow is not None
+    deep = session.get(DualRelPerson, person.id, depth=2)
+    assert deep is not None
+    assert deep.works_for is not None
+    assert deep.works_for.located_in is not None
+    assert deep.manager is not None
+    assert deep.manager.department is not None
+    assert session.get(DualRelPerson, person.id, depth=2) is deep
