@@ -41,6 +41,60 @@ async def test_async_put_flush_false(async_session: AsyncSPARQLSession) -> None:
     assert await async_session.get(Person, plain.id) is plain
 
 
+async def test_async_exit_raises_flush_error_when_close_on_exit_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sparqlmodel import session_core
+
+    odos = Person(id=IRI("urn:person:odos"), name="Odos")
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session = AsyncSPARQLSession(store=AsyncMemoryStore(), close_on_exit=False)
+    session.autoflush = False
+    await session.put(odos, flush=False)
+    await session.put(other, flush=False)
+    calls = {"n": 0}
+    orig = session_core.put_impl_async
+
+    async def failing_put(store: object, state: object, model: Person) -> Person:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("put failed")
+        return await orig(store, state, model)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session_core, "put_impl_async", failing_put)
+    with pytest.raises(RuntimeError, match="put failed"):
+        async with session:
+            pass
+    assert not session._closed
+
+
+async def test_async_exit_preserves_flush_error_over_close_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sparqlmodel import session_core
+
+    odos = Person(id=IRI("urn:person:odos"), name="Odos")
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session = AsyncSPARQLSession(store=AsyncMemoryStore())
+    session.autoflush = False
+    await session.put(odos, flush=False)
+    await session.put(other, flush=False)
+    calls = {"n": 0}
+    orig = session_core.put_impl_async
+
+    async def failing_put(store: object, state: object, model: Person) -> Person:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("put failed")
+        return await orig(store, state, model)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session_core, "put_impl_async", failing_put)
+    with pytest.raises(RuntimeError, match="put failed") as exc_info:
+        async with session:
+            pass
+    assert "pending" not in str(exc_info.value).lower()
+
+
 async def test_async_flush_requeues_on_failure(
     async_session: AsyncSPARQLSession,
     odos: Person,
@@ -188,6 +242,20 @@ async def test_async_exit_suppresses_close_error_when_not_rollback() -> None:
         ) as session:
             await session.put(Person(id=IRI("urn:p:x"), name="X"), flush=False)
             raise ValueError("boom")
+
+
+async def test_async_get_shallow_after_deep_updates_identity_map(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    deep = await async_session.get(Person, odos.id, depth=1)
+    shallow = await async_session.get(Person, odos.id, depth=0)
+    assert shallow is not deep
+    assert shallow.works_for is None
+    key = identity_key_for_iri(Person, odos.id)
+    assert async_session._state.get_identity(key) is shallow
 
 
 async def test_async_query_options(async_session: AsyncSPARQLSession) -> None:

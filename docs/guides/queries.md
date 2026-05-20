@@ -12,7 +12,7 @@ with SPARQLSession() as session:
 
 | Operator | SPARQL style | Notes |
 |----------|--------------|-------|
-| `==` | BIND / pattern match | Strings compile as literals unless field is `IRI` |
+| `==` | Triple pattern match | Strings compile as literals unless field is `IRI` |
 | `!=` | NOT EXISTS (default since 0.5.2) | See `use_inequality_for_ne()` for legacy inequality |
 | `&` | AND | Use parentheses: `(A & B) \| C` |
 | `\|` | OR | `(A & B) \| C` compiles with correct precedence (0.2+) |

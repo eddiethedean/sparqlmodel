@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`compile_where` / `compile_compare`** — default `!=` compilation uses `NOT EXISTS` (matches `Query` and 0.5.2 docs); pass `use_not_exists_for_ne=False` for inequality mode
+- **`get()` identity map** — shallow `depth=0` reload updates identity; graph miss evicts stale identity/hydration without dropping pending `put` queue (sync and async)
+- **Session context manager** — `__exit__` / `__aexit__` preserve flush errors instead of masking them with pending-close `RuntimeError`
+- **SPARQL IRI safety** — validate predicate/type IRIs and `term_to_n3` NamedNode values; reject field-to-field comparisons in the query compiler
+- **`close()`** — mark session closed only after store teardown succeeds; `AsyncSPARQLSession.close` skips `aclose` when the store has no `aclose` (sync parity)
+
+### Documentation
+
+- Troubleshooting, SPECS, README, and query guide — OPTIONAL/pagination milestones and `==` operator description aligned with 0.6/0.7 roadmap
+
 ## [0.6.0] - 2026-05-20
 
 ### Added

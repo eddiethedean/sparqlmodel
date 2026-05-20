@@ -65,3 +65,22 @@ def test_invalid_where_expression_raises() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     with pytest.raises(QueryError, match="Unsupported"):
         compile_where(Person, ("not an expr",), registry)  # type: ignore[arg-type]
+
+
+def test_field_to_field_comparison_raises() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    with pytest.raises(QueryError, match="another field"):
+        compile_where(Person, (Person.name == Person.works_for,), registry)
+
+
+def test_term_to_n3_rejects_invalid_iri() -> None:
+    from pyoxigraph import NamedNode
+
+    from sparqlmodel.rdf_n3 import term_to_n3, validate_iri_token
+
+    with pytest.raises(QueryError, match="Invalid IRI"):
+        validate_iri_token("http://x> . ?hack <urn:y>")
+    with pytest.raises((QueryError, ValueError), match="Invalid IRI|>"):
+        term_to_n3(NamedNode("http://x> . ?hack <urn:y>"))
+    with pytest.raises(QueryError, match="Invalid IRI"):
+        term_to_n3("<http://x> . ?hack <urn:y>>")

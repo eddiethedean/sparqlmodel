@@ -106,6 +106,8 @@ nitpick_ignore = [
     ("py:class", "sparqlmodel.stores.base.Store"),
     ("py:class", "Response"),
     ("py:meth", "sparqlmodel.stores.http.HttpStore.close"),
+    ("py:class", "typing_extensions.Self"),
+    ("py:class", "Self"),
 ]
 
 # -- Options for HTML output -------------------------------------------------

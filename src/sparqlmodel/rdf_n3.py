@@ -5,7 +5,15 @@ from __future__ import annotations
 from pyoxigraph import BlankNode, Literal, NamedNode, Triple
 from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
+from sparqlmodel.exceptions import QueryError
 from sparqlmodel.sparql_escape import escape_sparql_string
+
+
+def validate_iri_token(iri: str) -> str:
+    """Reject IRIs that would break angle-bracket tokens in SPARQL."""
+    if not iri or any(c in iri for c in " \n\r\t<>"):
+        raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
+    return iri
 
 
 def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
@@ -14,10 +22,11 @@ def term_to_n3(term: OxTerm | QuadSubject | QuadPredicate | str) -> str:
         if term.startswith("_:"):
             return term
         if term.startswith("<") and term.endswith(">"):
+            validate_iri_token(term[1:-1])
             return term
-        return f"<{term}>"
+        return f"<{validate_iri_token(term)}>"
     if isinstance(term, NamedNode):
-        return f"<{term.value}>"
+        return f"<{validate_iri_token(term.value)}>"
     if isinstance(term, BlankNode):
         raw = str(term)
         return raw if raw.startswith("_:") else f"_:{raw}"  # pragma: no cover

@@ -58,6 +58,55 @@ def test_expire_drops_pending_put(session: SPARQLSession, odos: Person) -> None:
     assert session.get(Person, odos.id) is None
 
 
+def test_exit_raises_flush_error_when_close_on_exit_false(
+    session: SPARQLSession, odos: Person, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sparqlmodel import session_core
+
+    session.close_on_exit = False
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session.autoflush = False
+    session.put(odos, flush=False)
+    session.put(other, flush=False)
+    calls = {"n": 0}
+    orig = session_core.put_impl
+
+    def failing_put(store: object, state: object, model: Person) -> Person:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("put failed")
+        return orig(store, state, model)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session_core, "put_impl", failing_put)
+    with pytest.raises(RuntimeError, match="put failed"), session:
+        pass
+    assert not session._closed
+
+
+def test_exit_preserves_flush_error_over_close_pending(
+    session: SPARQLSession, odos: Person, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sparqlmodel import session_core
+
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session.autoflush = False
+    session.put(odos, flush=False)
+    session.put(other, flush=False)
+    calls = {"n": 0}
+    orig = session_core.put_impl
+
+    def failing_put(store: object, state: object, model: Person) -> Person:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("put failed")
+        return orig(store, state, model)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session_core, "put_impl", failing_put)
+    with pytest.raises(RuntimeError, match="put failed") as exc_info, session:
+        pass
+    assert "pending" not in str(exc_info.value).lower()
+
+
 def test_flush_requeues_on_failure(
     session: SPARQLSession, odos: Person, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -197,15 +246,38 @@ def test_get_deep_load_reuses_identity(session: SPARQLSession, odos: Person) -> 
     assert deep1.works_for is not None
 
 
-def test_get_shallow_after_deep_does_not_replace_identity(
-    session: SPARQLSession, odos: Person
-) -> None:
+def test_get_shallow_after_deep_updates_identity_map(session: SPARQLSession, odos: Person) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
     session.put(odos)
     deep = session.get(Person, odos.id, depth=1)
     shallow = session.get(Person, odos.id, depth=0)
     assert shallow is not deep
     assert shallow.works_for is None
-    assert session.get(Person, odos.id, depth=1) is deep
+    key = identity_key_for_iri(Person, odos.id)
+    assert session._state.get_identity(key) is shallow
+    again = session.get(Person, odos.id, depth=1)
+    assert again is not shallow
+    assert again.works_for is not None
+
+
+def test_get_none_expires_identity_when_removed_from_graph(
+    session: SPARQLSession, odos: Person
+) -> None:
+    from sparqlmodel.graph import owned_triples_for_subjects, triples_to_graph
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    session.put(odos)
+    session.get(Person, odos.id, depth=1)
+    key = identity_key_for_iri(Person, odos.id)
+    assert session._state.get_identity(key) is not None
+    from sparqlmodel.graph import cascade_subjects_for_removal
+
+    subjects = cascade_subjects_for_removal(odos, session.graph, for_put=False)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    session.store.update_graph(remove=remove_g)
+    assert session.get(Person, odos.id) is None
+    assert session._state.get_identity(key) is None
 
 
 def test_depth_satisfied_leaf_and_iri_branches() -> None:

@@ -1,4 +1,4 @@
-# SparqlModel
+# SPARQLModel
 
 [![PyPI version](https://img.shields.io/pypi/v/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
 [![Python](https://img.shields.io/pypi/pyversions/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
@@ -228,7 +228,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade (production mirror sync planned **1.0**)
-- Query: `limit` only — `offset` / `order_by` / `count` planned **0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- Query: `limit` only — `offset` / `order_by` / `count` planned **0.7–0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics
 - Multi-hop `!=` still requires relationship hops (inner-join); missing `works_for` is not treated as “null name”

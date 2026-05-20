@@ -37,7 +37,7 @@ def test_and_or_operator_precedence() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     expr = (Person.name == "Odos") & (Person.name != "Other") | (Person.name == "Ada")
     sparql = compile_where(Person, (expr,), registry)
-    assert sparql.count("EXISTS") == 2
+    assert sparql.count("EXISTS") == 3  # two OR branches; != uses nested NOT EXISTS
     assert sparql.count("||") == 1
 
 

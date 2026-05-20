@@ -115,10 +115,10 @@ class SPARQLSession:
                 f"Cannot close SPARQLSession with {n} pending put(s); "
                 "call flush() or rollback_pending() first"
             )
-        self._closed = True
         close = getattr(self._store, "close", None)
         if callable(close):
             close()
+        self._closed = True
 
     def __enter__(self) -> Self:
         self._check_open()
@@ -130,19 +130,27 @@ class SPARQLSession:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        flush_err: BaseException | None = None
         try:
             if exc_type is None:
                 if self._state.pending:
-                    self.flush()
+                    try:
+                        self.flush()
+                    except Exception as exc:
+                        flush_err = exc
             elif self.rollback_on_error:
                 self.rollback_pending()
         finally:
             if self.close_on_exit:
                 try:
                     self.close()
-                except RuntimeError:
+                except RuntimeError as close_err:
+                    if flush_err is not None:
+                        raise flush_err from close_err
                     if exc_type is None or self.rollback_on_error:
                         raise
+        if flush_err is not None:
+            raise flush_err
 
     def expire(self, model_cls: type[SPARQLModel], iri: str | IRI) -> None:
         """Remove a resource from the identity map and hydration cache."""

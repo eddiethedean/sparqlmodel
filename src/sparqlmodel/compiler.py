@@ -8,7 +8,7 @@ from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.rdf_n3 import term_to_n3
+from sparqlmodel.rdf_n3 import term_to_n3, validate_iri_token
 from sparqlmodel.sparql_escape import escape_sparql_string
 from sparqlmodel.types import IRI, NamespaceRegistry, expand_iri, is_absolute_iri, is_compact_iri
 
@@ -40,9 +40,7 @@ def _format_literal(value: object) -> str:
 
 
 def _format_iri(iri: str) -> str:
-    if not iri or any(c in iri for c in " \n\r\t<>"):
-        raise QueryError(f"Invalid IRI for SPARQL: {iri!r}")
-    return term_to_n3(iri)
+    return term_to_n3(validate_iri_token(iri))
 
 
 def _format_object(
@@ -130,9 +128,9 @@ def _follow_path(
             raise QueryError(f"Field '{segment}' has no SPARQL metadata")
         join_counter[0] += 1
         join_var = f"?__join_{join_counter[0]}"
-        pred_expanded = expand_iri(meta.predicate, registry.prefixes)
+        pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
         patterns.append(f"{current_var} <{pred_expanded}> {join_var} .")
-        type_expanded = expand_iri(related_cls.rdf_type, registry.prefixes)
+        type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
         patterns.append(f"{join_var} a <{type_expanded}> .")
         current_cls = related_cls
         current_var = join_var
@@ -199,9 +197,13 @@ def compile_compare(
     join_counter: list[int],
     join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
     *,
-    use_not_exists_for_ne: bool = False,
+    use_not_exists_for_ne: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Compile a comparison; return (patterns, filters)."""
+    if isinstance(expr.right, FieldRef):
+        raise QueryError(
+            "Cannot compare a field to another field; compare to a literal or IRI value"
+        )
     if expr.right is None and expr.op != CompareOp.IN:
         raise QueryError("Filter value cannot be None; use explicit existence checks")
 
@@ -221,7 +223,7 @@ def compile_compare(
 
     meta = get_field_metadata(field_info)
     assert meta is not None
-    pred_expanded = expand_iri(meta.predicate, registry.prefixes)
+    pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
 
     if expr.op == CompareOp.IN:
         in_var = f"?__in_{field_name}_{id(expr)}"
@@ -270,7 +272,7 @@ def compile_and_branch(
     registry: NamespaceRegistry,
     join_counter: list[int],
     *,
-    use_not_exists_for_ne: bool = False,
+    use_not_exists_for_ne: bool = True,
 ) -> str:
     """Compile an AND branch inside OR as a single EXISTS block."""
     compares = _flatten_and_expressions((expr,))
@@ -299,7 +301,7 @@ def compile_or(
     registry: NamespaceRegistry,
     join_counter: list[int],
     *,
-    use_not_exists_for_ne: bool = False,
+    use_not_exists_for_ne: bool = True,
 ) -> list[str]:
     """Compile OR into a FILTER with EXISTS disjunction."""
     branches = _flatten_or_expressions(expr)
@@ -346,11 +348,11 @@ def compile_where(
     registry: NamespaceRegistry,
     *,
     limit: int | None = None,
-    use_not_exists_for_ne: bool = False,
+    use_not_exists_for_ne: bool = True,
 ) -> str:
     """Compile WHERE expressions into a full SELECT SPARQL query."""
     root_var = _model_var_name(model_cls)
-    type_expanded = expand_iri(model_cls.rdf_type, registry.prefixes)
+    type_expanded = validate_iri_token(expand_iri(model_cls.rdf_type, registry.prefixes))
 
     all_patterns: list[str] = [f"{root_var} a <{type_expanded}> ."]
     all_filters: list[str] = []

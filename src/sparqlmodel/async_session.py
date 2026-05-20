@@ -104,8 +104,10 @@ class AsyncSPARQLSession:
                 f"Cannot close AsyncSPARQLSession with {n} pending put(s); "
                 "call flush() or rollback_pending() first"
             )
+        aclose = getattr(self._store, "aclose", None)
+        if callable(aclose):
+            await aclose()
         self._closed = True
-        await self._store.aclose()
 
     async def __aenter__(self) -> Self:
         self._check_open()
@@ -117,19 +119,27 @@ class AsyncSPARQLSession:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        flush_err: BaseException | None = None
         try:
             if exc_type is None:
                 if self._state.pending:
-                    await self.flush()
+                    try:
+                        await self.flush()
+                    except Exception as exc:
+                        flush_err = exc
             elif self.rollback_on_error:
                 await self.rollback_pending()
         finally:
             if self.close_on_exit:
                 try:
                     await self.close()
-                except RuntimeError:
+                except RuntimeError as close_err:
+                    if flush_err is not None:
+                        raise flush_err from close_err
                     if exc_type is None or self.rollback_on_error:
                         raise
+        if flush_err is not None:
+            raise flush_err
 
     async def expire(self, model_cls: type[SPARQLModel], iri: str | IRI) -> None:
         """Remove a resource from the identity map and hydration cache."""

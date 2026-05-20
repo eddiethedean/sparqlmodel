@@ -420,7 +420,7 @@ Parallel to the sync stack; sync API remains supported.
 | `flush()` | Not a full remote transaction; partial failure re-queues remainder (0.2+) |
 | Sessions | Not thread-safe; one session per task unless scoped externally |
 | Closed session | After `close()`, all CRUD/query methods raise `RuntimeError`; share the store via a new session |
-| Interim mapping | **0.3.0:** `_triple.py` adapter; **0.4** Option A removes it; `serializers.py` interim until **0.6** |
+| Interim mapping | **0.3.0:** `_triple.py` adapter; **0.4** Option A removes it; `serializers.py` interim until **0.7** |
 
 ## Other (current)
 

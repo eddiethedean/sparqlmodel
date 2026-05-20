@@ -29,6 +29,13 @@ def test_compile_and() -> None:
     assert '"Odos"' in sparql
     assert '"Other"' in sparql
     assert sparql.count("FILTER") >= 1
+    assert "NOT EXISTS" in sparql
+
+
+def test_compile_where_default_ne_uses_not_exists() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.name != "X",), registry)
+    assert "NOT EXISTS" in sparql
 
 
 def test_unknown_field() -> None:

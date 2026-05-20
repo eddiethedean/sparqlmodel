@@ -156,10 +156,11 @@ def get_impl(
 
     model = hydrate_one(model_cls, iri, store, depth=depth)
     if model is not None:
-        existing = state.get_identity(id_key)
-        if existing is None or depth > 0 or not relationships_materialized(existing):
-            state.set_identity(model)
+        state.set_identity(model)
         state.set_hydration(hkey, model)
+    else:
+        state.evict_identity_prefix(id_key[0], id_key[1])
+        state.invalidate_hydration_for(id_key[0], id_key[1])
     return model
 
 
@@ -288,8 +289,9 @@ async def get_impl_async(
 
     model = hydrate_one(model_cls, iri, reader, depth=depth)
     if model is not None:
-        existing = state.get_identity(id_key)
-        if existing is None or depth > 0 or not relationships_materialized(existing):
-            state.set_identity(model)
+        state.set_identity(model)
         state.set_hydration(hkey, model)
+    else:
+        state.evict_identity_prefix(id_key[0], id_key[1])
+        state.invalidate_hydration_for(id_key[0], id_key[1])
     return model
