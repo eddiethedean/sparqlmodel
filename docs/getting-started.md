@@ -66,5 +66,6 @@ Use `put()` for upserts (cascade + orphan cleanup). Use `add()` only when you wi
 | Full ORM concepts | {doc}`ORM` |
 | HttpStore / deployment | {doc}`PRODUCTION` |
 | FastAPI | {doc}`guides/fastapi` |
+| Async (`asyncio`) | {doc}`guides/fastapi` — `AsyncSPARQLSession`, `AsyncHttpStore` (same `[http]` extra) |
 | Python API | {doc}`api/index` |
 | Problems | {doc}`troubleshooting` |

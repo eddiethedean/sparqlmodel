@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-05-20
 
-### Fixed (maintenance)
+### Added
+
+- **`AsyncSPARQLSession`** — `async with`, `await put` / `get` / `delete` / `add`, `flush`, `rollback_pending`, `execute`, `query` → **`AsyncQuery`** with `await .all()` / `.first()` (same expression DSL as sync)
+- **`AsyncMemoryStore`**, **`AsyncHttpStore`** — `httpx.AsyncClient` mirror semantics matching sync `HttpStore`; shared helpers in `stores/http_common.py`
+- **`session_core`** — shared CRUD/hydration for sync and async sessions (sync API unchanged)
+- **FastAPI** — `init_async_app`, `get_async_session`, `AsyncSessionDep`, `async_http_store_lifespan`, `async_session_dependency`
+- **`pytest-asyncio`** in dev extras; `asyncio_mode = auto` for tests
+
+### Fixed
 
 - **`compile_where` / `compile_compare`** — default `!=` compilation uses `NOT EXISTS` (matches `Query` and 0.5.2 docs); pass `use_not_exists_for_ne=False` for inequality mode
 - **`get()` identity map** — shallow `depth=0` reload updates identity; graph miss evicts stale identity/hydration without dropping pending `put` queue (sync and async)
@@ -21,18 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`close()`** — mark session closed only after store teardown succeeds; `AsyncSPARQLSession.close` skips `aclose` when the store has no `aclose` (sync parity)
 - **FastAPI** — `session_dependency` / `async_session_dependency` no longer close shared `init_app` / `http_store_lifespan` stores when `close_on_exit=True`
 
-### Documentation (maintenance)
+### Documentation
 
 - Troubleshooting, SPECS, README, and query guide — OPTIONAL/pagination milestones and `==` operator description aligned with 0.6/0.7 roadmap
 - HttpStore `query().all()` mirror behavior; FastAPI `sparql_store` lifecycle notes
-
-### Added
-
-- **`AsyncSPARQLSession`** — `async with`, `await put` / `get` / `delete` / `add`, `flush`, `rollback_pending`, `execute`, `query` → **`AsyncQuery`** with `await .all()` / `.first()` (same expression DSL as sync)
-- **`AsyncMemoryStore`**, **`AsyncHttpStore`** — `httpx.AsyncClient` mirror semantics matching sync `HttpStore`; shared helpers in `stores/http_common.py`
-- **`session_core`** — shared CRUD/hydration for sync and async sessions (sync API unchanged)
-- **FastAPI** — `init_async_app`, `get_async_session`, `AsyncSessionDep`, `async_http_store_lifespan`, `async_session_dependency`
-- **`pytest-asyncio`** in dev extras; `asyncio_mode = auto` for tests
 
 ### Notes
 

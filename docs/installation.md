@@ -25,9 +25,9 @@ python -c "import sparqlmodel; print(sparqlmodel.__version__)"
 
 | Extra | Install | Provides |
 |-------|---------|----------|
-| *(core)* | `pip install sparqlmodel` | `MemoryStore`, session, query compiler |
-| `http` | `pip install "sparqlmodel[http]"` | `HttpStore` (requires `httpx`) |
-| `fastapi` | `pip install "sparqlmodel[fastapi]"` | `SessionDep`, lifespan helpers, RDF responses |
+| *(core)* | `pip install sparqlmodel` | `MemoryStore`, `SPARQLSession`, query compiler |
+| `http` | `pip install "sparqlmodel[http]"` | `HttpStore`, `AsyncHttpStore` (requires `httpx`) |
+| `fastapi` | `pip install "sparqlmodel[fastapi]"` | `SessionDep`, `AsyncSessionDep`, lifespan helpers, RDF responses |
 | Combined | `pip install "sparqlmodel[http,fastapi]"` | Remote store + FastAPI integration |
 
 ```{note}

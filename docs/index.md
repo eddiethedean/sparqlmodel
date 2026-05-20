@@ -29,10 +29,10 @@ Mapping (literals, terms, file I/O) is provided by the required dependency [Trip
 |------|------------------------------|
 | Pydantic | `BaseModel` subclasses; validation on construct, `put`, and `get`; `Field` constraints; JSON Schema for APIs |
 | Models | `SPARQLModel`, `Field`, `Relationship`, `IRI`, `rdf_type`, RDF predicates |
-| Session | `add`, `put`, `delete`, `get`, identity map, flush queue |
-| Queries | `==`, `!=`, `&`, `\|`, ordering, `in_`, multi-hop paths, `limit` |
-| Stores | `MemoryStore`, `HttpStore` (mirror documented) |
-| FastAPI | `SessionDep`, `http_store_lifespan`, Turtle / JSON-LD responses |
+| Session | Sync `SPARQLSession` and **async** `AsyncSPARQLSession`; identity map, flush queue |
+| Queries | `==`, `!=`, `&`, `\|`, ordering, `in_`, multi-hop paths, `limit` (sync and async) |
+| Stores | `MemoryStore` / `AsyncMemoryStore`; `HttpStore` / `AsyncHttpStore` (`[http]`; mirror documented) |
+| FastAPI | `SessionDep`, `AsyncSessionDep`, lifespan helpers, Turtle / JSON-LD responses |
 
 ```{tip}
 Production checklist and 0.3–1.0 milestones: {doc}`SPECS` and {doc}`ROADMAP`.
