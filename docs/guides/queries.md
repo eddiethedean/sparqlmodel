@@ -51,7 +51,7 @@ Traverse relationships in filters:
 session.query(Person).where(Person.works_for.name == "Acme Corp").all()
 ```
 
-For embedded `SPARQLModel` targets, the related resource must have the expected `rdf:type` in the graph. When the relationship annotation allows `IRI` (e.g. `Organization | IRI | None`), filters match IRI-only edges without requiring a type triple on the join variable — use `put(..., works_for=IRI("urn:org:…"))` and query with `is_not(None)`, nested scalars, or `!=` as usual (**0.8.0**). Unknown compact prefixes in filter values stay literals unless the field type is `IRI`.
+For embedded `SPARQLModel` targets, the related resource must have the expected `rdf:type` in the graph. When the relationship annotation allows `IRI` (e.g. `Organization | IRI | None`), filters match IRI-only edges without requiring a type triple on the join variable — use `put(..., works_for=IRI("urn:org:…"))` and query with `is_not(None)`, nested scalars, or `!=` as usual (**0.8.1**). Unknown compact prefixes in filter values stay literals unless the field type is `IRI`.
 
 ## Negation semantics
 
@@ -61,7 +61,7 @@ Default ``!=`` uses ``FILTER NOT EXISTS`` (since 0.5.2): resources with no value
 session.query(Person).where(Person.name != "X").use_inequality_for_ne().all()
 ```
 
-On nullable relationship paths, inequality ``!=`` also includes a ``!BOUND`` disjunct so resources without a link still match (**0.8.0**). Required (non-nullable) hops still exclude unbound values.
+On nullable relationship paths, inequality ``!=`` also includes a ``!BOUND`` disjunct so resources without a link still match (**0.8.1**). Required (non-nullable) hops still exclude unbound values.
 
 ``.use_optional_for_comparisons()`` toggles NOT EXISTS vs inequality for ``!=`` (historical name). Nullable relationship hops still use real ``OPTIONAL`` blocks when the field annotation includes ``None``.
 

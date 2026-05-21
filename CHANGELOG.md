@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-05-21
-
-### Added
-
-- **`Query.offset` / `AsyncQuery.offset`** — `OFFSET` in compiled SELECT
-- **`Query.order_by` / `AsyncQuery.order_by`** — `ORDER BY` on bound scalar fields (`desc=True` for descending)
-- **`Query.count` / `AsyncQuery.count`** — `COUNT(DISTINCT ?root)` without pagination clauses
-- **`FieldRef.is_(None)` / `is_not(None)`** — absence or presence of nullable `Relationship` links (including nested relationship paths)
-- **Compiler** — `OPTIONAL` blocks for nullable relationship hops; `!=` on optional paths includes resources with no link (`!BOUND` disjunct)
+## [0.8.1] - 2026-05-21
 
 ### Fixed
 
@@ -27,16 +19,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **`first()`** — ignores `.offset()` as well as `.limit()` (always first match in filter/sort order with `LIMIT 1`)
+- **`FieldRef.is_(None)` / `is_not(None)`** — nested relationship paths compile (scalar leaf still requires a relationship field)
 - **`parse_count_bindings`** — invalid or negative COUNT values raise `QueryError`
 - **`limit` / `offset`** — reject negative values (including `-0`)
 
 ### Documentation
 
-- Query guide, SPECS P0 checklist, README, PRODUCTION, ORM, ROADMAP — 0.8 query lists shipped
 - Query guide — `order_by` on nullable hops, IRI reference filters, inequality vs default `!=`
 - PRODUCTION — async FastAPI availability corrected to **0.6+**
 - README — known limitations for query/session semantics
+
+## [0.8.0] - 2026-05-21
+
+### Added
+
+- **`Query.offset` / `AsyncQuery.offset`** — `OFFSET` in compiled SELECT
+- **`Query.order_by` / `AsyncQuery.order_by`** — `ORDER BY` on bound scalar fields (`desc=True` for descending)
+- **`Query.count` / `AsyncQuery.count`** — `COUNT(DISTINCT ?root)` without pagination clauses
+- **`FieldRef.is_(None)` / `is_not(None)`** — absence or presence of nullable `Relationship` links
+- **Compiler** — `OPTIONAL` blocks for nullable relationship hops; `!=` on optional paths includes resources with no link (`!BOUND` disjunct)
+
+### Changed
+
+- **`first()`** — ignores `.offset()` as well as `.limit()` (always first match in filter/sort order with `LIMIT 1`)
+
+### Documentation
+
+- Query guide, SPECS P0 checklist, README, PRODUCTION, ORM, ROADMAP — 0.8 query lists shipped
 
 ## [0.7.1] - 2026-05-21
 
