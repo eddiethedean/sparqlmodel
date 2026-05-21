@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-21
+
+### Added
+
+- **`SPARQLSession.from_rdf_file`** — open an in-memory session from an on-disk RDF file (Turtle, TriG, etc.)
+- **`examples/realworld/`** — Nobel, DCAT, Wikidata, and Schema.org sample scripts with bundled `.ttl` data
+- **Docs** — `guides/realworld` with `literalinclude` from example sources; linked from site index and README
+
+### Documentation
+
+- Sphinx/CI doc builds: `make docs`, `PYTHONWARNINGS` for intersphinx, updated Pydantic intersphinx URL, relative links for example data files
+- PyPI link in installation guide (removed broken `#history` anchor)
+
 ## [0.7.0] - 2026-05-20
 
 ### Changed
