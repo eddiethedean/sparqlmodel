@@ -76,18 +76,12 @@ class FieldRef:
     def is_(self, value: object) -> CompareExpr:
         if value is not None:
             raise QueryError("is_() only supports None for nullable relationship absence checks")
-        if self.path:
-            raise QueryError("is_(None) applies to a relationship field, not a nested scalar path")
         return CompareExpr(self, CompareOp.IS_, value)
 
     def is_not(self, value: object) -> CompareExpr:
         if value is not None:
             raise QueryError(
                 "is_not() only supports None for nullable relationship presence checks"
-            )
-        if self.path:
-            raise QueryError(
-                "is_not(None) applies to a relationship field, not a nested scalar path"
             )
         return CompareExpr(self, CompareOp.IS_NOT, value)
 

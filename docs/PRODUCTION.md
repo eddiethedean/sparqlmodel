@@ -81,7 +81,7 @@ total = session.query(Person).where(...).count()
 | Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.9** |
 | Query logging | None | Structured SPARQL log (**1.0**) |
 | Bulk import | Repeated `put` | Bulk helpers (**1.0**) |
-| Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.5**) |
+| Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.6+**) |
 
 ---
 

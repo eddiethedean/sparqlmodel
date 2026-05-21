@@ -7,7 +7,11 @@ from typing import Any, get_args, get_origin
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
-from sparqlmodel.fields import get_field_metadata, relationship_is_nullable
+from sparqlmodel.fields import (
+    get_field_metadata,
+    relationship_allows_iri,
+    relationship_is_nullable,
+)
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_n3 import term_to_n3, validate_iri_token
 from sparqlmodel.sparql_escape import escape_sparql_string
@@ -95,6 +99,23 @@ def _optional_block(lines: list[str]) -> str:
     return f"OPTIONAL {{\n    {body}\n    }}"
 
 
+def _relationship_hop_patterns(
+    current_var: str,
+    join_var: str,
+    predicate: str,
+    related_cls: type[SPARQLModel],
+    field_info: Any,
+    registry: NamespaceRegistry,
+) -> list[str]:
+    """Edge patterns for one relationship hop; omit ``rdf:type`` when ``IRI`` refs are allowed."""
+    pred_expanded = validate_iri_token(expand_iri(predicate, registry.prefixes))
+    patterns = [f"{current_var} <{pred_expanded}> {join_var} ."]
+    if not relationship_allows_iri(field_info.annotation):
+        type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
+        patterns.append(f"{join_var} a <{type_expanded}> .")
+    return patterns
+
+
 def _flatten_or_expressions(expr: OrExpr) -> list[CompareExpr | AndExpr]:
     """Flatten nested ``OrExpr`` into disjunct branches."""
     flat: list[CompareExpr | AndExpr] = []
@@ -136,12 +157,14 @@ def _follow_path(
             raise QueryError(f"Field '{segment}' has no SPARQL metadata")
         join_counter[0] += 1
         join_var = f"?__join_{join_counter[0]}"
-        pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
-        type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
-        hop_patterns = [
-            f"{current_var} <{pred_expanded}> {join_var} .",
-            f"{join_var} a <{type_expanded}> .",
-        ]
+        hop_patterns = _relationship_hop_patterns(
+            current_var,
+            join_var,
+            meta.predicate,
+            related_cls,
+            field_info,
+            registry,
+        )
         if relationship_is_nullable(field_info.annotation):
             patterns.append(_optional_block(hop_patterns))
         else:
@@ -239,12 +262,14 @@ def _compile_relationship_presence(
 
     join_counter[0] += 1
     join_var = f"?__join_{join_counter[0]}"
-    pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
-    type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
-    hop_patterns = [
-        f"{current_var} <{pred_expanded}> {join_var} .",
-        f"{join_var} a <{type_expanded}> .",
-    ]
+    hop_patterns = _relationship_hop_patterns(
+        current_var,
+        join_var,
+        meta.predicate,
+        related_cls,
+        field_info,
+        registry,
+    )
     patterns.append(_optional_block(hop_patterns))
 
     if expr.op == CompareOp.IS_:
@@ -271,7 +296,11 @@ def _resolve_order_target(
     pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
     join_counter[0] += 1
     order_var = f"?__order_{field_name}_{join_counter[0]}"
-    patterns.append(f"{subject_var} <{pred_expanded}> {order_var} .")
+    order_line = f"{subject_var} <{pred_expanded}> {order_var} ."
+    if any("OPTIONAL" in pattern for pattern in patterns):
+        patterns.append(_optional_block([order_line]))
+    else:
+        patterns.append(order_line)
     return patterns, order_var
 
 
@@ -353,7 +382,11 @@ def compile_compare(
         else:
             neq_var = f"?__neq_{field_name}_{id(expr)}"
             patterns.append(f"{subject_var} <{pred_expanded}> {neq_var} .")
-            filters.append(f"{neq_var} != {obj}")
+            neq_filter = f"{neq_var} != {obj}"
+            if any("OPTIONAL" in pattern for pattern in path_patterns):
+                filters.append(f"(!BOUND({subject_var}) || {neq_filter})")
+            else:
+                filters.append(neq_filter)
     elif expr.op in (CompareOp.LT, CompareOp.GT, CompareOp.LTE, CompareOp.GTE):
         cmp_var = f"?__cmp_{field_name}_{id(expr)}"
         patterns.append(f"{subject_var} <{pred_expanded}> {cmp_var} .")

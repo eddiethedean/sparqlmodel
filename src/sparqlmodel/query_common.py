@@ -33,6 +33,7 @@ class QueryState:
     order_by: list[tuple[FieldRef, bool]] = field(default_factory=list)
     use_not_exists_for_ne: bool = True
     use_inequality_for_ne: bool = False
+    # Toggles default ``!=`` / NOT EXISTS via apply helpers; real OPTIONAL blocks use nullable hops.
     use_optional_for_comparisons: bool = False
 
     def compile(
@@ -62,6 +63,25 @@ class QueryState:
         )
 
 
+def _count_value_to_int(value: object) -> int:
+    if isinstance(value, bool):
+        result = int(value)
+    elif isinstance(value, int):
+        result = value
+    elif isinstance(value, float):
+        result = int(value)
+    elif isinstance(value, str):
+        try:
+            result = int(value)
+        except ValueError as exc:
+            raise QueryError(f"COUNT binding is not a valid integer: {value!r}") from exc
+    else:
+        raise QueryError(f"Unsupported COUNT binding type: {type(value).__name__}")
+    if result < 0:
+        raise QueryError(f"COUNT must be non-negative, got {result}")
+    return result
+
+
 def parse_count_bindings(bindings: list[dict[str, Any]]) -> int:
     """Extract integer count from a COUNT query binding row."""
     if not bindings:
@@ -69,16 +89,7 @@ def parse_count_bindings(bindings: list[dict[str, Any]]) -> int:
     row = bindings[0]
     for key in COUNT_BINDING_KEYS:
         if key in row:
-            value = row[key]
-            if isinstance(value, bool):
-                return int(value)
-            if isinstance(value, int):
-                return value
-            if isinstance(value, float):
-                return int(value)
-            if isinstance(value, str):
-                return int(value)
-            raise QueryError(f"Unsupported COUNT binding type: {type(value).__name__}")
+            return _count_value_to_int(row[key])
     raise QueryError("COUNT query did not return ?__count binding")
 
 

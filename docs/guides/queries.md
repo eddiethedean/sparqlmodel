@@ -51,15 +51,17 @@ Traverse relationships in filters:
 session.query(Person).where(Person.works_for.name == "Acme Corp").all()
 ```
 
-The related resource must have the expected `rdf:type` in the graph. Unknown compact prefixes in filter values stay literals unless the field type is `IRI`.
+For embedded `SPARQLModel` targets, the related resource must have the expected `rdf:type` in the graph. When the relationship annotation allows `IRI` (e.g. `Organization | IRI | None`), filters match IRI-only edges without requiring a type triple on the join variable — use `put(..., works_for=IRI("urn:org:…"))` and query with `is_not(None)`, nested scalars, or `!=` as usual (**0.8.1**). Unknown compact prefixes in filter values stay literals unless the field type is `IRI`.
 
 ## Negation semantics
 
-Default ``!=`` uses ``FILTER NOT EXISTS`` (since 0.5.2): resources with no value for the field match, and multi-valued predicates are handled correctly. For pre-0.5.2 inequality semantics (excludes unbound values):
+Default ``!=`` uses ``FILTER NOT EXISTS`` (since 0.5.2): resources with no value for the field match, and multi-valued predicates are handled correctly. For pre-0.5.2 inequality semantics:
 
 ```python
 session.query(Person).where(Person.name != "X").use_inequality_for_ne().all()
 ```
+
+On nullable relationship paths, inequality ``!=`` also includes a ``!BOUND`` disjunct so resources without a link still match (**0.8.1**). Required (non-nullable) hops still exclude unbound values.
 
 ``.use_optional_for_comparisons()`` toggles NOT EXISTS vs inequality for ``!=`` (historical name). Nullable relationship hops still use real ``OPTIONAL`` blocks when the field annotation includes ``None``.
 
@@ -85,7 +87,7 @@ with SPARQLSession() as session:
 | Method | Behavior |
 |--------|----------|
 | `.offset(n)` | `OFFSET n` (after `ORDER BY`, before `LIMIT`) |
-| `.order_by(field, *, desc=False)` | `ORDER BY` on a scalar field; repeatable for tie-breakers |
+| `.order_by(field, *, desc=False)` | `ORDER BY` on a scalar field; repeatable for tie-breakers. Through nullable hops, sort bindings use `OPTIONAL` so rows without a link are kept (unbound sort keys sort first in SPARQL) |
 | `.count()` | `COUNT(DISTINCT ?root)`; ignores `.limit()`, `.offset()`, and `.order_by()` |
 | `.first()` | Always `LIMIT 1`; ignores prior `.limit()` and `.offset()` |
 

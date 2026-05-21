@@ -76,6 +76,23 @@ def test_put_nested_location_orphan_removed(session) -> None:
     assert len(list(session.graph.triples((hq_ref, None, None)))) == 0
     assert session.get(Location, hq.id) is None
     assert session.get(Location, IRI("urn:loc:new")) is not None
+    cached = session.get(Location, hq.id)
+    assert cached is None
+
+
+def test_put_orphan_evicts_identity_cache(session) -> None:
+    hq = Location(id=IRI("urn:loc:hq"), name="HQ")
+    acme = Organization(id=IRI("urn:org:acme"), name="Acme", located_in=hq)
+    odos = Person(id=IRI("urn:person:odos"), name="Odos", works_for=acme)
+    session.put(odos)
+    cached_hq = session.get(Location, hq.id, depth=0)
+    assert cached_hq is not None
+
+    acme.located_in = Location(id=IRI("urn:loc:new"), name="New HQ")
+    session.put(odos)
+    assert session.get(Location, hq.id) is None
+    assert session.get(Location, hq.id) is None
+    assert cached_hq is not session.get(Location, IRI("urn:loc:new"))
 
 
 def test_put_removes_stale_bnode_relationship_target(session) -> None:

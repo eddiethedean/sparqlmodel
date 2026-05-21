@@ -1391,6 +1391,10 @@ def test_parse_count_bindings_variants() -> None:
     assert parse_count_bindings([{"__count": True}]) == 1
     with pytest.raises(QueryError, match="Unsupported COUNT"):
         parse_count_bindings([{"__count": object()}])
+    with pytest.raises(QueryError, match="not a valid integer"):
+        parse_count_bindings([{"__count": "not-a-number"}])
+    with pytest.raises(QueryError, match="non-negative"):
+        parse_count_bindings([{"__count": -1}])
     with pytest.raises(QueryError, match="did not return"):
         parse_count_bindings([{"person": "urn:x"}])
 
@@ -1414,10 +1418,11 @@ def test_query_state_apply_helpers() -> None:
 
 
 def test_fieldref_is_is_not_validation() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
     with pytest.raises(QueryError, match="only supports None"):
         Person.works_for.is_("x")  # type: ignore[arg-type]
-    with pytest.raises(QueryError, match="nested scalar"):
-        Person.works_for.name.is_(None)
+    with pytest.raises(QueryError, match="relationship field"):
+        compile_where(Person, (Person.works_for.name.is_(None),), registry)
     with pytest.raises(QueryError, match="only supports None"):
         Person.works_for.is_not("x")  # type: ignore[arg-type]
 
@@ -1496,6 +1501,7 @@ def test_compile_presence_with_path_and_errors() -> None:
             )
 
 
-def test_fieldref_is_not_nested_path_raises() -> None:
-    with pytest.raises(QueryError, match="nested scalar"):
-        Person.works_for.name.is_not(None)
+def test_fieldref_is_not_on_scalar_path_via_compile() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    with pytest.raises(QueryError, match="relationship field"):
+        compile_where(Person, (Person.works_for.name.is_not(None),), registry)

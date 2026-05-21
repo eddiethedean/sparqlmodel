@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-21
+
+### Fixed
+
+- **`put(flush=True)`** — clears pending subjects for the model cascade when `autoflush=False` (sync and async)
+- **Identity map** — `put` invalidates hydration cache using pre-write cascade subjects (orphaned embeds evicted correctly)
+- **`order_by`** — nullable relationship hops use `OPTIONAL` for sort bindings (resources without a link are not dropped)
+- **IRI relationship refs** — filters on `Relationship | IRI` fields match IRI-only edges without requiring `rdf:type` on the join variable
+- **`!=` with `.use_inequality_for_ne()`** — on nullable optional paths, includes `!BOUND` so missing links match like default `!=`
+
+### Changed
+
+- **`parse_count_bindings`** — invalid or negative COUNT values raise `QueryError`
+- **`FieldRef.is_(None)` / `is_not(None)`** — nested relationship paths compile (scalar leaf still requires a relationship field)
+- **`limit` / `offset`** — reject negative values (including `-0`)
+
+### Documentation
+
+- Query guide — `order_by` on nullable hops, IRI reference filters, inequality vs default `!=`
+- PRODUCTION — async FastAPI availability corrected to **0.6+**
+- README — known limitations updated for 0.8.1 query/session fixes
+
 ## [0.8.0] - 2026-05-21
 
 ### Added

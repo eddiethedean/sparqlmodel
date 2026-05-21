@@ -137,9 +137,56 @@ def test_is_none_scalar_raises() -> None:
         compile_where(Person, (Person.name.is_(None),), registry)
 
 
-def test_is_none_on_path_raises() -> None:
-    with pytest.raises(QueryError, match="nested scalar"):
-        Person.works_for.name.is_(None)
+def test_nested_relationship_is_none(session) -> None:
+    from tests.test_compiler_joins import DualOrgPerson
+
+    employer = Organization(id=IRI("urn:org:e"), name="E")
+    match = DualOrgPerson(
+        id=IRI("urn:p:m"),
+        name="Match",
+        employer=employer,
+        volunteer_at=None,
+    )
+    alone = DualOrgPerson(id=IRI("urn:p:a"), name="Alone", employer=None, volunteer_at=None)
+    session.put(match)
+    session.put(alone)
+    names = {
+        p.name for p in session.query(DualOrgPerson).where(DualOrgPerson.employer.is_(None)).all()
+    }
+    assert names == {"Alone"}
+
+
+def test_order_by_nullable_includes_missing_relationship(session) -> None:
+    session.put(Person(id=IRI("urn:p:1"), name="Zara"))
+    session.put(Person(id=IRI("urn:p:2"), name="Amy"))
+    names = [p.name for p in session.query(Person).order_by(Person.works_for.name).all()]
+    assert names == ["Amy", "Zara"]
+
+
+def test_works_for_iri_reference_is_not_none(session, acme: Organization) -> None:
+    session.put(Person(id=IRI("urn:p:ref"), name="Ref", works_for=acme.id))
+    session.put(Person(id=IRI("urn:p:alone"), name="Alone"))
+    names = {p.name for p in session.query(Person).where(Person.works_for.is_not(None)).all()}
+    assert names == {"Ref"}
+
+
+def test_nullable_inequality_includes_missing(session, acme: Organization) -> None:
+    session.put(Person(id=IRI("urn:p:with"), name="With", works_for=acme))
+    session.put(Person(id=IRI("urn:p:alone"), name="Alone"))
+    names = {
+        p.name
+        for p in session.query(Person)
+        .where(Person.works_for.name != "Acme Corp")
+        .use_inequality_for_ne()
+        .all()
+    }
+    assert names == {"Alone"}
+
+
+def test_compile_iri_hop_omits_rdf_type() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.works_for.is_not(None),), registry)
+    assert "<https://schema.org/Organization>" not in sparql
 
 
 def test_compile_works_for_is_none_has_bound_filter() -> None:

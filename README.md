@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#080---2026-05-21) (0.8.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#081---2026-05-21) (0.8.1)
 
 ---
 
@@ -227,14 +227,15 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.8.0)
+## Known limitations (0.8.1)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))
 - `merge` / `refresh` / `expunge` planned **0.9** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#09--session-cache-control))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
-- Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics
-- Nullable relationship `!=` uses `OPTIONAL` hops; required (non-nullable) hops still use inner-join semantics
+- Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching (since **0.8.1**)
+- `==`, `<`, `>`, and `in_` on optional paths still exclude unbound values (SPARQL-native)
+- Nullable relationship filters use `OPTIONAL` hops; required (non-nullable) hops still use inner-join semantics
 - Sessions are not thread-safe; one session per request/task
 - Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition
 - Cyclic embedded models raise `ConfigurationError` on `put` / `model_to_graph`

@@ -97,6 +97,14 @@ def invalidate_cascade_keys(
     for_put: bool,
 ) -> None:
     subjects = cascade_subjects_for_removal(model, store_graph, for_put=for_put)
+    invalidate_subjects(state, subjects)
+
+
+def invalidate_subjects(
+    state: SessionState,
+    subjects: list[tuple[type[SPARQLModel], str | IRI]],
+) -> None:
+    """Expire identity and hydration cache entries for cascade subjects."""
     keys = [identity_key_for_iri(cls, iri) for cls, iri in subjects]
     state.expire_keys(keys)
 
@@ -108,10 +116,11 @@ def put_impl(
 ) -> SPARQLModel:
     model.ensure_id()
     subjects = cascade_subjects_for_removal(model, store.graph, for_put=True)
+    remove_pending_for_subjects(state, subjects)
     remove_g = triples_to_graph(owned_triples_for_subjects(subjects, store.graph))
     add_g = model_to_graph(model)
     store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
-    invalidate_cascade_keys(state, store.graph, model, for_put=True)
+    invalidate_subjects(state, subjects)
     state.set_identity(model)
     return model
 
@@ -268,10 +277,11 @@ async def put_impl_async(
 ) -> SPARQLModel:
     model.ensure_id()
     subjects = cascade_subjects_for_removal(model, store.graph, for_put=True)
+    remove_pending_for_subjects(state, subjects)
     remove_g = triples_to_graph(owned_triples_for_subjects(subjects, store.graph))
     add_g = model_to_graph(model)
     await store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
-    invalidate_cascade_keys(state, store.graph, model, for_put=True)
+    invalidate_subjects(state, subjects)
     state.set_identity(model)
     return model
 

@@ -42,6 +42,18 @@ async def test_async_execute_select(async_session: AsyncSPARQLSession, odos: Per
     assert len(results) >= 1
 
 
+async def test_async_put_flush_true_clears_pending_queue() -> None:
+    async with AsyncSPARQLSession(store=AsyncMemoryStore(), autoflush=False) as session:
+        v1 = Person(id=IRI("urn:p:v1"), name="Version 1")
+        v2 = Person(id=IRI("urn:p:v1"), name="Version 2")
+        await session.put(v1, flush=False)
+        await session.put(v2, flush=True)
+        await session.flush()
+        loaded = await session.get(Person, v1.id)
+        assert loaded is not None
+        assert loaded.name == "Version 2"
+
+
 async def test_async_delete_drops_pending_put(odos: Person) -> None:
     async with AsyncSPARQLSession(store=AsyncMemoryStore(), autoflush=False) as session:
         await session.put(odos, flush=False)
