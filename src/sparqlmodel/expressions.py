@@ -26,6 +26,8 @@ class CompareOp(str, Enum):
     LTE = "<="
     GTE = ">="
     IN = "in"
+    IS_ = "is"
+    IS_NOT = "is_not"
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,24 @@ class FieldRef:
             )
         seq = values if isinstance(values, tuple) else tuple(values)
         return CompareExpr(self, CompareOp.IN, seq)
+
+    def is_(self, value: object) -> CompareExpr:
+        if value is not None:
+            raise QueryError("is_() only supports None for nullable relationship absence checks")
+        if self.path:
+            raise QueryError("is_(None) applies to a relationship field, not a nested scalar path")
+        return CompareExpr(self, CompareOp.IS_, value)
+
+    def is_not(self, value: object) -> CompareExpr:
+        if value is not None:
+            raise QueryError(
+                "is_not() only supports None for nullable relationship presence checks"
+            )
+        if self.path:
+            raise QueryError(
+                "is_not(None) applies to a relationship field, not a nested scalar path"
+            )
+        return CompareExpr(self, CompareOp.IS_NOT, value)
 
 
 @dataclass(frozen=True)

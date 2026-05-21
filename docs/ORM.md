@@ -245,7 +245,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Async session and stores** shipped in **0.6.0**.
+**Not yet available (planned):** `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
 
 ---
 

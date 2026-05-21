@@ -13,7 +13,7 @@ Source tree: [`examples/realworld/`](https://github.com/eddiethedean/sqarqlmodel
 | [Wikidata capitals](#wikidata-capital-cities) | `wikidata_capitals.py` | `data/wikidata_capitals.ttl` |
 | [Schema.org NGOs](#schemaorg-ngo-registry) | `schema_org_ngos.py` | `data/schema_org_ngos.ttl` |
 
-Provenance and licenses: [`DATA_SOURCES.md`](../../examples/realworld/DATA_SOURCES.md).
+Provenance and licenses: [DATA_SOURCES.md](https://github.com/eddiethedean/sqarqlmodel/blob/main/examples/realworld/DATA_SOURCES.md).
 
 ## Run locally
 

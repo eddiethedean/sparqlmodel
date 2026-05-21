@@ -52,18 +52,14 @@ from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app
 
 ---
 
-## Pagination and sorting (planned 0.8)
-
-**Today:** Use `.limit(n)` only.
-
-**Target:**
+## Pagination and sorting (0.8+)
 
 ```python
 session.query(Person).where(...).order_by(Person.name).offset(20).limit(10).all()
 total = session.query(Person).where(...).count()
 ```
 
-Until **0.8**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
+`count()` hits the store with a `COUNT(DISTINCT ?root)` query and does not hydrate rows. On `HttpStore`, it uses the remote endpoint only (no mirror hydration). For list routes, prefer `.all()` with `.offset()` / `.limit()` and a separate `.count()` with the same `.where()` filters.
 
 ---
 

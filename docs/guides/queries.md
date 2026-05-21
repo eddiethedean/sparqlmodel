@@ -61,17 +61,52 @@ Default ``!=`` uses ``FILTER NOT EXISTS`` (since 0.5.2): resources with no value
 session.query(Person).where(Person.name != "X").use_inequality_for_ne().all()
 ```
 
-``.use_optional_for_comparisons()`` enables NOT EXISTS explicitly (historical name; no SPARQL ``OPTIONAL`` blocks). Disabling it restores the default NOT EXISTS mode unless ``use_inequality_for_ne()`` was set.
+``.use_optional_for_comparisons()`` toggles NOT EXISTS vs inequality for ``!=`` (historical name). Nullable relationship hops still use real ``OPTIONAL`` blocks when the field annotation includes ``None``.
 
 Ordering (`<`, `>`, …) and `in_` still require a bound predicate value (SPARQL-native). Unique variables are generated per `!=` inside AND branches of OR expressions (0.2+).
 
 Filter values on `IRI` fields (or unions including `IRI`) accept absolute `urn:` and `http(s)://` strings, not only `prefix:local` compact IRIs.
 
+## Pagination, sorting, and count
+
+```python
+with SPARQLSession() as session:
+    page = (
+        session.query(Person)
+        .where(Person.name != "Other")
+        .order_by(Person.name)
+        .offset(20)
+        .limit(10)
+        .all()
+    )
+    total = session.query(Person).where(Person.name != "Other").count()
+```
+
+| Method | Behavior |
+|--------|----------|
+| `.offset(n)` | `OFFSET n` (after `ORDER BY`, before `LIMIT`) |
+| `.order_by(field, *, desc=False)` | `ORDER BY` on a scalar field; repeatable for tie-breakers |
+| `.count()` | `COUNT(DISTINCT ?root)`; ignores `.limit()`, `.offset()`, and `.order_by()` |
+| `.first()` | Always `LIMIT 1`; ignores prior `.limit()` and `.offset()` |
+
+## Nullable relationships
+
+For `Relationship | None` (or unions including `None`), the compiler wraps each nullable hop in SPARQL `OPTIONAL`. That keeps resources without a link in the result set when filters use `!=` on nested scalars.
+
+Explicit absence or presence:
+
+```python
+session.query(Person).where(Person.works_for.is_(None)).all()
+session.query(Person).where(Person.works_for.is_not(None)).all()
+```
+
+``use_optional_for_comparisons()`` only toggles default ``!=`` / NOT EXISTS semantics (historical name); it does not emit ``OPTIONAL`` blocks.
+
 ## Result helpers
 
 ```python
 q = session.query(Person).where(Person.name == "Odos")
-q.first()                    # one or None (always LIMIT 1, ignores prior .limit())
+q.first()                    # one or None (always LIMIT 1, ignores prior .limit() / .offset())
 q.first(depth=1)             # eager-load one hop
 q.limit(10).all()
 q.limit(10).all(depth=1)
@@ -79,10 +114,6 @@ q.limit(10).all(depth=1)
 
 ```{warning}
 On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `.all()` and `.first()` run a remote SELECT but hydrate each row with `get()` from the **local mirror**. Rows for IRIs this store has not written are omitted. See {doc}`../troubleshooting` — `query().all()` returns fewer rows.
-```
-
-```{note}
-`offset`, `order_by`, and `count()` are planned for **0.8** ([ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#08--query-lists)). Until then use `.limit()` only or raw `session.execute`.
 ```
 
 ## Raw SPARQL

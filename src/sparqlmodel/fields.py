@@ -212,6 +212,14 @@ def resolve_related_model(
     )
 
 
+def relationship_is_nullable(annotation: Any) -> bool:
+    """True when a relationship annotation includes ``None`` (optional link)."""
+    origin = get_origin(annotation)
+    if origin is not None:
+        return type(None) in get_args(annotation)
+    return False
+
+
 def relationship_allows_iri(annotation: Any) -> bool:
     """True when the relationship annotation includes ``IRI`` (composition or reference)."""
     if annotation is IRI:

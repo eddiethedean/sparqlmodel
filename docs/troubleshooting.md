@@ -59,7 +59,7 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 - Combining OR and AND with `&`, e.g. `((A | B) & C)` or `(C & (A | B))` — use `.where((A | B), C)` instead
 - Passing a bare string to `.in_()` — use a one-element tuple or list, e.g. `.in_(("value",))`
 
-**Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.8** (compiler OPTIONAL for nullable relationships).
+**Fix:** Use nullable-hop `!=` (compiler emits `OPTIONAL` since **0.8**), or `Person.relationship.is_(None)` / `is_not(None)` for explicit absence. For complex patterns, raw `execute()` remains available.
 
 ## `QueryError: Cannot combine OR and AND`
 

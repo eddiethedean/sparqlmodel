@@ -45,10 +45,10 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.6.0**
 - [x] FastAPI `AsyncSessionDep` + `async_http_store_lifespan` — **0.6.0**
 - [x] Async/sync parity contract tests on memory and HTTP stores — **0.6.0**
-- [ ] `Query.offset(n)` — **0.8**
-- [ ] `Query.order_by(...)` — **0.8**
-- [ ] `Query.count()` — **0.8**
-- [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8**
+- [x] `Query.offset(n)` — **0.8.0**
+- [x] `Query.order_by(...)` — **0.8.0**
+- [x] `Query.count()` — **0.8.0**
+- [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
 - [ ] HttpStore mirror sync or remote-authoritative `get` contract — **1.0**
 - [ ] Scoped session pattern documented (FastAPI + scripts) — **0.9**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
@@ -144,24 +144,23 @@ with SPARQLSession() as session:
 
 - `.where(*expr)` — `CompareExpr`, `AndExpr`, or top-level `OrExpr`
 - `.limit(n)` — non-negative integer
-- `.first()` — always uses `LIMIT 1`; ignores any prior `.limit()` on the same query
+- `.offset(n)` — non-negative integer (**0.8**)
+- `.order_by(field, *, desc=False)` — scalar field only; repeatable (**0.8**)
+- `.count()` — returns `int`; ignores limit/offset/order_by (**0.8**)
+- `.first()` — always uses `LIMIT 1`; ignores any prior `.limit()` or `.offset()` on the same query
 - `.use_not_exists_for_ne()` — compile `!=` with `NOT EXISTS` (default since 0.5.2)
 - `.use_inequality_for_ne()` — legacy inequality `!=` (pre-0.5.2 default)
 - `.all(*, depth=0)` / `.first(*, depth=0)` — execute and hydrate
 
 ## Query builder (target API)
 
-**Current (0.2):** As above. No `offset`, `order_by`, `count`, `distinct`, or field projection. Nested filters require related `rdf:type` in the graph.
+**Current (0.8):** `.offset(n)`, `.order_by(field, *, desc=False)`, `.count()` (ignores limit/offset/order_by). `.first()` always `LIMIT 1` and ignores `.limit()` / `.offset()`. Nullable relationship hops use `OPTIONAL`; `relationship.is_(None)` / `is_not(None)` for absence/presence. No `distinct` or field projection.
 
-**Target (1.0):**
+**Target (post-1.3):**
 
 | Method | SPARQL |
 |--------|--------|
-| `.offset(n)` | `OFFSET n` |
-| `.order_by(field, *, desc=False)` | `ORDER BY` on bound variable |
-| `.count()` | Subselect or `COUNT` pattern; returns `int` |
-| `.where(Relationship.is_(None))` / absence | `OPTIONAL` + `FILTER(!BOUND(?var))` or `NOT EXISTS` |
-| `.distinct()` | `DISTINCT` (if supported) |
+| `.distinct()` | `DISTINCT` projection (if supported) |
 
 **Precedence:** Python `&` binds tighter than `|`; `(A & B) | C` is two disjuncts (fixed 0.2).
 
@@ -271,7 +270,7 @@ works_for: Organization | None = Relationship("schema:worksFor", model=Organizat
 - `list[T]` / collection fields for multi-valued literals and IRIs (via TripleModel) — **1.0**
 - Language-tagged fields (`LangString`, multi-lang maps) — **1.0** (TripleModel)
 - Polymorphic `session.query(Base).where(...)` matching subclasses — **1.0**
-- Compiler emits `OPTIONAL` for nullable relationship paths in filters — **0.8**
+- Compiler emits `OPTIONAL` for nullable relationship paths in filters — **0.8.0**
 - Optional `Relationship(..., back_populates=...)` for inverse navigation — **1.0**
 
 ---
@@ -388,14 +387,6 @@ Parallel to the sync stack; sync API remains supported.
 | Area | Behavior |
 |------|----------|
 | Dual model types | 0.3 uses interim `_triple.py` dynamic adapter; **0.4** unifies on `SPARQLModel(TripleModel)` |
-
-## Until 0.8 (query)
-
-| Area | Behavior |
-|------|----------|
-| Pagination | `limit` only; no `offset` or `order_by` |
-| Absence / null filters | No `OPTIONAL` for nullable relationships in DSL |
-| Aggregates | No `count()` on `Query` |
 
 ## Until 1.0 (HttpStore)
 

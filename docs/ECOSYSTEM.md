@@ -175,7 +175,7 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 | **0.5** | Pyoxigraph engine (`triplemodel.Store`, no core rdflib) | — |
 | **0.6** | Async ORM (`AsyncSPARQLSession`, async stores, FastAPI) | — |
 | **0.7** | Thin `serializers.py` only (shipped) | All file `parse` / `serialize` upstream |
-| **0.8** | Query lists (`offset`, `order_by`, `count`) | — |
+| **0.8** | Query lists (`offset`, `order_by`, `count`, OPTIONAL nullable hops) | — |
 | **0.9** | Session cache (`merge`, `refresh`, `expunge`) | — |
 | **1.0** | Production HttpStore | Mirror sync, read/write URLs |
 | **1.1** | Multi-valued / lang / polymorphic query | TripleModel mapping first |

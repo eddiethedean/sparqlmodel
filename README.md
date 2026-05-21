@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#071---2026-05-21) (0.7.1)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#080---2026-05-21) (0.8.0)
 
 ---
 
@@ -142,7 +142,7 @@ with SPARQLSession() as session:
     # pre-0.5.2 inequality (excludes unbound): .use_inequality_for_ne()
 ```
 
-Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` or `.in_(list)` (not a bare string — use `("x",)` for one value), multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.first()` always `LIMIT 1` (ignores prior `.limit()`), `.use_inequality_for_ne()`, `.use_optional_for_comparisons()`.
+Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` or `.in_(list)` (not a bare string — use `("x",)` for one value), multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.offset(n)`, `.order_by(field, desc=False)`, `.count()`, `.is_(None)` / `.is_not(None)` on nullable relationships, `.first()` always `LIMIT 1` (ignores prior `.limit()` and `.offset()`), `.use_inequality_for_ne()`, `.use_optional_for_comparisons()` (NE semantics toggle; real `OPTIONAL` blocks are automatic on nullable hops).
 
 ---
 
@@ -231,7 +231,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))
-- Query: `limit` only — `offset` / `order_by` / `count` planned **0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--13))
+- `merge` / `refresh` / `expunge` planned **0.9** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#09--session-cache-control))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics
 - Multi-hop `!=` still requires relationship hops (inner-join); missing `works_for` is not treated as “null name”

@@ -7,7 +7,7 @@ from typing import Any, get_args, get_origin
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
-from sparqlmodel.fields import get_field_metadata
+from sparqlmodel.fields import get_field_metadata, relationship_is_nullable
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_n3 import term_to_n3, validate_iri_token
 from sparqlmodel.sparql_escape import escape_sparql_string
@@ -90,6 +90,11 @@ def _flatten_and_expressions(
     return flat
 
 
+def _optional_block(lines: list[str]) -> str:
+    body = "\n    ".join(lines)
+    return f"OPTIONAL {{\n    {body}\n    }}"
+
+
 def _flatten_or_expressions(expr: OrExpr) -> list[CompareExpr | AndExpr]:
     """Flatten nested ``OrExpr`` into disjunct branches."""
     flat: list[CompareExpr | AndExpr] = []
@@ -132,9 +137,15 @@ def _follow_path(
         join_counter[0] += 1
         join_var = f"?__join_{join_counter[0]}"
         pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
-        patterns.append(f"{current_var} <{pred_expanded}> {join_var} .")
         type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
-        patterns.append(f"{join_var} a <{type_expanded}> .")
+        hop_patterns = [
+            f"{current_var} <{pred_expanded}> {join_var} .",
+            f"{join_var} a <{type_expanded}> .",
+        ]
+        if relationship_is_nullable(field_info.annotation):
+            patterns.append(_optional_block(hop_patterns))
+        else:
+            patterns.extend(hop_patterns)
         current_cls = related_cls
         current_var = join_var
         join_cache[partial] = (current_var, current_cls)
@@ -184,6 +195,86 @@ def _resolve_compare_target(
     return target_model, subject_var, patterns, field_info, field_name
 
 
+def _compile_relationship_presence(
+    expr: CompareExpr,
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+    join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
+) -> tuple[list[str], list[str]]:
+    """Compile ``relationship.is_(None)`` / ``is_not(None)``."""
+    left = expr.left
+    if not isinstance(left, FieldRef):
+        raise QueryError("Expected FieldRef on left side of comparison")
+
+    path = left.path
+    field_name = left.field_name
+    if left.model_cls is not model_cls:
+        raise QueryError(
+            f"Filter field {left.model_cls.__name__}.{field_name} does not match "
+            f"query model {model_cls.__name__}"
+        )
+
+    patterns: list[str] = []
+    if path:
+        current_cls, current_var, path_patterns = _follow_path(
+            model_cls, path, root_var, registry, join_counter, join_cache
+        )
+        patterns.extend(path_patterns)
+    else:
+        current_cls = model_cls
+        current_var = root_var
+
+    rel_map = {n: (fi, rc) for n, fi, rc in current_cls.get_relationship_fields()}
+    if field_name not in rel_map:
+        raise QueryError(
+            f"is_(None) / is_not(None) requires a relationship field on {current_cls.__name__}"
+        )
+
+    field_info, related_cls = rel_map[field_name]
+    meta = get_field_metadata(field_info)
+    if meta is None:
+        raise QueryError(f"Field '{field_name}' has no SPARQL metadata")
+
+    join_counter[0] += 1
+    join_var = f"?__join_{join_counter[0]}"
+    pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
+    type_expanded = validate_iri_token(expand_iri(related_cls.rdf_type, registry.prefixes))
+    hop_patterns = [
+        f"{current_var} <{pred_expanded}> {join_var} .",
+        f"{join_var} a <{type_expanded}> .",
+    ]
+    patterns.append(_optional_block(hop_patterns))
+
+    if expr.op == CompareOp.IS_:
+        return patterns, [f"!BOUND({join_var})"]
+    if expr.op == CompareOp.IS_NOT:
+        return patterns, [f"BOUND({join_var})"]
+    raise QueryError(f"Unsupported presence operator: {expr.op}")
+
+
+def _resolve_order_target(
+    field_ref: FieldRef,
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+    join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
+) -> tuple[list[str], str]:
+    """Return triple patterns and the variable for ORDER BY."""
+    _, subject_var, patterns, field_info, field_name = _resolve_compare_target(
+        field_ref, model_cls, root_var, registry, join_counter, join_cache
+    )
+    meta = get_field_metadata(field_info)
+    assert meta is not None
+    pred_expanded = validate_iri_token(expand_iri(meta.predicate, registry.prefixes))
+    join_counter[0] += 1
+    order_var = f"?__order_{field_name}_{join_counter[0]}"
+    patterns.append(f"{subject_var} <{pred_expanded}> {order_var} .")
+    return patterns, order_var
+
+
 def _exists_block(patterns: list[str], filters: list[str]) -> str:
     body = "\n        ".join(patterns)
     if filters:
@@ -203,12 +294,19 @@ def compile_compare(
     use_not_exists_for_ne: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Compile a comparison; return (patterns, filters)."""
+    if expr.op in (CompareOp.IS_, CompareOp.IS_NOT):
+        return _compile_relationship_presence(
+            expr, model_cls, root_var, registry, join_counter, join_cache
+        )
+
     if isinstance(expr.right, FieldRef):
         raise QueryError(
             "Cannot compare a field to another field; compare to a literal or IRI value"
         )
     if expr.right is None and expr.op != CompareOp.IN:
-        raise QueryError("Filter value cannot be None; use explicit existence checks")
+        raise QueryError(
+            "Filter value cannot be None; use relationship.is_(None) for absence checks"
+        )
 
     if expr.op == CompareOp.IN and isinstance(expr.right, tuple):
         if len(expr.right) == 0:
@@ -247,7 +345,11 @@ def compile_compare(
         if use_not_exists_for_ne:
             ne_var = f"?__ne_{id(expr)}"
             inner = f"{subject_var} <{pred_expanded}> {ne_var} .\n        FILTER({ne_var} = {obj})"
-            filters.append(f"NOT EXISTS {{ {inner} }}")
+            not_exists = f"NOT EXISTS {{ {inner} }}"
+            if any("OPTIONAL" in pattern for pattern in path_patterns):
+                filters.append(f"(!BOUND({subject_var}) || {not_exists})")
+            else:
+                filters.append(not_exists)
         else:
             neq_var = f"?__neq_{field_name}_{id(expr)}"
             patterns.append(f"{subject_var} <{pred_expanded}> {neq_var} .")
@@ -351,6 +453,9 @@ def compile_where(
     registry: NamespaceRegistry,
     *,
     limit: int | None = None,
+    offset: int | None = None,
+    order_by: tuple[tuple[FieldRef, bool], ...] = (),
+    count: bool = False,
     use_not_exists_for_ne: bool = True,
 ) -> str:
     """Compile WHERE expressions into a full SELECT SPARQL query."""
@@ -399,6 +504,20 @@ def compile_where(
             )
         )
 
+    order_vars: list[tuple[str, bool]] = []
+    if order_by and not count:
+        for field_ref, desc in order_by:
+            order_patterns, order_var = _resolve_order_target(
+                field_ref,
+                model_cls,
+                root_var,
+                registry,
+                join_counter,
+                join_cache,
+            )
+            all_patterns.extend(order_patterns)
+            order_vars.append((order_var, desc))
+
     where_body = "\n    ".join(all_patterns)
     if all_filters:
         filter_lines = "\n    ".join(
@@ -410,10 +529,27 @@ def compile_where(
 
     if limit is not None and limit < 0:
         raise QueryError("limit must be non-negative")
-    limit_clause = f"\nLIMIT {limit}" if limit is not None else ""
+    if offset is not None and offset < 0:
+        raise QueryError("offset must be non-negative")
+
+    order_clause = ""
+    if order_vars:
+        order_parts = [
+            f"{'DESC' if desc else 'ASC'}({order_var})" for order_var, desc in order_vars
+        ]
+        order_clause = f"\nORDER BY {' '.join(order_parts)}"
+
+    offset_clause = f"\nOFFSET {offset}" if offset is not None and not count else ""
+    limit_clause = f"\nLIMIT {limit}" if limit is not None and not count else ""
     prefixes = registry.sparql_prefixes()
     prefix_block = f"{prefixes}\n\n" if prefixes else ""
 
+    if count:
+        select_clause = f"SELECT (COUNT(DISTINCT {root_var}) AS ?__count)"
+    else:
+        select_clause = f"SELECT DISTINCT {root_var}"
+
     return (
-        f"{prefix_block}SELECT DISTINCT {root_var} WHERE {{\n    {where_clause}\n}}{limit_clause}"
+        f"{prefix_block}{select_clause} WHERE {{\n    {where_clause}\n}}"
+        f"{order_clause}{offset_clause}{limit_clause}"
     )

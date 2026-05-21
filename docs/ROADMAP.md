@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **[0.8 — Query lists](#08--query-lists)**. **0.7** delegated file I/O shipped **2026-05-20**. Forward plan: [0.8 → 1.3](#forward-roadmap-07--13).
+**Current focus (next release):** **[0.9 — Session cache](#09--session-cache-control)**. **0.8** query lists shipped **2026-05-21**. Forward plan: [0.9 → 1.3](#forward-roadmap-07--13).
 
 ---
 
@@ -296,7 +296,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 1.3)
 
-**Shipped:** [0.7 — Delegated file I/O](#07--delegated-file-io) (2026-05-20). **Next release:** **0.8**.
+**Shipped:** [0.8 — Query lists](#08--query-lists) (2026-05-21). **Next release:** **0.9**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
@@ -305,7 +305,7 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 | Release | Track | Primary outcome |
 |---------|-------|-----------------|
 | **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry — **shipped** |
-| **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters |
+| **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters — **shipped** |
 | **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns |
 | **1.0** | Stores | **Production HttpStore** — mirror sync, read/write URLs, robust remote SELECT |
 | **1.1** | Modeling | **Richer RDF fields** — multi-valued, `@lang`, polymorphic query, inverse nav |
@@ -353,6 +353,8 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 ### 0.8 — Query lists
 
+**Status:** shipped as **0.8.0** (2026-05-21).
+
 **Track:** Query & API · **Depends on:** 0.7
 
 **Goal:** SQLModel-grade **list** endpoints — paginate, sort, and count without hand-written SPARQL.
@@ -361,8 +363,8 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 |-------------|--------|
 | `Query.offset(n)` / `AsyncQuery.offset(n)` | `OFFSET` in compiled SELECT |
 | `Query.order_by(FieldRef, *, desc=False)` | `ORDER BY` on bound variables |
-| `Query.count()` | Efficient count pattern (subquery or `COUNT` — implementation detail) |
-| OPTIONAL / absence for `Relationship \| None` | Compiler emits `OPTIONAL` where nullable hops need it |
+| `Query.count()` | `COUNT(DISTINCT ?root)` |
+| OPTIONAL / absence for `Relationship \| None` | Compiler `OPTIONAL` on nullable hops; `is_(None)` / `is_not(None)` |
 | Tests + [guides/queries.md](guides/queries.md) pagination examples | Sync and async parity |
 
 **Exit criteria:** FastAPI list routes can use `.limit().offset().order_by()` and `.count()`; SPECS **P0** query checklist items for **0.8** are checked.
@@ -493,9 +495,9 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | `Session.add` / `commit` | `add` / `put` + context `flush` | Shipped |
 | `session.get(PK)` | `get(Model, iri)` | Shipped |
 | `select().where()` | `query().where()` | Shipped |
-| `limit` / `offset` | `limit` / `offset` | `limit` shipped; `offset` **0.8** |
-| `order_by` | `order_by` | **0.8** |
-| `count` | `count()` | **0.8** |
+| `limit` / `offset` | `limit` / `offset` | Shipped (**0.8**) |
+| `order_by` | `order_by` | Shipped (**0.8**) |
+| `count` | `count()` | Shipped (**0.8**) |
 | Relationships + eager load | `Relationship`, `depth` | Shipped (depth 0–2) |
 | `merge` / `refresh` / `expunge` | same | **0.9** |
 | Transactions | pending queue + store updates | Partial (remote txn **1.0**) |
@@ -516,7 +518,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | Lang / multi-lang literals | Yes | **1.1** (TripleModel) |
 | Collection fields (`LiteralList`, …) | Yes | **1.1** (TripleModel) |
 | Polymorphic queries | Yes | **1.1** |
-| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); OPTIONAL nullable hops **0.8** |
+| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); OPTIONAL nullable hops (**0.8**) |
 | Read/write endpoint split | Yes | **1.0** |
 | Async ORM + HTTP store | No | Shipped (**0.6**) |
 | FastAPI integration | No | Yes (0.2) |
@@ -530,14 +532,13 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities (forward work)
 
-1. **0.8** — Query lists (`offset`, `order_by`, `count`, OPTIONAL nullable hops) — unblocks production HTTP list APIs.
-2. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
-3. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
-4. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
-5. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
-6. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
-7. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
-8. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **1.3** GA.
+1. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
+2. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
+3. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
+4. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
+5. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
+6. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
+7. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **1.3** GA.
 
 ---
 

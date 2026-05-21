@@ -199,3 +199,39 @@ async def test_async_query_options_toggle() -> None:
         q.use_not_exists_for_ne().use_inequality_for_ne().use_optional_for_comparisons()
         sparql = q.where(Person.name != "X")._compile()
         assert "NOT EXISTS" not in sparql or "FILTER" in sparql
+
+
+async def test_async_compile_offset_order_count(async_session: AsyncSPARQLSession) -> None:
+    registry = Person.namespace_registry()
+    sparql = compile_where(
+        Person,
+        (Person.name == "A",),
+        registry,
+        limit=5,
+        offset=2,
+        order_by=((Person.name, False),),
+        count=True,
+    )
+    assert "COUNT(DISTINCT" in sparql
+    assert "OFFSET" not in sparql
+    list_sparql = compile_where(
+        Person,
+        (Person.name == "A",),
+        registry,
+        limit=5,
+        offset=2,
+        order_by=((Person.name, False),),
+    )
+    assert "OFFSET 2" in list_sparql
+    assert "ORDER BY" in list_sparql
+
+
+async def test_async_count_and_pagination(async_session: AsyncSPARQLSession) -> None:
+    await async_session.put(Person(id=IRI("urn:p:1"), name="Amy"))
+    await async_session.put(Person(id=IRI("urn:p:2"), name="Zed"))
+    assert await async_session.query(Person).count() == 2
+    names = [
+        p.name
+        for p in await async_session.query(Person).order_by(Person.name).offset(1).limit(1).all()
+    ]
+    assert names == ["Zed"]
