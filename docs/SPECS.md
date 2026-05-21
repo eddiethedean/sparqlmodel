@@ -222,7 +222,7 @@ class Person(SPARQLModel):
 
 - Metaclass enables `Person.name == "x"` in queries (`FieldRef`)
 - `ensure_id()` assigns `urn:uuid:…` when `id` is unset
-- JSON-LD helpers: `model_dump_jsonld` / `model_validate_jsonld` (interim; prefer TripleModel JSON-LD long term)
+- JSON-LD helpers: `model_dump_jsonld` / `model_validate_jsonld` (ORM dict API; file JSON-LD via `serialize` — **0.7**)
 - **Subclasses `TripleModel`** (Option A, **0.4+**); merged metaclass for query `FieldRef`
 - `model_config` uses `extra="forbid"`
 - `Field` / `Relationship` are ORM sugar over `rdf_field` / `Predicate` (built at class creation, no `exec`)

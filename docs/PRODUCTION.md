@@ -52,7 +52,7 @@ from sparqlmodel.fastapi import SessionDep, http_store_lifespan, init_app
 
 ---
 
-## Pagination and sorting (planned 0.6)
+## Pagination and sorting (planned 0.8)
 
 **Today:** Use `.limit(n)` only.
 
@@ -63,7 +63,7 @@ session.query(Person).where(...).order_by(Person.name).offset(20).limit(10).all(
 total = session.query(Person).where(...).count()
 ```
 
-Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
+Until **0.8**, implement offset/sort in raw SPARQL via `session.execute` or fetch-and-slice in memory for small graphs only.
 
 ---
 
