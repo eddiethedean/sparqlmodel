@@ -31,7 +31,7 @@ def test_org_round_trip(acme: Organization) -> None:
 
 def test_model_with_bool() -> None:
     class FlagModel(SPARQLModel):
-        rdf_type = "schema:Thing"
+        rdf_type = "urn:test:GraphFlagThing"
         active: bool = Field("schema:value")
 
     m = FlagModel(id=IRI("urn:flag"), active=True)
@@ -41,7 +41,7 @@ def test_model_with_bool() -> None:
 
 def test_model_with_int_float() -> None:
     class NumModel(SPARQLModel):
-        rdf_type = "schema:Thing"
+        rdf_type = "urn:test:GraphNumThing"
         count: int = Field("schema:integerValue")
         score: float = Field("schema:value")
 

@@ -17,7 +17,7 @@ with SPARQLSession() as session:
 | `&` | AND | Use parentheses: `(A & B) \| C` |
 | `\|` | OR | `(A & B) \| C` compiles with correct precedence (0.2+) |
 | `<`, `>`, `<=`, `>=` | comparison | Typed numeric literals use XSD datatypes |
-| `.in_(tuple)` | IN / VALUES | Membership; lists and other sequences accepted |
+| `.in_(tuple)` | IN / VALUES | Membership; lists and other sequences accepted — not a bare `str` (use `("value",)` or `["value"]`) |
 | `None` in filter | — | Raises {class}`~sparqlmodel.exceptions.QueryError` |
 
 ## Boolean composition

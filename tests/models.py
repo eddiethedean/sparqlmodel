@@ -29,7 +29,7 @@ class Person(SPARQLModel):
 
 
 class TeamLead(SPARQLModel):
-    rdf_type = "schema:Person"
+    rdf_type = "urn:test:TeamLead"
     __prefixes__ = {"schema": "https://schema.org/"}
 
     id: IRI
@@ -38,7 +38,7 @@ class TeamLead(SPARQLModel):
 
 
 class DualRelPerson(SPARQLModel):
-    rdf_type = "schema:Person"
+    rdf_type = "urn:test:DualRelPerson"
     __prefixes__ = {"schema": "https://schema.org/"}
 
     id: IRI

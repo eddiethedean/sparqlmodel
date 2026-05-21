@@ -87,6 +87,26 @@ def test_compile_in_empty_raises() -> None:
         compile_where(Person, (Person.name.in_(()),), registry)
 
 
+def test_in_bare_string_raises() -> None:
+    with pytest.raises(QueryError, match="bare string"):
+        Person.name.in_("ab")
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(Person, (Person.name.in_(("ab",)),), registry)
+    assert '"ab"' in sparql
+
+
+def test_compare_and_or_group_raises() -> None:
+    with pytest.raises(QueryError, match="Cannot combine OR and AND"):
+        _ = (Person.name == "C") & ((Person.name == "A") | (Person.name == "B"))
+    registry = NamespaceRegistry(Person.get_prefixes())
+    sparql = compile_where(
+        Person,
+        ((Person.name == "A") | (Person.name == "B"), Person.name == "C"),
+        registry,
+    )
+    assert "||" in sparql
+
+
 def test_compile_ordering() -> None:
     registry = NamespaceRegistry(Organization.get_prefixes())
     sparql = compile_where(

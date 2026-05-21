@@ -56,15 +56,16 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 - Comparing a field to `None` (unsupported in DSL)
 - Filtering `Person.name` on a `query(Organization)` chain
-- Combining OR and AND with `&`, e.g. `((A | B) & C)` — use `.where((A | B), C)` instead
+- Combining OR and AND with `&`, e.g. `((A | B) & C)` or `(C & (A | B))` — use `.where((A | B), C)` instead
+- Passing a bare string to `.in_()` — use a one-element tuple or list, e.g. `.in_(("value",))`
 
 **Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.8** (compiler OPTIONAL for nullable relationships).
 
 ## `QueryError: Cannot combine OR and AND`
 
-**Symptom:** Building or running a filter like `((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")` raises {class}`~sparqlmodel.exceptions.QueryError`.
+**Symptom:** Building or running a filter like `((Person.name == "A") | (Person.name == "B")) & (Person.name != "C")` or `(Person.name != "C") & ((Person.name == "A") | (Person.name == "B"))` raises {class}`~sparqlmodel.exceptions.QueryError`.
 
-**Cause:** Python `&` between an `OrExpr` and a comparison flattens to a flat AND in the expression tree, which would compile incorrectly.
+**Cause:** Python `&` between an `OrExpr` and a comparison (in either order) would produce an invalid expression tree for the compiler.
 
 **Fix:** Pass separate `.where()` arguments::
 
@@ -74,6 +75,14 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
     ).all()
 
 Or use `(A & B) | C` when OR should bind less tightly than AND.
+
+## Remote and mirror diverge after editing `session.graph`
+
+**Symptom:** `query` / `execute` return data that `get` cannot load, or triples added via `session.graph.add` never appear on the remote endpoint.
+
+**Cause:** On {class}`~sparqlmodel.stores.http.HttpStore`, `session.graph` is the **local mirror** only. Direct graph mutation does not send SPARQL Update to the server.
+
+**Fix:** Use `session.put` / `delete` for persistence, or {class}`~sparqlmodel.stores.memory.MemoryStore` when tests need low-level graph edits.
 
 ## `!=` behaves unexpectedly
 

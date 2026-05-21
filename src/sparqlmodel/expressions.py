@@ -63,6 +63,11 @@ class FieldRef:
         return self._compare(CompareOp.GTE, other)
 
     def in_(self, values: tuple[object, ...] | Sequence[object]) -> CompareExpr:
+        if isinstance(values, str):
+            raise QueryError(
+                "in_() does not accept a bare string (it would split into characters). "
+                "Use a one-element tuple or list, e.g. in_((value,)) or in_([value])."
+            )
         seq = values if isinstance(values, tuple) else tuple(values)
         return CompareExpr(self, CompareOp.IN, seq)
 
@@ -75,7 +80,9 @@ class CompareExpr:
     op: CompareOp
     right: object
 
-    def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
+    def __and__(self, other: CompareExpr | AndExpr | OrExpr) -> AndExpr:
+        if isinstance(other, OrExpr):
+            raise QueryError(_OR_AND_MSG)
         if isinstance(other, AndExpr):
             return AndExpr((self,) + other.expressions)
         return AndExpr((self, other))
@@ -92,7 +99,9 @@ class AndExpr:
 
     expressions: tuple[CompareExpr, ...]
 
-    def __and__(self, other: CompareExpr | AndExpr) -> AndExpr:
+    def __and__(self, other: CompareExpr | AndExpr | OrExpr) -> AndExpr:
+        if isinstance(other, OrExpr):
+            raise QueryError(_OR_AND_MSG)
         if isinstance(other, AndExpr):
             return AndExpr(self.expressions + other.expressions)
         return AndExpr(self.expressions + (other,))

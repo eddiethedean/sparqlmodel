@@ -81,14 +81,14 @@ class PersonNoCascade(SPARQLModel):
 
 def test_put_graph_contract_typed_literals() -> None:
     class FlagModel(SPARQLModel):
-        rdf_type = "schema:Thing"
+        rdf_type = "urn:test:FlagThing"
         __prefixes__ = {"schema": "https://schema.org/"}
 
         id: IRI
         active: bool = Field("schema:value")
 
     class NumModel(SPARQLModel):
-        rdf_type = "schema:Thing"
+        rdf_type = "urn:test:NumThing"
         __prefixes__ = {"schema": "https://schema.org/"}
 
         id: IRI

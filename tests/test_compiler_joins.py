@@ -9,7 +9,7 @@ from tests.models import Location, Organization, Person
 
 
 class DualOrgPerson(SPARQLModel):
-    rdf_type = "schema:Person"
+    rdf_type = "urn:test:DualOrgPerson"
     __prefixes__ = {"schema": "https://schema.org/"}
 
     id: IRI

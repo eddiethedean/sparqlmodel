@@ -144,6 +144,7 @@ with SPARQLSession() as session:
 
 - `.where(*expr)` — `CompareExpr`, `AndExpr`, or top-level `OrExpr`
 - `.limit(n)` — non-negative integer
+- `.first()` — always uses `LIMIT 1`; ignores any prior `.limit()` on the same query
 - `.use_not_exists_for_ne()` — compile `!=` with `NOT EXISTS` (default since 0.5.2)
 - `.use_inequality_for_ne()` — legacy inequality `!=` (pre-0.5.2 default)
 - `.all(*, depth=0)` / `.first(*, depth=0)` — execute and hydrate
@@ -177,7 +178,7 @@ with SPARQLSession() as session:
 | `&` | Conjoin patterns (`AndExpr` or multiple `.where`) |
 | `\|` | Disjunction via `FILTER` + `EXISTS` branches (`OrExpr`) |
 | `<`, `>`, `<=`, `>=` | Ordering on bound literal variables |
-| `.in_(tuple)` | `FILTER(?var IN (...))` |
+| `.in_(tuple)` / `.in_(list)` | `FILTER(?var IN (...))` — bare `str` raises `QueryError` (use `("value",)` or `["value"]`) |
 | `None` | Raises `QueryError` |
 
 Nested attribute paths (`Person.works_for.located_in.name`) support arbitrary hop length via join variables and related-type patterns.

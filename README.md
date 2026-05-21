@@ -142,7 +142,7 @@ with SPARQLSession() as session:
     # pre-0.5.2 inequality (excludes unbound): .use_inequality_for_ne()
 ```
 
-Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` (also accepts lists), multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.use_inequality_for_ne()`, `.use_optional_for_comparisons()`.
+Operators: `==`, `!=`, `&`, `|`, `<`, `>`, `<=`, `>=`, `.in_(tuple)` or `.in_(list)` (not a bare string — use `("x",)` for one value), multi-hop paths (`Person.works_for.name`), `.limit(n)`, `.first()` always `LIMIT 1` (ignores prior `.limit()`), `.use_inequality_for_ne()`, `.use_optional_for_comparisons()`.
 
 ---
 

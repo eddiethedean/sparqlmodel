@@ -103,7 +103,7 @@ def test_model_from_jsonld_empty_type_list() -> None:
 
 def test_jsonld_scalar_iri_field() -> None:
     class Tagged(SPARQLModel):
-        rdf_type = "schema:Person"
+        rdf_type = "urn:test:TaggedPerson"
         __prefixes__ = {"schema": "https://schema.org/"}
         id: IRI
         same_as: IRI = Field("schema:sameAs")
@@ -115,7 +115,7 @@ def test_jsonld_scalar_iri_field() -> None:
 
 def test_jsonld_scalar_iri_field_round_trip_compact_id() -> None:
     class Tagged(SPARQLModel):
-        rdf_type = "schema:Person"
+        rdf_type = "urn:test:TaggedPersonCompact"
         __prefixes__ = {"schema": "https://schema.org/"}
         id: IRI
         same_as: IRI = Field("schema:sameAs")
@@ -123,7 +123,7 @@ def test_jsonld_scalar_iri_field_round_trip_compact_id() -> None:
     doc = {
         "@context": {"schema": "https://schema.org/"},
         "@id": "urn:person:1",
-        "@type": "schema:Person",
+        "@type": "urn:test:TaggedPersonCompact",
         "schema:sameAs": {"@id": "local-ref"},
     }
     restored = model_from_jsonld(Tagged, doc)
@@ -132,7 +132,7 @@ def test_jsonld_scalar_iri_field_round_trip_compact_id() -> None:
 
 def test_jsonld_scalar_iri_field_round_trip() -> None:
     class Tagged(SPARQLModel):
-        rdf_type = "schema:Person"
+        rdf_type = "urn:test:TaggedPersonRoundTrip"
         __prefixes__ = {"schema": "https://schema.org/"}
         id: IRI
         same_as: IRI = Field("schema:sameAs")
@@ -146,13 +146,13 @@ def test_jsonld_skips_non_cascade_embed() -> None:
     from sparqlmodel import Relationship
 
     class Org(SPARQLModel):
-        rdf_type = "schema:Organization"
+        rdf_type = "urn:test:SerializerOrg"
         __prefixes__ = {"schema": "https://schema.org/"}
         id: IRI
         name: str = Field("schema:name")
 
     class Employee(SPARQLModel):
-        rdf_type = "schema:Person"
+        rdf_type = "urn:test:SerializerEmployee"
         __prefixes__ = {"schema": "https://schema.org/"}
         id: IRI
         name: str = Field("schema:name")

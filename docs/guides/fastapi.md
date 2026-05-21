@@ -78,6 +78,8 @@ With `init_app` / `http_store_lifespan`, prefer `SessionDep` or `get_session` (t
 
 `negotiated_response(request, model)` inspects `Accept` and returns Turtle or JSON-LD. For APIs that always return JSON-LD, call `jsonld_response(model)` directly.
 
+The optional `formats` argument is a map of **media type strings to negotiate** (dict keys only). Values are reserved for future use and are ignored today; serialization format is resolved from the winning media type via TripleModel `infer_format`.
+
 ## Testing
 
 Use `MemoryStore` + `TestClient`:

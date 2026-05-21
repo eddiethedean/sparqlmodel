@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from sparqlmodel import IRI, SPARQLSession
+from sparqlmodel.exceptions import StaleTripleWarning
 from tests.models import Person
 
 
@@ -216,7 +217,8 @@ def test_stale_add_skips_field_without_metadata(
         return orig(field_info)
 
     monkeypatch.setattr(fields_mod, "get_field_metadata", fake_meta)
-    session.add(odos)
+    with pytest.warns(StaleTripleWarning, match="stale triples"):
+        session.add(odos)
 
 
 def test_session_state_unit() -> None:

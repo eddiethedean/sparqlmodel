@@ -25,6 +25,8 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation today:** `put` through the same session/store, or use `MemoryStore` for single-process apps.
 
+**Do not mutate `session.graph` directly on `HttpStore` / `AsyncHttpStore`.** `session.graph` is the local mirror only; `add`/`remove` on it do not update the remote endpoint. `query` and `execute` still read the server, so the mirror and remote can diverge permanently. Use `session.put` / `delete` or `MemoryStore` for tests that need direct graph edits.
+
 **Planned (1.0):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
 
 ---

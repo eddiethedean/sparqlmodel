@@ -101,6 +101,8 @@ nitpick_ignore = [
     ("py:class", "IriId"),
     ("py:class", "ConfigDict"),
     ("py:class", "pydantic.ConfigDict"),
+    ("py:class", "pydantic.fields.FieldInfo"),
+    ("py:class", "FieldInfo"),
     ("py:class", "pydantic._internal._model_construction.ModelMetaclass"),
     ("py:class", "sparqlmodel.serializers.T"),
     ("py:class", "sparqlmodel.stores.base.Store"),

@@ -112,7 +112,7 @@ def test_compile_where_rejects_non_finite_float() -> None:
     from sparqlmodel import Field, SPARQLModel
 
     class ScorePerson(SPARQLModel):
-        rdf_type = "schema:Person"
+        rdf_type = "urn:test:ScorePerson"
         __prefixes__ = {"schema": "https://schema.org/"}
         score: float = Field("schema:value")
 

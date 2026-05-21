@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`FieldRef.in_()`** — reject bare `str` values (previously split into characters); use `("value",)` or `["value"]` for a single member
+- **Query DSL** — `(compare) & (or_group)` now raises the same clear `QueryError` as `(or_group) & (compare)` instead of a compiler flatten error
+
+### Documentation
+
+- SPECS, README, query guide — `first()` ignores prior `.limit()`; `in_()` string caveat
+- PRODUCTION, troubleshooting — do not mutate `session.graph` on `HttpStore`; reverse AND/OR precedence example
+- FastAPI guide — `negotiated_response(..., formats=)` keys-only behavior
+
+### Tests
+
+- Async query/compiler parity suite (`tests/test_async_compiler_parity.py`)
+- Unique test `rdf_type` URIs and `pytest.warns` for intentional warnings (fewer noisy pytest warnings)
+
 ## [0.7.0] - 2026-05-20
 
 ### Changed
