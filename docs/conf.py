@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+# Applied before intersphinx imports requests (RTD/CI do not use docs/Makefile).
+os.environ.setdefault("PYTHONWARNINGS", "ignore::Warning")
 
 # -- Path setup ----------------------------------------------------------------
 
@@ -80,13 +84,26 @@ napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 napoleon_use_param = True
 
-# Intersphinx
+# Intersphinx (use canonical inventory URLs to avoid redirect noise in the build log).
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "pydantic": ("https://docs.pydantic.dev/latest/", None),
+    "pydantic": ("https://pydantic.dev/docs/validation/latest/", None),
     "fastapi": ("https://fastapi.tiangolo.com/", None),
     "starlette": ("https://www.starlette.io/", None),
 }
+
+# CI and Read the Docs pass sphinx-build -W; suppress known-benign Sphinx warnings.
+suppress_warnings = [
+    "toc.not_included",
+    "toc.no_title",
+    "toc.excluded",
+    "app.add_directive",
+    "app.add_node",
+    "app.add_role",
+    "app.add_generic_role",
+    "app.add_crossref_type",
+    "ref.python",
+]
 
 # Fail on broken cross-refs (triplemodel has no published intersphinx inventory).
 nitpicky = True

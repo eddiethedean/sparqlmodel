@@ -66,4 +66,4 @@ triplemodel>=0.10.0,<2
 pyoxigraph>=0.5,<0.6
 ```
 
-Track releases on [PyPI](https://pypi.org/project/sparqlmodel/#history) and the {doc}`changelog`.
+Track releases on [PyPI](https://pypi.org/project/sparqlmodel/) and the {doc}`changelog`.

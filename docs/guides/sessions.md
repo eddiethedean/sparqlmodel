@@ -61,6 +61,8 @@ Different `depth` values may cache separate hydrated views.
 | {class}`~sparqlmodel.stores.memory.MemoryStore` | Tests, notebooks, single-process tools (default) |
 | {class}`~sparqlmodel.stores.http.HttpStore` | Fuseki, Jena, or any SPARQL 1.1 endpoint (`sparqlmodel[http]`) |
 
+Load an existing RDF file into a session with {meth}`~sparqlmodel.session.SPARQLSession.from_rdf_file` (see {doc}`realworld` for full examples).
+
 ```python
 from sparqlmodel import HttpStore, SPARQLSession
 

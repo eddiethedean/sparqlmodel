@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from triplemodel import Store
+from triplemodel import Store, load_graph
 from typing_extensions import Self
 
 from sparqlmodel import session_core
@@ -17,6 +19,7 @@ from sparqlmodel.graph import (
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.query import Query
 from sparqlmodel.rdf_bridge import model_to_graph
+from sparqlmodel.serializers import _resolve_rdf_format
 from sparqlmodel.session_state import SessionState, identity_key_for_iri
 from sparqlmodel.stores.base import StoreProtocol
 from sparqlmodel.stores.memory import MemoryStore
@@ -67,6 +70,52 @@ class SPARQLSession:
         self.close_on_exit = close_on_exit
         self.rollback_on_error = rollback_on_error
         self._closed = False
+
+    @classmethod
+    def from_rdf_file(
+        cls,
+        path: str | Path,
+        *,
+        format: str = "turtle",
+        prefixes: Mapping[str, str] | None = None,
+        autoflush: bool = True,
+        close_on_exit: bool = True,
+        rollback_on_error: bool = True,
+    ) -> Self:
+        """Open a session over an on-disk RDF file.
+
+        Uses an in-memory :class:`~sparqlmodel.stores.memory.MemoryStore`. Parses ``path`` with
+        TripleModel ``load_graph`` (pass a :class:`~pathlib.Path`, not file
+        contents as a string). Use for tutorials, fixtures, and ETL that starts from Turtle,
+        TriG, or other supported formats before ``put`` / ``query``.
+
+        Args:
+            path: File path to parse.
+            format: RDF format hint (e.g. ``\"turtle\"``, ``\"trig\"``); inferred from extension
+                when omitted on ``load_graph``.
+            prefixes: Namespace prefixes merged into the session registry and graph.
+            autoflush: Passed to :meth:`__init__`.
+            close_on_exit: Passed to :meth:`__init__`.
+            rollback_on_error: Passed to :meth:`__init__`.
+        """
+        source = Path(path)
+        if not source.is_file():
+            raise FileNotFoundError(f"RDF file not found: {source}")
+        fmt = _resolve_rdf_format(format)
+        prefix_map = dict(prefixes) if prefixes is not None else None
+        graph = load_graph(
+            source=source,
+            format=fmt,
+            bind_prefixes=prefix_map,
+        )
+        store = MemoryStore(graph=graph, prefixes=prefix_map)
+        return cls(
+            store=store,
+            prefixes=prefix_map,
+            autoflush=autoflush,
+            close_on_exit=close_on_exit,
+            rollback_on_error=rollback_on_error,
+        )
 
     @property
     def store(self) -> StoreProtocol:

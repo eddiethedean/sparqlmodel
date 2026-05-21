@@ -1,0 +1,28 @@
+# DCAT catalog excerpt — open data portal describing the Nobel Linked Data service
+# Inspired by EU DCAT-AP samples (SEMIC) and https://data.nobelprize.org/
+
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/catalog/nobel-media> a dcat:Catalog ;
+    dct:title "Nobel Media Dataset catalog"@en ;
+    dct:description "Catalog of datasets published by Nobel Media AB."@en ;
+    dct:issued "2014-09-25"^^xsd:date ;
+    dcat:dataset <http://example.org/dataset/nobel-linked> ;
+    foaf:homepage <https://www.nobelprize.org/> .
+
+<http://example.org/dataset/nobel-linked> a dcat:Dataset ;
+    dct:title "Linked Nobel prizes"@en ;
+    dct:description "Nobel prizes, laureates, and related media resources as linked data."@en ;
+    dct:issued "2014-01-15"^^xsd:date ;
+    dcat:keyword "Nobel prize", "science", "laureates" ;
+    dcat:landingPage <https://www.nobelprize.org/about/linked-data-examples/> ;
+    dcat:distribution <http://example.org/distribution/nobel-sparql> .
+
+<http://example.org/distribution/nobel-sparql> a dcat:Distribution ;
+    dct:title "Nobel Prize SPARQL endpoint"@en ;
+    dct:description "Public SPARQL endpoint over the Nobel Prize linked dataset."@en ;
+    dcat:accessURL <http://data.nobelprize.org/sparql> ;
+    dct:format <http://publications.europa.eu/resource/authority/file-type/SPARQL> .

@@ -12,13 +12,14 @@ Mapping (literals, terms, file I/O) is provided by the required dependency [Trip
 |---|---|
 | {doc}`installation` | Python versions, extras (`http`, `fastapi`), dev setup |
 | {doc}`getting-started` | First models, session, and query in minutes |
-| {doc}`guides/index` | Pydantic models, sessions, query DSL, FastAPI — task-oriented how-tos |
+| {doc}`guides/realworld` | Nobel, DCAT, Wikidata, Schema.org — runnable `examples/realworld/` |
+| {doc}`guides/index` | Pydantic models, sessions, query DSL, FastAPI |
 
 ## By role
 
 | You are… | Start with |
 |----------|------------|
-| Application developer | {doc}`getting-started` → {doc}`guides/index` → {doc}`ORM` |
+| Application developer | {doc}`getting-started` → {doc}`guides/realworld` → {doc}`guides/index` → {doc}`ORM` |
 | API / platform engineer | {doc}`guides/fastapi` → {doc}`PRODUCTION` |
 | Contributor / reviewer | {doc}`SPECS` → {doc}`ECOSYSTEM` → {doc}`api/index` |
 | Operator | {doc}`PRODUCTION` → {doc}`troubleshooting` |
@@ -58,6 +59,7 @@ getting-started
 :caption: Guides
 
 guides/index
+guides/realworld
 ORM
 PRODUCTION
 ECOSYSTEM

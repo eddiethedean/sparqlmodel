@@ -1,0 +1,69 @@
+# Excerpt: Nobel Prize in 1901 — laureates and prizes
+# Vocabulary: http://data.nobelprize.org/terms/
+# Names align with https://www.nobelprize.org/about/linked-data-examples/
+
+@prefix nobel: <http://data.nobelprize.org/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<http://data.nobelprize.org/resource/laureate/1> a nobel:Laureate ;
+    rdfs:label "Wilhelm Conrad Röntgen"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Physics/1901> .
+
+<http://data.nobelprize.org/resource/laureate/2> a nobel:Laureate ;
+    rdfs:label "Sully Prudhomme"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Literature/1901> .
+
+<http://data.nobelprize.org/resource/laureate/3> a nobel:Laureate ;
+    rdfs:label "Jean Henry Dunant"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Peace/1901> .
+
+<http://data.nobelprize.org/resource/laureate/4> a nobel:Laureate ;
+    rdfs:label "Frédéric Passy"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Peace/1901> .
+
+<http://data.nobelprize.org/resource/laureate/5> a nobel:Laureate ;
+    rdfs:label "Emil Adolf von Behring"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Medicine/1901> .
+
+<http://data.nobelprize.org/resource/laureate/6> a nobel:Laureate ;
+    rdfs:label "Jacobus Henricus van 't Hoff"@en ;
+    foaf:gender "male" ;
+    nobel:nobelPrize <http://data.nobelprize.org/resource/nobelprize/Chemistry/1901> .
+
+<http://data.nobelprize.org/resource/nobelprize/Physics/1901> a nobel:NobelPrize ;
+    rdfs:label "The Nobel Prize in Physics 1901"@en ;
+    nobel:year "1901" ;
+    nobel:category nobel:Physics ;
+    nobel:laureate <http://data.nobelprize.org/resource/laureate/1> .
+
+<http://data.nobelprize.org/resource/nobelprize/Literature/1901> a nobel:NobelPrize ;
+    rdfs:label "The Nobel Prize in Literature 1901"@en ;
+    nobel:year "1901" ;
+    nobel:category nobel:Literature ;
+    nobel:laureate <http://data.nobelprize.org/resource/laureate/2> .
+
+<http://data.nobelprize.org/resource/nobelprize/Peace/1901> a nobel:NobelPrize ;
+    rdfs:label "The Nobel Peace Prize 1901"@en ;
+    nobel:year "1901" ;
+    nobel:category nobel:Peace ;
+    nobel:laureate <http://data.nobelprize.org/resource/laureate/3> ,
+        <http://data.nobelprize.org/resource/laureate/4> .
+
+<http://data.nobelprize.org/resource/nobelprize/Medicine/1901> a nobel:NobelPrize ;
+    rdfs:label "The Nobel Prize in Physiology or Medicine 1901"@en ;
+    nobel:year "1901" ;
+    nobel:category nobel:Medicine ;
+    nobel:laureate <http://data.nobelprize.org/resource/laureate/5> .
+
+<http://data.nobelprize.org/resource/nobelprize/Chemistry/1901> a nobel:NobelPrize ;
+    rdfs:label "The Nobel Prize in Chemistry 1901"@en ;
+    nobel:year "1901" ;
+    nobel:category nobel:Chemistry ;
+    nobel:laureate <http://data.nobelprize.org/resource/laureate/6> .

@@ -7,6 +7,6 @@ ci:
 	ty check
 	pytest --cov=sparqlmodel --cov-fail-under=100 --cov-report=term-missing
 
-# Sphinx HTML (matches .github/workflows/ci.yml docs job)
+# Sphinx HTML (matches .github/workflows/ci.yml docs job; -W = warnings are errors)
 docs:
-	sphinx-build -W -b html docs docs/_build/html
+	$(MAKE) -C docs html SPHINXOPTS=-W

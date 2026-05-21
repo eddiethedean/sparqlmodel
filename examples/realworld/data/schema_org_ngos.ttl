@@ -1,0 +1,21 @@
+# Schema.org NGO registry excerpt (nonprofit transparency / open data use case)
+# Uses https://schema.org/ property URIs; example.org IDs are not official.
+
+@prefix schema: <https://schema.org/> .
+
+<https://example.org/org/wwf> a schema:NGO ;
+    schema:name "World Wide Fund for Nature" ;
+    schema:url <https://www.worldwildlife.org/> ;
+    schema:nonprofitStatus "NonprofitANBI" ;
+    schema:foundingDate "1961"^^<http://www.w3.org/2001/XMLSchema#gYear> .
+
+<https://example.org/org/icrc> a schema:NGO ;
+    schema:name "International Committee of the Red Cross" ;
+    schema:url <https://www.icrc.org/> ;
+    schema:nonprofitStatus "NonprofitANBI" ;
+    schema:foundingDate "1863"^^<http://www.w3.org/2001/XMLSchema#gYear> .
+
+<https://example.org/org/medicins-sans-frontieres> a schema:NGO ;
+    schema:name "Médecins Sans Frontières" ;
+    schema:url <https://www.msf.org/> ;
+    schema:nonprofitStatus "NonprofitANBI" .

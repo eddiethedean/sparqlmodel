@@ -1,0 +1,21 @@
+# Wikidata excerpt: capital cities (English label, population, country)
+# Entities: Q90 Paris, Q84 London — CC0 1.0
+# Generated from Wikidata Query Service; see refresh_wikidata_capitals.py
+
+@prefix wd: <http://www.wikidata.org/entity/> .
+@prefix wdt: <http://www.wikidata.org/prop/direct/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+wd:Q90 rdfs:label "Paris"@en ;
+    wdt:P31 wd:Q174844 ;
+    wdt:P1082 "2103778"^^xsd:decimal ;
+    wdt:P17 wd:Q142 .
+
+wd:Q84 rdfs:label "London"@en ;
+    wdt:P31 wd:Q174844 ;
+    wdt:P1082 "8799728"^^xsd:decimal ;
+    wdt:P17 wd:Q145 .
+
+wd:Q142 rdfs:label "France"@en .
+wd:Q145 rdfs:label "United Kingdom"@en .

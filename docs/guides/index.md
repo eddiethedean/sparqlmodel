@@ -12,12 +12,15 @@ queries
 fastapi
 ```
 
+Real-world examples (Nobel, DCAT, Wikidata, Schema.org) live on {doc}`realworld` and in the site sidebar under **Guides**.
+
 | Guide | Description |
 |-------|-------------|
 | {doc}`models` | Pydantic validation, `Field` constraints, read/write validation stack |
 | {doc}`sessions` | Lifecycle, flush queue, identity map, MemoryStore vs HttpStore |
 | {doc}`queries` | Filters, boolean logic, multi-hop paths, limits, compiler behavior |
 | {doc}`fastapi` | Per-request sessions, lifespan, content negotiation, testing |
+| {doc}`realworld` | Nobel, DCAT, Wikidata, Schema.org — bundled public datasets with `SPARQLSession` |
 
 ## Related
 

@@ -217,6 +217,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 | **[Read the Docs](https://sparqlmodel.readthedocs.io/en/latest/)** | Full site: install, guides, API reference, troubleshooting |
 | [Getting started](https://sparqlmodel.readthedocs.io/en/latest/getting-started.html) | Quickstart and first session |
 | [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Models (Pydantic), sessions, queries, FastAPI |
+| [Real-world examples](https://sparqlmodel.readthedocs.io/en/latest/guides/realworld.html) | Nobel, DCAT, Wikidata, Schema.org (`examples/realworld/`) |
 | [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
 | [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-13-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |

@@ -60,6 +60,7 @@ Use `put()` for upserts (cascade + orphan cleanup). Use `add()` only when you wi
 | {doc}`guides/models` | Pydantic validation, `Field` kwargs, read vs write |
 | {doc}`guides/sessions` | Flush queue, stores, identity map, composition |
 | {doc}`guides/queries` | Boolean filters, `!=`, limits, raw SPARQL |
+| {doc}`guides/realworld` | Nobel, DCAT, Wikidata, Schema.org over bundled linked data |
 
 | Topic | Document |
 |-------|----------|
