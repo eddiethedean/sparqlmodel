@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import httpx
-from triplemodel import Store
+from triplemodel import Store, load_graph
 
 from sparqlmodel.exceptions import QueryError
+from sparqlmodel.rdf_n3 import validate_iri_token
 from sparqlmodel.stores import http_common
 from sparqlmodel.stores.sparql_json import parse_sparql_json_bindings
-from sparqlmodel.types import NamespaceRegistry
+from sparqlmodel.types import IRI, NamespaceRegistry
 
 _CLOSED_STORE_MSG = "Cannot use a closed AsyncHttpStore"
 
@@ -20,13 +21,16 @@ class AsyncHttpStore:
     """Async SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
 
     Same mirror semantics as :class:`~sparqlmodel.stores.http.HttpStore`, using
-    ``httpx.AsyncClient`` for non-blocking remote I/O.
+    ``httpx.AsyncClient`` for non-blocking remote I/O. Supports optional
+    ``read_endpoint`` / ``write_endpoint`` for Fuseki-style split URLs.
     """
 
     def __init__(
         self,
         endpoint: str,
         *,
+        read_endpoint: str | None = None,
+        write_endpoint: str | None = None,
         graph: Store | None = None,
         prefixes: dict[str, str] | None = None,
         auth: tuple[str, str] | None = None,
@@ -36,6 +40,8 @@ class AsyncHttpStore:
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
+        self._read_endpoint = (read_endpoint or endpoint).rstrip("/")
+        self._write_endpoint = (write_endpoint or endpoint).rstrip("/")
         self._graph = graph or Store()
         self._registry = NamespaceRegistry(prefixes)
         self._registry.bind(self._graph)
@@ -50,6 +56,8 @@ class AsyncHttpStore:
             self._client = client
             if req_headers:
                 self._client.headers.update(req_headers)
+            if timeout is not None:
+                self._client.timeout = timeout
         else:
             self._client = httpx.AsyncClient(
                 headers=req_headers,
@@ -62,8 +70,14 @@ class AsyncHttpStore:
         if self._closed:
             raise RuntimeError(_CLOSED_STORE_MSG)
 
+    def _read_url(self) -> str:
+        return http_common.sparql_url(self._read_endpoint)
+
+    def _write_url(self) -> str:
+        return http_common.sparql_url(self._write_endpoint)
+
     def _sparql_url(self) -> str:
-        return http_common.sparql_url(self._endpoint)
+        return self._read_url()
 
     @property
     def graph(self) -> Store:
@@ -76,6 +90,14 @@ class AsyncHttpStore:
     @property
     def endpoint(self) -> str:
         return self._endpoint
+
+    @property
+    def read_endpoint(self) -> str:
+        return self._read_endpoint
+
+    @property
+    def write_endpoint(self) -> str:
+        return self._write_endpoint
 
     async def aclose(self) -> None:
         if self._closed:
@@ -94,10 +116,9 @@ class AsyncHttpStore:
         self._check_open()
         if not update.strip():
             return
-        url = http_common.sparql_url(self._endpoint)
         try:
             response = await self._client.post(
-                url,
+                self._write_url(),
                 content=update.encode("utf-8"),
                 headers=http_common.SPARQL_UPDATE_HEADERS,
             )
@@ -106,12 +127,13 @@ class AsyncHttpStore:
             raise QueryError(f"SPARQL UPDATE failed: {exc}") from exc
 
     async def query(self, sparql: str) -> list[dict[str, Any]]:
-        """Execute SPARQL SELECT against the remote endpoint."""
+        """Execute SPARQL SELECT against the remote read endpoint."""
         self._check_open()
-        url = http_common.sparql_url(self._endpoint)
+        if not http_common.is_select_query(sparql):
+            raise QueryError("Expected SELECT query for AsyncHttpStore.query()")
         try:
             response = await self._client.post(
-                url,
+                self._read_url(),
                 content=sparql.encode("utf-8"),
                 headers=http_common.SPARQL_QUERY_HEADERS,
             )
@@ -121,8 +143,37 @@ class AsyncHttpStore:
 
         try:
             return parse_sparql_json_bindings(response.content)
+        except QueryError:
+            raise
         except Exception as exc:
             raise QueryError(f"Failed to parse SPARQL JSON results: {exc}") from exc
+
+    async def pull_subjects_into_mirror(self, iris: Iterable[str | IRI]) -> None:
+        """Fetch triples for ``iris`` from the remote endpoint into the local mirror."""
+        self._check_open()
+        unique = list(dict.fromkeys(str(i) for i in iris))
+        if not unique:
+            return
+        values = " ".join(f"<{validate_iri_token(iri)}>" for iri in unique)
+        sparql = f"CONSTRUCT {{ ?s ?p ?o }} WHERE {{ VALUES ?s {{ {values} }} ?s ?p ?o }}"
+        headers = {
+            **http_common.SPARQL_QUERY_HEADERS,
+            "Accept": "text/turtle",
+        }
+        try:
+            response = await self._client.post(
+                self._read_url(),
+                content=sparql.encode("utf-8"),
+                headers=headers,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise QueryError(f"SPARQL CONSTRUCT failed: {exc}") from exc
+        if not response.content.strip():
+            return
+        remote = load_graph(data=response.content, format="turtle")
+        for triple in remote:
+            self._graph.add(triple)
 
     async def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""

@@ -13,6 +13,15 @@ from sparqlmodel.types import NamespaceRegistry
 from tests.models import Location, Organization, Person
 
 
+def test_compile_optional_hop_ordered_comparison_includes_unbound() -> None:
+    registry = NamespaceRegistry(Person.get_prefixes())
+    expr = Person.works_for.located_in.name > "Boston"
+    sparql = compile_where(Person, (expr,), registry)
+    assert "OPTIONAL" in sparql
+    assert "!BOUND" in sparql
+    assert ">" in sparql
+
+
 def test_compile_or_disjunction() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
     expr = (Person.name == "Odos") | (Person.name == "Ada")

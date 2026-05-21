@@ -10,6 +10,7 @@ from triplemodel import Store
 from sparqlmodel import IRI, Field, SPARQLModel, SPARQLSession
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.stores.http import HttpStore, _graph_to_delete_data, _graph_to_insert_data
+from sparqlmodel.stores.http_common import is_select_query
 
 
 class Person(SPARQLModel):
@@ -18,6 +19,52 @@ class Person(SPARQLModel):
 
     id: IRI
     name: str = Field("schema:name")
+
+
+def test_is_select_query_prefix_and_empty() -> None:
+    assert not is_select_query("")
+    assert not is_select_query("PREFIX schema: <https://schema.org/>")
+    assert is_select_query("PREFIX schema: <https://schema.org/>\nSELECT ?s WHERE { ?s ?p ?o }")
+    assert not is_select_query("ASK { ?s ?p ?o }")
+
+
+def test_http_store_pull_empty_iris_no_request() -> None:
+    posts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posts.append(request.content.decode())
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    store.pull_subjects_into_mirror([])
+    assert posts == []
+    store.close()
+
+
+def test_http_store_construct_failure_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="down")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    with pytest.raises(QueryError, match="CONSTRUCT failed"):
+        store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+    store.close()
+
+
+def test_http_store_construct_empty_response() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+    assert len(store.graph) == 0
+    store.close()
 
 
 def test_insert_delete_data_helpers() -> None:
@@ -183,6 +230,54 @@ def test_http_store_query_non_select() -> None:
     store.close()
 
 
+def test_http_store_query_ask_rejected() -> None:
+    store = HttpStore("http://example.org/sparql")
+    with pytest.raises(QueryError, match="Expected SELECT query"):
+        store.query("ASK { ?s ?p ?o }")
+    store.close()
+
+
+def test_http_store_query_select_with_ask_json_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"head": {}, "boolean": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    with pytest.raises(QueryError, match="ASK"):
+        store.query("SELECT * WHERE { ?s ?p ?o }")
+    store.close()
+
+
+def test_http_store_read_write_endpoints() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.headers.get("content-type") == "application/sparql-update":
+            return httpx.Response(200)
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/dataset",
+        read_endpoint="http://read.example/query",
+        write_endpoint="http://write.example/update",
+        client=client,
+    )
+    assert store.read_endpoint == "http://read.example/query"
+    assert store.write_endpoint == "http://write.example/update"
+    store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+    g = Store()
+    g.add(("urn:s", "urn:p", "urn:o"))
+    store.update_graph(add=g)
+    assert any("read.example" in url for url in seen)
+    assert any("write.example" in url for url in seen)
+    store.close()
+
+
 def test_http_store_operations_after_close_raise() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
@@ -243,56 +338,84 @@ def test_http_store_update_remove_only() -> None:
     store.close()
 
 
-def test_http_store_get_uses_mirror_not_remote_select() -> None:
-    """SELECT can see remote data that get() cannot until the mirror is updated."""
-    state: dict[str, object] = {"select_count": 0}
+def test_http_store_get_pulls_remote_subject_into_mirror() -> None:
+    """get() CONSTRUCT-syncs remote subjects before hydration."""
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f"<{remote_iri}> a schema:Person ;\n"
+        '  schema:name "Remote" .\n'
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.headers.get("content-type") == "application/sparql-query":
-            state["select_count"] = int(state["select_count"]) + 1
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
             return httpx.Response(
                 200,
-                json={
-                    "head": {"vars": ["person"]},
-                    "results": {
-                        "bindings": [
-                            {"person": {"type": "uri", "value": "urn:person:remote"}},
-                        ]
-                    },
-                },
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
             )
-        return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "head": {"vars": ["person"]},
+                "results": {
+                    "bindings": [
+                        {"person": {"type": "uri", "value": remote_iri}},
+                    ]
+                },
+            },
+        )
 
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
-    store = HttpStore("http://example.org/sparql", client=client)
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
     session = SPARQLSession(store=store)
     bindings = session.execute("SELECT ?person WHERE { ?person ?p ?o }")
-    assert bindings[0]["person"] == "urn:person:remote"
-    assert session.get(Person, IRI("urn:person:remote")) is None
-    assert len(store.graph) == 0
+    assert bindings[0]["person"] == remote_iri
+    loaded = session.get(Person, IRI(remote_iri))
+    assert loaded is not None
+    assert loaded.name == "Remote"
+    assert len(store.graph) >= 2
     store.close()
 
 
-def test_http_store_query_all_drops_remote_only_rows() -> None:
-    """query().all() hydrates via get(); remote SELECT rows absent from mirror are skipped."""
-    state: dict[str, object] = {"select_count": 0}
+def test_http_store_query_all_hydrates_remote_rows() -> None:
+    """query().all() pulls remote subjects into the mirror before hydration."""
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f"<{remote_iri}> a schema:Person ;\n"
+        '  schema:name "Remote" .\n'
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.headers.get("content-type") == "application/sparql-query":
-            state["select_count"] = int(state["select_count"]) + 1
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
             return httpx.Response(
                 200,
-                json={
-                    "head": {"vars": ["person"]},
-                    "results": {
-                        "bindings": [
-                            {"person": {"type": "uri", "value": "urn:person:remote"}},
-                        ]
-                    },
-                },
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
             )
-        return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "head": {"vars": ["person"]},
+                "results": {
+                    "bindings": [
+                        {"person": {"type": "uri", "value": remote_iri}},
+                    ]
+                },
+            },
+        )
 
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
@@ -303,8 +426,8 @@ def test_http_store_query_all_drops_remote_only_rows() -> None:
     )
     session = SPARQLSession(store=store)
     results = session.query(Person).all()
-    assert results == []
-    assert int(state["select_count"]) >= 1
+    assert len(results) == 1
+    assert results[0].name == "Remote"
     store.close()
 
 

@@ -1,51 +1,54 @@
-"""Parse SPARQL 1.1 Query Results JSON without rdflib."""
+"""Parse SPARQL 1.1 Query Results JSON via pyoxigraph."""
 
 from __future__ import annotations
 
-import json
-from typing import Any, cast
+from typing import Any
+
+from pyoxigraph import (
+    BlankNode,
+    Literal,
+    NamedNode,
+    QueryBoolean,
+    QueryResultsFormat,
+    QuerySolutions,
+    parse_query_results,
+)
+
+from sparqlmodel.exceptions import QueryError
 
 
 def parse_sparql_json_bindings(payload: bytes) -> list[dict[str, Any]]:
     """Return SELECT variable bindings from a SPARQL Results JSON document."""
-    data = json.loads(payload)
-    if not isinstance(data, dict) or "head" not in data or "results" not in data:
-        raise ValueError("Invalid SPARQL JSON: missing head or results")
-    head = data.get("head", {})
-    if not isinstance(head, dict):
-        raise ValueError("Invalid SPARQL JSON: head must be an object")
-    vars_ = head.get("vars", [])
-    if not isinstance(vars_, list):
-        raise ValueError("Invalid SPARQL JSON: head.vars must be a list")
-    results = data.get("results", {})
-    bindings_raw = results.get("bindings", [])
-    if not isinstance(bindings_raw, list):
-        raise ValueError("Invalid SPARQL JSON: results.bindings must be a list")
+    try:
+        parsed = parse_query_results(payload, QueryResultsFormat.JSON)
+    except (ValueError, SyntaxError) as exc:
+        raise ValueError(f"Invalid SPARQL JSON: {exc}") from exc
 
-    out: list[dict[str, Any]] = []
-    for row in bindings_raw:
-        if not isinstance(row, dict):
-            continue
+    if isinstance(parsed, QueryBoolean):
+        raise QueryError(f"Expected SELECT query, got ASK (boolean={parsed})")
+
+    if not isinstance(parsed, QuerySolutions):
+        raise QueryError(f"Unexpected SPARQL result type: {type(parsed).__name__}")
+
+    bindings: list[dict[str, Any]] = []
+    variables = parsed.variables
+    for row in parsed:
         binding: dict[str, Any] = {}
-        for var in vars_:
-            cell = row.get(var)
-            if cell is None:
-                continue
-            binding[str(var)] = _binding_value(cell)
-        out.append(binding)
-    return out
+        for var in variables:
+            name = str(var).lstrip("?")
+            binding[name] = _term_value(row[var])
+        bindings.append(binding)
+    return bindings
 
 
-def _binding_value(cell: object) -> Any:
-    if not isinstance(cell, dict):
-        return cell
-    binding_cell = cast(dict[str, Any], cell)
-    value = binding_cell.get("value")
-    if value is None:
+def _term_value(term: object) -> Any:
+    if term is None:
         return None
-    type_ = binding_cell.get("type", "literal")
-    if type_ == "uri":
-        return str(value)
-    if type_ == "bnode":
-        return f"_:{value}"
-    return str(value)
+    if isinstance(term, NamedNode):
+        return term.value
+    if isinstance(term, BlankNode):
+        raw = str(term)
+        return raw if raw.startswith("_:") else f"_:{raw}"
+    if isinstance(term, Literal):
+        return term.value
+    return str(term)

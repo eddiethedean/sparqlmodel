@@ -396,7 +396,11 @@ def compile_compare(
             CompareOp.LTE: "<=",
             CompareOp.GTE: ">=",
         }
-        filters.append(f"{cmp_var} {op_map[expr.op]} {obj}")
+        cmp_filter = f"{cmp_var} {op_map[expr.op]} {obj}"
+        if any("OPTIONAL" in pattern for pattern in path_patterns):
+            filters.append(f"(!BOUND({subject_var}) || {cmp_filter})")
+        else:
+            filters.append(cmp_filter)
     else:
         raise QueryError(f"Unsupported comparison operator: {expr.op}")
 

@@ -272,10 +272,13 @@ async def test_async_get_shallow_after_deep_updates_identity_map(
 
     deep = await async_session.get(Person, odos.id, depth=1)
     shallow = await async_session.get(Person, odos.id, depth=0)
-    assert shallow is not deep
+    assert shallow is deep
     assert shallow.works_for is None
     key = identity_key_for_iri(Person, odos.id)
-    assert async_session._state.get_identity(key) is shallow
+    assert async_session._state.get_identity(key) is deep
+    again = await async_session.get(Person, odos.id, depth=1)
+    assert again is deep
+    assert again.works_for is not None
 
 
 async def test_async_get_same_depth_not_stale_after_graph_remove(
@@ -402,3 +405,15 @@ async def test_async_refresh_missing_raises(async_session: AsyncSPARQLSession) -
     orphan = Person(id=IRI("urn:person:orphan"), name="Nobody")
     with pytest.raises(ConfigurationError, match="not in store"):
         await async_session.refresh(orphan)
+
+
+async def test_async_refresh_shallow_then_get_deep_reloads(
+    async_session: AsyncSPARQLSession, odos: Person
+) -> None:
+    deep = await async_session.get(Person, odos.id, depth=2)
+    assert deep.works_for is not None
+    await async_session.refresh(deep, depth=0)
+    assert deep.works_for is None
+    again = await async_session.get(Person, odos.id, depth=2)
+    assert again is deep
+    assert again.works_for is not None

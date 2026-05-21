@@ -6,7 +6,7 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 
 **SparqlModel — the SQLModel of SPARQL.**
 
-**Mapping** (literals, terms, `to_graph`, `sync_to_graph`, `from_graph`, `parse`, `serialize`) is specified and implemented by **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9`, a **required dependency** (Pydantic `TripleModel` classes). SparqlModel integrates TripleModel internally; application code uses `SPARQLSession` and **Pydantic v2** `SPARQLModel` unless doing stateless file I/O.
+**Mapping** (literals, terms, `to_graph`, `sync_to_graph`, `from_graph`, `parse`, `serialize`) is specified and implemented by **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.10`, a **required dependency** (Pydantic `TripleModel` classes). SparqlModel integrates TripleModel internally; application code uses `SPARQLSession` and **Pydantic v2** `SPARQLModel` unless doing stateless file I/O.
 
 | Concern | SparqlModel | TripleModel |
 |---------|-------------|-------------|
@@ -49,7 +49,8 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] `Query.order_by(...)` — **0.8.0**
 - [x] `Query.count()` — **0.8.0**
 - [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
-- [ ] HttpStore mirror sync or remote-authoritative `get` contract — **1.0**
+- [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**
+- [ ] HttpStore full mirror sync or remote-authoritative `get` contract — **1.0**
 - [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
@@ -59,7 +60,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [ ] Multi-valued scalar and relationship fields — **1.1** (TripleModel + SparqlModel hydrate)
 - [ ] Language-tagged literals (`@lang`) — **1.1** (TripleModel)
 - [ ] Polymorphic queries (`rdf:type` subclasses) — **1.1**
-- [ ] HttpStore separate read/write endpoint URLs — **1.0**
+- [x] HttpStore separate read/write endpoint URLs — **0.9.1**
 - [ ] Optional SHACL validation on `put` — **1.2**
 - [ ] Inverse / `back_populates` relationship navigation (where modeled) — **1.1**
 

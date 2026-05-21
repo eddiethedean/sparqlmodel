@@ -8,6 +8,7 @@ from pyoxigraph import Literal
 from triplemodel import Store
 
 from sparqlmodel import IRI, AsyncSPARQLSession, Field, SPARQLModel
+from sparqlmodel.exceptions import QueryError
 from sparqlmodel.stores.async_http import AsyncHttpStore
 from sparqlmodel.stores.http_common import graph_to_delete_data, graph_to_insert_data
 
@@ -18,6 +19,43 @@ class Person(SPARQLModel):
 
     id: IRI
     name: str = Field("schema:name")
+
+
+async def test_async_http_query_ask_rejected() -> None:
+    store = AsyncHttpStore("http://example.org/sparql")
+    with pytest.raises(QueryError, match="Expected SELECT query"):
+        await store.query("ASK { ?s ?p ?o }")
+    await store.aclose()
+
+
+async def test_async_http_query_select_with_ask_json_body() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"head": {}, "boolean": True})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        with pytest.raises(QueryError, match="ASK"):
+            await store.query("SELECT * WHERE { ?s ?p ?o }")
+        await store.aclose()
+
+
+async def test_async_http_construct_failure_raises() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="down")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        with pytest.raises(QueryError, match="CONSTRUCT failed"):
+            await store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+        await store.aclose()
+
+
+async def test_async_http_pull_empty_iris() -> None:
+    store = AsyncHttpStore("http://example.org/sparql")
+    await store.pull_subjects_into_mirror([])
+    await store.aclose()
 
 
 async def test_async_http_insert_delete_helpers() -> None:
@@ -83,23 +121,36 @@ async def test_async_http_store_closed_raises() -> None:
         await store.query("SELECT * WHERE { ?s ?p ?o }")
 
 
-async def test_async_http_store_query_all_drops_remote_only_rows() -> None:
-    """Async query().all() hydrates via get(); mirror misses become empty results."""
+async def test_async_http_store_query_all_hydrates_remote_rows() -> None:
+    """Async query().all() pulls remote subjects into the mirror before hydration."""
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f"<{remote_iri}> a schema:Person ;\n"
+        '  schema:name "Remote" .\n'
+    )
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.headers.get("content-type") == "application/sparql-query":
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
             return httpx.Response(
                 200,
-                json={
-                    "head": {"vars": ["person"]},
-                    "results": {
-                        "bindings": [
-                            {"person": {"type": "uri", "value": "urn:person:remote"}},
-                        ]
-                    },
-                },
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
             )
-        return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "head": {"vars": ["person"]},
+                "results": {
+                    "bindings": [
+                        {"person": {"type": "uri", "value": remote_iri}},
+                    ]
+                },
+            },
+        )
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as client:
@@ -110,4 +161,14 @@ async def test_async_http_store_query_all_drops_remote_only_rows() -> None:
         )
         async with AsyncSPARQLSession(store=store) as session:
             results = await session.query(Person).all()
-            assert results == []
+            assert len(results) == 1
+            assert results[0].name == "Remote"
+
+
+async def test_async_http_update_graph_after_aclose_raises() -> None:
+    store = AsyncHttpStore("http://example.org/sparql")
+    await store.aclose()
+    g = Store()
+    g.add(("urn:s", "urn:p", "urn:o"))
+    with pytest.raises(RuntimeError, match="closed"):
+        await store.update_graph(add=g)

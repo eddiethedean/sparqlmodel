@@ -12,7 +12,7 @@ Common issues when running SparqlModel in development or production.
 
 - `put` data through the same `HttpStore` session before `get`
 - Use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps
-- Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**0.9**)
+- Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**1.0**)
 
 See {doc}`PRODUCTION` — HttpStore mirror model.
 
@@ -20,9 +20,9 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Symptom:** `session.query(Person).where(...).all()` is empty or shorter than the same filter run in a SPARQL client against the endpoint.
 
-**Cause:** On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, the query compiler runs a remote SELECT, then each binding is hydrated with `get()`. `get()` reads the **local mirror**, not the remote dataset. Rows whose subject IRI was never written through this store instance are dropped silently.
+**Cause (0.9.1+):** On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, the compiler runs a remote SELECT, then hydrates each binding with `get()`. `get()` reads the **local mirror** and, since **0.9.1**, issues a CONSTRUCT to pull the subject into the mirror when it is missing. Rows still fail to appear if the remote CONSTRUCT returns no triples, the endpoint rejects CONSTRUCT, or the subject has no `rdf:type` matching your model.
 
-**Mitigations:** Same as for `execute` + `get` above — `put` through the session first, use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps, or use raw `execute()` and handle bindings without `query().all()` until mirror sync ships (**1.0**).
+**Mitigations:** `put` through the session first, call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs, use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps, or use raw `execute()` and handle bindings without `query().all()`.
 
 ## Stale data after `put`
 

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-21
+
+### Added
+
+- **`HttpStore` / `AsyncHttpStore`** — optional `read_endpoint` / `write_endpoint` (Fuseki-style split URLs)
+- **`pull_subjects_into_mirror`** on HTTP stores; `get` auto-pulls remote subject triples into the mirror when missing
+- **SPARQL JSON parsing** — `pyoxigraph.parse_query_results` for remote SELECT bindings
+
+### Fixed
+
+- **Hydration cache** — `get` / `refresh` respect `depth`; shallow `refresh` no longer leaves stale deep hydration entries
+- **`depth_satisfied`** — aligned `depth=1` with per-field checks; requires at least one loaded relationship hop when `depth > 0`
+- **Compiler** — `!BOUND` guards for `<`, `>`, `<=`, `>=` on optional relationship paths (consistent with `!=`)
+
+### Changed
+
+- **`HttpStore.query` / `AsyncHttpStore.query`** — reject non-SELECT SPARQL; ASK JSON responses raise `QueryError`
+- Injected `httpx` clients honor the store `timeout` when provided
+
+### Documentation
+
+- Troubleshooting — mirror sync target **1.0**; SPECS TripleModel dependency `>=0.10`
+- PRODUCTION, README — partial HttpStore mirror pull (0.9.1)
+
 ## [0.9.0] - 2026-05-21
 
 ### Added

@@ -304,6 +304,21 @@ def test_refresh_missing_subject_raises(session: SPARQLSession) -> None:
         session.refresh(orphan)
 
 
+def test_refresh_shallow_then_get_deep_reloads_relationships(
+    session: SPARQLSession, odos: Person
+) -> None:
+    session.put(odos)
+    deep = session.get(Person, odos.id, depth=2)
+    assert deep.works_for is not None
+    assert deep.works_for.name == "Acme Corp"
+    session.refresh(deep, depth=0)
+    assert deep.works_for is None
+    again = session.get(Person, odos.id, depth=2)
+    assert again is deep
+    assert again.works_for is not None
+    assert again.works_for.name == "Acme Corp"
+
+
 def test_expunge_then_get_returns_new_instance(session: SPARQLSession, odos: Person) -> None:
     session.put(odos)
     first = session.get(Person, odos.id)
@@ -353,12 +368,12 @@ def test_get_shallow_after_deep_updates_identity_map(session: SPARQLSession, odo
     session.put(odos)
     deep = session.get(Person, odos.id, depth=1)
     shallow = session.get(Person, odos.id, depth=0)
-    assert shallow is not deep
+    assert shallow is deep
     assert shallow.works_for is None
     key = identity_key_for_iri(Person, odos.id)
-    assert session._state.get_identity(key) is shallow
+    assert session._state.get_identity(key) is deep
     again = session.get(Person, odos.id, depth=1)
-    assert again is not shallow
+    assert again is deep
     assert again.works_for is not None
 
 
@@ -472,15 +487,31 @@ def test_depth_satisfied_requires_all_relationship_branches() -> None:
     )
     assert SPARQLSession._depth_satisfied(complete, 2)
 
-    # works_for deep but manager branch not materialized at depth 1
-    shallow_lead = TeamLead(id=IRI("urn:lead:1"), name="Lead", department=None)
+    # manager present but not a loaded SPARQLModel (depth 2 requires materialized hops)
     incomplete = DualRelPerson(
         id=IRI("urn:p:dual"),
         name="Pat",
         works_for=org,
-        manager=shallow_lead,
+        manager=None,
     )
+    object.__setattr__(incomplete, "manager", "not-a-model")  # type: ignore[arg-type]
     assert not SPARQLSession._depth_satisfied(incomplete, 2)
+
+    partial = DualRelPerson(
+        id=IRI("urn:p:partial"),
+        name="Pat",
+        works_for=org,
+        manager=None,
+    )
+    assert SPARQLSession._depth_satisfied(partial, 1)
+    only_works = DualRelPerson(
+        id=IRI("urn:p:one"),
+        name="Pat",
+        works_for=org,
+        manager=None,
+    )
+    object.__setattr__(only_works, "manager", IRI("urn:lead:missing"))
+    assert not SPARQLSession._depth_satisfied(only_works, 1)
 
 
 def test_get_depth_two_multi_relationship_loads_all_branches(

@@ -31,6 +31,24 @@ def sparql_url(endpoint: str) -> str:
     return urljoin(endpoint + "/", "sparql")
 
 
+def is_select_query(sparql: str) -> bool:
+    """Return True when ``sparql`` appears to be a SPARQL SELECT (not ASK/CONSTRUCT/DESCRIBE)."""
+    text = sparql
+    while True:
+        stripped = text.lstrip()
+        if not stripped:
+            return False
+        upper = stripped.upper()
+        if upper.startswith("PREFIX "):
+            newline = stripped.find("\n")
+            if newline == -1:
+                return False
+            text = stripped[newline + 1 :]
+            continue
+        head = stripped.split(None, 1)[0].upper()
+        return head == "SELECT"
+
+
 def build_request_headers(
     *,
     headers: Mapping[str, str] | None = None,
@@ -38,7 +56,7 @@ def build_request_headers(
     bearer_token: str | None = None,
 ) -> dict[str, str]:
     req_headers = dict(headers or {})
-    if bearer_token is not None:
+    if bearer_token:
         req_headers["Authorization"] = f"Bearer {bearer_token}"
     if auth is not None:
         user, password = auth

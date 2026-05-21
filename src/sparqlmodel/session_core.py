@@ -47,6 +47,28 @@ def relationships_materialized(model: SPARQLModel) -> bool:
     return False
 
 
+async def _maybe_pull_subject_into_mirror(
+    store: StoreProtocol | AsyncStoreProtocol,
+    iri: str | IRI,
+) -> None:
+    """When the store supports remote mirror sync, fetch ``iri`` before hydration."""
+    pull = getattr(store, "pull_subjects_into_mirror", None)
+    if pull is None:
+        return
+    result = pull([iri])
+    if hasattr(result, "__await__"):
+        await result
+
+
+def _maybe_pull_subject_into_mirror_sync(
+    store: StoreProtocol,
+    iri: str | IRI,
+) -> None:
+    pull = getattr(store, "pull_subjects_into_mirror", None)
+    if pull is not None:
+        pull([iri])
+
+
 def _subject_exists_in_store(
     store_graph: Store,
     model_cls: type[SPARQLModel],
@@ -63,14 +85,14 @@ def depth_satisfied(model: SPARQLModel, depth: int) -> bool:
     if depth <= 0:
         return True
     rel_fields = list(model.get_relationship_fields())
-    if depth == 1:
-        if not rel_fields:
-            return True
-        return relationships_materialized(model)
+    if not rel_fields:
+        return True
+    saw_relationship = False
     for name, field_info, _related_cls in rel_fields:
         value = getattr(model, name, None)
         if value is None:
             continue
+        saw_relationship = True
         if isinstance(value, IRI):
             if relationship_allows_iri(field_info.annotation):
                 continue
@@ -79,7 +101,7 @@ def depth_satisfied(model: SPARQLModel, depth: int) -> bool:
             return False
         if not depth_satisfied(value, depth - 1):
             return False
-    return True
+    return saw_relationship
 
 
 def remove_pending_for_subjects(
@@ -170,9 +192,13 @@ def get_impl(
             if not _subject_exists_in_store(store.graph, model_cls, iri):
                 return None
         elif _subject_exists_in_store(store.graph, model_cls, iri):
-            return cast("SPARQLModel | None", hydrated)
-        state.evict_identity_prefix(id_key[0], id_key[1])
-        state.invalidate_hydration_for(id_key[0], id_key[1])
+            cached = cast("SPARQLModel", hydrated)
+            if depth_satisfied(cached, depth):
+                return cached
+            state.invalidate_hydration_for(id_key[0], id_key[1])
+        else:
+            state.evict_identity_prefix(id_key[0], id_key[1])
+            state.invalidate_hydration_for(id_key[0], id_key[1])
 
     identity = state.get_identity(id_key)
     if identity is not None and depth_satisfied(identity, depth):
@@ -185,14 +211,22 @@ def get_impl(
             state.evict_identity_prefix(id_key[0], id_key[1])
             state.invalidate_hydration_for(id_key[0], id_key[1])
 
-    model = hydrate_one(model_cls, iri, store, depth=depth)
-    if model is not None:
-        state.set_identity(model)
-        state.set_hydration(hkey, model)
-    else:
-        state.evict_identity_prefix(id_key[0], id_key[1])
-        state.invalidate_hydration_for(id_key[0], id_key[1])
-    return model
+    if not _subject_exists_in_store(store.graph, model_cls, iri):
+        _maybe_pull_subject_into_mirror_sync(store, iri)
+
+    loaded = hydrate_one(model_cls, iri, store, depth=depth)
+    if loaded is not None:
+        identity = state.get_identity(id_key)
+        if identity is not None:
+            _copy_validated_state(identity, loaded)
+            state.set_hydration(hkey, identity)
+            return identity
+        state.set_identity(loaded)
+        state.set_hydration(hkey, loaded)
+        return loaded
+    state.evict_identity_prefix(id_key[0], id_key[1])
+    state.invalidate_hydration_for(id_key[0], id_key[1])
+    return None
 
 
 def hydrate_bindings_impl(
@@ -312,6 +346,7 @@ def refresh_impl(
     identity = state.get_identity(id_key)
     if identity is not None:
         _copy_validated_state(identity, loaded)
+        state.invalidate_hydration_for(model_cls, id_key[1])
         hkey = (model_cls, id_key[1], depth)
         state.set_hydration(hkey, identity)
         return identity
@@ -372,9 +407,13 @@ async def get_impl_async(
             if not _subject_exists_in_store(store.graph, model_cls, iri):
                 return None
         elif _subject_exists_in_store(store.graph, model_cls, iri):
-            return cast("SPARQLModel | None", hydrated)
-        state.evict_identity_prefix(id_key[0], id_key[1])
-        state.invalidate_hydration_for(id_key[0], id_key[1])
+            cached = cast("SPARQLModel", hydrated)
+            if depth_satisfied(cached, depth):
+                return cached
+            state.invalidate_hydration_for(id_key[0], id_key[1])
+        else:
+            state.evict_identity_prefix(id_key[0], id_key[1])
+            state.invalidate_hydration_for(id_key[0], id_key[1])
 
     identity = state.get_identity(id_key)
     if identity is not None and depth_satisfied(identity, depth):
@@ -387,11 +426,19 @@ async def get_impl_async(
             state.evict_identity_prefix(id_key[0], id_key[1])
             state.invalidate_hydration_for(id_key[0], id_key[1])
 
-    model = hydrate_one(model_cls, iri, reader, depth=depth)
-    if model is not None:
-        state.set_identity(model)
-        state.set_hydration(hkey, model)
-    else:
-        state.evict_identity_prefix(id_key[0], id_key[1])
-        state.invalidate_hydration_for(id_key[0], id_key[1])
-    return model
+    if not _subject_exists_in_store(store.graph, model_cls, iri):
+        await _maybe_pull_subject_into_mirror(store, iri)
+
+    loaded = hydrate_one(model_cls, iri, reader, depth=depth)
+    if loaded is not None:
+        identity = state.get_identity(id_key)
+        if identity is not None:
+            _copy_validated_state(identity, loaded)
+            state.set_hydration(hkey, identity)
+            return identity
+        state.set_identity(loaded)
+        state.set_hydration(hkey, loaded)
+        return loaded
+    state.evict_identity_prefix(id_key[0], id_key[1])
+    state.invalidate_hydration_for(id_key[0], id_key[1])
+    return None

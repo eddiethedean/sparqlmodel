@@ -86,6 +86,17 @@ async def test_async_http_context_manager() -> None:
         assert store._closed
 
 
+async def test_async_http_read_write_endpoint_properties() -> None:
+    store = AsyncHttpStore(
+        "http://example.org/dataset",
+        read_endpoint="http://read.example/query",
+        write_endpoint="http://write.example/update",
+    )
+    assert store.read_endpoint == "http://read.example/query"
+    assert store.write_endpoint == "http://write.example/update"
+    await store.aclose()
+
+
 async def test_async_http_sparql_url_and_owned_client() -> None:
     store = AsyncHttpStore("http://example.org/sparql")
     assert store._sparql_url() == "http://example.org/sparql"

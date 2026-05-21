@@ -11,7 +11,7 @@ Operator and architect guide for running SparqlModel in production. Normative AP
 | **MemoryStore** | Unit tests, local prototypes, single-process tools |
 | **HttpStore** | Remote Fuseki/Jena/compatible SPARQL 1.1 endpoint |
 
-Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **1.0**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
+Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (full reconciliation planned **1.0**). Prefer one writer per endpoint. Since **0.9.1**, `get` can CONSTRUCT-pull individual subjects into the mirror when they are missing locally.
 
 ---
 
@@ -23,11 +23,13 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 | `query`, `execute` | **Remote only** |
 | `get`, `session.graph`, cascade | **Mirror only** |
 
-**Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation today:** `put` through the same session/store, or use `MemoryStore` for single-process apps.
+**Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation (0.9.1+):** `get` attempts `pull_subjects_into_mirror` automatically; you can also call `pull_subjects_into_mirror` explicitly, `put` through the same session/store, or use `MemoryStore` for single-process apps.
 
 **Do not mutate `session.graph` directly on `HttpStore` / `AsyncHttpStore`.** `session.graph` is the local mirror only; `add`/`remove` on it do not update the remote endpoint. `query` and `execute` still read the server, so the mirror and remote can diverge permanently. Use `session.put` / `delete` or `MemoryStore` for tests that need direct graph edits.
 
-**Planned (1.0):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
+**Shipped (0.9.1):** Optional `read_endpoint` / `write_endpoint`, `pull_subjects_into_mirror`, auto-pull on `get`, `pyoxigraph.parse_query_results` for SELECT JSON.
+
+**Planned (1.0):** Full mirror reconciliation, batched updates, retries.
 
 ---
 

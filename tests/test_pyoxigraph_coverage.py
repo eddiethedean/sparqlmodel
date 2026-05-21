@@ -14,8 +14,8 @@ from sparqlmodel.expressions import AndExpr, OrExpr, _flatten_and_parts
 from sparqlmodel.graph import _term_subject_key
 from sparqlmodel.rdf_n3 import term_to_n3, triple_to_n3
 from sparqlmodel.serializers import export_graph
-from sparqlmodel.stores.memory import MemoryStore, _term_value
-from sparqlmodel.stores.sparql_json import _binding_value, parse_sparql_json_bindings
+from sparqlmodel.stores.memory import MemoryStore
+from sparqlmodel.stores.sparql_json import _term_value, parse_sparql_json_bindings
 from tests.models import Organization, Person
 
 
@@ -67,40 +67,58 @@ def test_term_to_n3_literal_escapes_newline() -> None:
 
 
 def test_parse_sparql_json_bindings_errors() -> None:
-    with pytest.raises(ValueError, match="missing head"):
+    with pytest.raises(ValueError, match="Invalid SPARQL JSON"):
         parse_sparql_json_bindings(b"{}")
-    with pytest.raises(ValueError, match="head must be an object"):
-        parse_sparql_json_bindings(json.dumps({"head": [], "results": {"bindings": []}}).encode())
-    with pytest.raises(ValueError, match="head.vars must be a list"):
-        parse_sparql_json_bindings(
-            json.dumps({"head": {"vars": {}}, "results": {"bindings": []}}).encode()
-        )
-    with pytest.raises(ValueError, match="results.bindings must be a list"):
+    with pytest.raises(QueryError, match="ASK"):
+        parse_sparql_json_bindings(b'{"head":{},"boolean":true}')
+    with pytest.raises((ValueError, SyntaxError)):
         parse_sparql_json_bindings(
             json.dumps({"head": {"vars": []}, "results": {"bindings": {}}}).encode()
         )
 
 
-def test_parse_sparql_json_bindings_skips_bad_rows() -> None:
+def test_parse_sparql_json_bindings_unexpected_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Unexpected:
+        pass
+
+    def fake_parse(*_args: object, **_kwargs: object) -> object:
+        return _Unexpected()
+
+    monkeypatch.setattr(
+        "sparqlmodel.stores.sparql_json.parse_query_results",
+        fake_parse,
+    )
+    with pytest.raises(QueryError, match="Unexpected SPARQL result"):
+        parse_sparql_json_bindings(b"{}")
+
+
+def test_parse_sparql_json_bindings_typed_literal() -> None:
     payload = {
-        "head": {"vars": ["x", "y"]},
+        "head": {"vars": ["age"]},
         "results": {
             "bindings": [
-                "not-a-row",
-                {"y": {"type": "uri", "value": "urn:a"}},
+                {
+                    "age": {
+                        "type": "literal",
+                        "value": "30",
+                        "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+                    }
+                },
             ],
         },
     }
     rows = parse_sparql_json_bindings(json.dumps(payload).encode())
-    assert rows == [{"y": "urn:a"}]
+    assert rows == [{"age": "30"}]
 
 
-def test_binding_value_variants() -> None:
-    assert _binding_value("raw") == "raw"
-    assert _binding_value({"type": "uri", "value": "urn:u"}) == "urn:u"
-    assert _binding_value({"type": "bnode", "value": "b1"}) == "_:b1"
-    assert _binding_value({"type": "literal", "value": "lit"}) == "lit"
-    assert _binding_value({"type": "literal"}) is None
+def test_term_value_variants() -> None:
+    from pyoxigraph import BlankNode, Literal, NamedNode
+
+    assert _term_value(None) is None
+    assert _term_value(NamedNode("urn:u")) == "urn:u"
+    assert _term_value(BlankNode("b1")).startswith("_:")
+    assert _term_value(Literal("lit")) == "lit"
+    assert _term_value(99) == "99"
 
 
 def test_memory_store_unexpected_result_type() -> None:
@@ -132,12 +150,14 @@ def test_memory_store_non_select_result() -> None:
 
 
 def test_memory_term_value_coercion() -> None:
-    assert _term_value(None) is None
-    assert _term_value(NamedNode("urn:x")) == "urn:x"
-    assert _term_value(Literal("hello")) == "hello"
+    from sparqlmodel.stores.memory import _term_value as memory_term_value
+
+    assert memory_term_value(None) is None
+    assert memory_term_value(NamedNode("urn:x")) == "urn:x"
+    assert memory_term_value(Literal("hello")) == "hello"
     bn = BlankNode()
-    assert _term_value(bn).startswith("_:")
-    assert _term_value(99) == "99"
+    assert memory_term_value(bn).startswith("_:")
+    assert memory_term_value(99) == "99"
 
 
 def test_term_subject_key_string_iri() -> None:

@@ -72,7 +72,7 @@ persistent → expunge → detached (may merge again)
 persistent → refresh → persistent (reloaded from store)
 ```
 
-`refresh` and `merge` do not write to the store — use `put` to persist changes. If `depth=0` but the instance has materialized nested `SPARQLModel` attributes, reload only shallow fields unless you `refresh(..., depth=1)` or `expunge` then `get` at the needed depth.
+`refresh` and `merge` do not write to the store — use `put` to persist changes. `refresh(..., depth=0)` clears relationship attributes on the cached instance; a later `get(..., depth≥1)` reloads nested data from the store (0.9.1+). Use `expunge` then `get` at the needed depth if you want a clean reload boundary.
 
 ## Choosing a store
 

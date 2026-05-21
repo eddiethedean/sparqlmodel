@@ -224,7 +224,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 |-----|----------------|-------|--------|
 | SELECT-only `execute` / `MemoryStore.query` (ASK raises `QueryError`) | `QueryBoolean`, `bool(store.query("ASK …"))` | SparqlModel | **1.2** (see SPECS P2) |
 | No CONSTRUCT / DESCRIBE on session | `QueryTriples`, `.serialize(RdfFormat.*)` | SparqlModel | **1.2** |
-| Hand-rolled SPARQL Results JSON parser | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results), `QuerySolutions` | SparqlModel `stores/` | **1.0** (`HttpStore` / `AsyncHttpStore`) |
+| ~~Hand-rolled SPARQL Results JSON parser~~ | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results) — **shipped 0.9.1** | SparqlModel `stores/` | **1.0** (remaining HttpStore hardening) |
 | HttpStore UPDATE as string templates only | Remote endpoints need HTTP; local mirror could use `Store.update()` for dev tooling | SparqlModel | **1.0** (optional helper) |
 | No disk-backed store | `Store(path)`, `backup`, `optimize`, `flush`, `read_only` | SparqlModel `stores/` | **1.2** (`OxigraphStore` backend) |
 | Large imports iterate `add` per triple | `bulk_load`, `bulk_extend`, `extend` | SparqlModel session + TripleModel | **1.2** (bulk `put`) |
@@ -296,7 +296,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 1.3)
 
-**Shipped:** [0.9 — Session cache](#09--session-cache-control) (2026-05-21). **Next release:** **1.0**.
+**Shipped:** **0.9.1** (2026-05-21) — hydration fixes and partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next release:** **1.0**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
@@ -392,6 +392,14 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 **Out of scope:** Remote mirror reconciliation (**1.0**); multi-valued fields (**1.1**).
 
+### 0.9.1 patch
+
+**Status:** shipped (2026-05-21).
+
+- Hydration cache / `depth_satisfied` fixes for `get` and `refresh`
+- Partial HttpStore hardening: `read_endpoint` / `write_endpoint`, `pull_subjects_into_mirror`, auto-pull on `get`, `parse_query_results`
+- Compiler `!BOUND` guards for ordered comparisons on optional paths
+
 ---
 
 ### 1.0 — Production HttpStore
@@ -402,10 +410,11 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 | Deliverable | Notes |
 |-------------|--------|
-| `read_endpoint` / `write_endpoint` (Fuseki-style split) | Optional constructor kwargs |
-| Mirror sync strategy | GSP GET, selective hydrate, or remote-authoritative `get` mode |
+| [x] `read_endpoint` / `write_endpoint` (Fuseki-style split) | Optional constructor kwargs — **0.9.1** |
+| [x] Partial mirror sync | `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1** |
+| Mirror sync strategy (full) | GSP GET, selective hydrate, or remote-authoritative `get` mode |
 | Batched UPDATE limits, retries, timeouts | [PRODUCTION.md](PRODUCTION.md) patterns |
-| Replace `stores/sparql_json.py` with `pyoxigraph.parse_query_results` | Typed bindings for remote SELECT |
+| [x] `pyoxigraph.parse_query_results` for remote SELECT | **0.9.1** |
 | Integration tests | Read/write split + mirror contract |
 
 **Exit criteria:** SPECS **P0** HttpStore items for **1.0** checked; operators know when `get` vs `execute` is authoritative.
