@@ -1373,3 +1373,129 @@ def test_model_to_graph_skips_non_cascade_embed() -> None:
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     org_type = "https://schema.org/Organization"
     assert not any(term_str(o) == org_type for _s, p, o in g if term_str(p) == rdf_type)
+
+
+def test_relationship_is_nullable_non_union() -> None:
+    from sparqlmodel.fields import relationship_is_nullable
+
+    assert relationship_is_nullable(Organization) is False
+
+
+def test_parse_count_bindings_variants() -> None:
+    from sparqlmodel.query_common import parse_count_bindings
+
+    assert parse_count_bindings([]) == 0
+    assert parse_count_bindings([{"__count": 3}]) == 3
+    assert parse_count_bindings([{"?__count": "5"}]) == 5
+    assert parse_count_bindings([{"__count": 1.0}]) == 1
+    assert parse_count_bindings([{"__count": True}]) == 1
+    with pytest.raises(QueryError, match="Unsupported COUNT"):
+        parse_count_bindings([{"__count": object()}])
+    with pytest.raises(QueryError, match="did not return"):
+        parse_count_bindings([{"person": "urn:x"}])
+
+
+def test_query_state_apply_helpers() -> None:
+    from sparqlmodel.query_common import (
+        QueryState,
+        apply_offset,
+        apply_order_by,
+        apply_use_optional_for_comparisons,
+    )
+
+    state = QueryState(model_cls=Person)
+    apply_order_by(state, Person.name, desc=True)
+    assert state.order_by == [(Person.name, True)]
+    with pytest.raises(QueryError, match="offset"):
+        apply_offset(state, -1)
+    state.use_inequality_for_ne = True
+    apply_use_optional_for_comparisons(state, False)
+    assert state.use_not_exists_for_ne is True
+
+
+def test_fieldref_is_is_not_validation() -> None:
+    with pytest.raises(QueryError, match="only supports None"):
+        Person.works_for.is_("x")  # type: ignore[arg-type]
+    with pytest.raises(QueryError, match="nested scalar"):
+        Person.works_for.name.is_(None)
+    with pytest.raises(QueryError, match="only supports None"):
+        Person.works_for.is_not("x")  # type: ignore[arg-type]
+
+
+def test_compile_non_nullable_relationship_hop() -> None:
+    class RequiredWorks(SPARQLModel):
+        rdf_type = "urn:test:RequiredWorks"
+        __prefixes__ = {"schema": "https://schema.org/"}
+
+        id: IRI
+        name: str = Field("schema:name")
+        works_for: Organization = Relationship("schema:worksFor", model=Organization)
+
+    registry = NamespaceRegistry(RequiredWorks.get_prefixes())
+    sparql = compile_where(
+        RequiredWorks,
+        (RequiredWorks.works_for.name == "Acme",),
+        registry,
+    )
+    assert "OPTIONAL" not in sparql
+
+
+def test_compile_presence_with_path_and_errors() -> None:
+    from dataclasses import replace
+
+    from sparqlmodel.compiler import _compile_relationship_presence
+    from tests.test_compiler_joins import DualOrgPerson
+
+    registry = NamespaceRegistry(DualOrgPerson.get_prefixes())
+    pats, filts = _compile_relationship_presence(
+        DualOrgPerson.employer.is_(None),
+        DualOrgPerson,
+        "?dualorgperson",
+        registry,
+        [0],
+        {},
+    )
+    assert "OPTIONAL" in "\n".join(pats)
+    assert any("!BOUND" in f for f in filts)
+
+    with pytest.raises(QueryError, match="does not match"):
+        compile_where(Organization, (Person.works_for.is_(None),), registry)
+
+    bad_left = replace(Person.works_for.is_(None), left="not-a-ref")  # type: ignore[arg-type]
+    with pytest.raises(QueryError, match="Expected FieldRef"):
+        _compile_relationship_presence(bad_left, Person, "?person", registry, [0], {})
+
+    bad_op = replace(Person.works_for.is_(None), op=CompareOp.EQ)
+    with pytest.raises(QueryError, match="Unsupported presence"):
+        _compile_relationship_presence(bad_op, Person, "?person", registry, [0], {})
+
+    nested = CompareExpr(
+        FieldRef(DualOrgPerson, "located_in", ("employer",)),
+        CompareOp.IS_,
+        None,
+    )
+    nested_pats, _ = _compile_relationship_presence(
+        nested,
+        DualOrgPerson,
+        "?dualorgperson",
+        registry,
+        [0],
+        {},
+    )
+    assert "OPTIONAL" in "\n".join(nested_pats)
+
+    with patch("sparqlmodel.compiler.get_field_metadata", return_value=None):
+        with pytest.raises(QueryError, match="no SPARQL metadata"):
+            _compile_relationship_presence(
+                DualOrgPerson.employer.is_(None),
+                DualOrgPerson,
+                "?dualorgperson",
+                registry,
+                [0],
+                {},
+            )
+
+
+def test_fieldref_is_not_nested_path_raises() -> None:
+    with pytest.raises(QueryError, match="nested scalar"):
+        Person.works_for.name.is_not(None)

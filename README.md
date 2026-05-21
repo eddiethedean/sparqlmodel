@@ -227,14 +227,14 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.7.1)
+## Known limitations (0.8.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))
 - `merge` / `refresh` / `expunge` planned **0.9** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#09--session-cache-control))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics
-- Multi-hop `!=` still requires relationship hops (inner-join); missing `works_for` is not treated as “null name”
+- Nullable relationship `!=` uses `OPTIONAL` hops; required (non-nullable) hops still use inner-join semantics
 - Sessions are not thread-safe; one session per request/task
 - Each model field must map to a unique RDF predicate; duplicate predicates raise `ConfigurationError` at class definition
 - Cyclic embedded models raise `ConfigurationError` on `put` / `model_to_graph`
