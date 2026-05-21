@@ -11,7 +11,7 @@ Operator and architect guide for running SparqlModel in production. Normative AP
 | **MemoryStore** | Unit tests, local prototypes, single-process tools |
 | **HttpStore** | Remote Fuseki/Jena/compatible SPARQL 1.1 endpoint |
 
-Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **0.8**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
+Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (planned **1.0**). Prefer one writer per endpoint or accept that `get` / cascade only see triples this store instance has written.
 
 ---
 
@@ -25,7 +25,7 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Symptom:** `execute` returns IRIs that `get` cannot load — data exists on the server but not in the mirror. **Mitigation today:** `put` through the same session/store, or use `MemoryStore` for single-process apps.
 
-**Planned (0.8):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
+**Planned (1.0):** Separate read/write URLs, mirror reconciliation, batched updates, retries.
 
 ---
 
@@ -71,7 +71,7 @@ Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 - `expire(Model, iri)` clears cache for that resource.
 - `depth=0` vs `depth=1` may cache separate hydrated views.
 
-**Planned (0.7):** `refresh`, `merge`, `expunge` for explicit cache control.
+**Planned (0.9):** `refresh`, `merge`, `expunge` for explicit cache control.
 
 ---
 
@@ -106,5 +106,5 @@ Until **0.6**, implement offset/sort in raw SPARQL via `session.execute` or fetc
 ## Further reading
 
 - [ORM.md](ORM.md) — developer guide
-- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate)
+- [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-13-ga-gate)
 - [ROADMAP.md — 0.4–1.2](ROADMAP.md)

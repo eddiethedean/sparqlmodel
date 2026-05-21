@@ -216,7 +216,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 | [Getting started](https://sparqlmodel.readthedocs.io/en/latest/getting-started.html) | Quickstart and first session |
 | [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Models (Pydantic), sessions, queries, FastAPI |
 | [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
-| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-12-ga-gate) |
+| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-13-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
 | [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.5–1.3 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
 | [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
@@ -227,8 +227,8 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 ## Known limitations (0.6.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0**)
-- Query: `limit` only — `offset` / `order_by` / `count` planned **0.7–0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md))
+- `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))
+- Query: `limit` only — `offset` / `order_by` / `count` planned **0.8** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--13))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); use `.use_inequality_for_ne()` for pre-0.5.2 inequality semantics
 - Multi-hop `!=` still requires relationship hops (inner-join); missing `works_for` is not treated as “null name”

@@ -108,7 +108,7 @@ restored = Person.from_graph(g, person.subject_uri())
 | `!=` / nested filter | **SparqlModel** | `compiler.py` |
 | Multi-valued round-trip | **TripleModel** (target **1.0**) | `hydration.py` + query compiler consume |
 | Language-tagged literals | **TripleModel** (target **1.0**) | `Field` sugar; not SparqlModel-only |
-| New RDF format | **TripleModel** | thin wrapper in `serializers.py` (**0.6**) |
+| New RDF format | **TripleModel** | thin wrapper in `serializers.py` until **0.7** |
 | Remote Fuseki | **SparqlModel** | `stores/` |
 | SHACL validation | **TripleModel** | optional `put` hook (**1.1**) |
 
@@ -125,7 +125,7 @@ If the fix helps code that **never** uses `SPARQLSession`, it belongs in **Tripl
 | `_triple.py` | Interim adapter (0.3) | **Remove in 0.4** (Option A) |
 | `graph.py` | Cascade / orphan policy | **Keep** orchestration only |
 | `fields.py` | Predicate sugar | Thin wrapper over `rdf_field` / `Predicate` at class creation |
-| `serializers.py` | Interim formats | Replace with TripleModel `parse` / `serialize` (**0.6**) |
+| `serializers.py` | Interim formats | Thin TripleModel wrappers only (**0.7**) |
 | `hydration.py` | Depth walker | Keep depth; load via `from_graph` on `SPARQLModel` |
 
 **Do not** add new parsers, datatype tables, term converters, or `exec`-generated shadow model classes to SparqlModel.
@@ -174,8 +174,14 @@ Recommended by TripleModel ecosystem docs for API stability through 1.0.
 | **0.4** | **Option A** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |
 | **0.5** | Pyoxigraph engine (`triplemodel.Store`, no core rdflib) | — |
 | **0.6** | Async ORM (`AsyncSPARQLSession`, async stores, FastAPI) | — |
-| **0.7** | Delete interim `serializers.py` | `parse` / `serialize` only upstream |
-| **0.8+** | Named graphs in apps if needed | Dataset APIs from TripleModel |
+| **0.7** | Thin `serializers.py` only | All file `parse` / `serialize` upstream |
+| **0.8** | Query lists (`offset`, `order_by`, `count`) | — |
+| **0.9** | Session cache (`merge`, `refresh`, `expunge`) | — |
+| **1.0** | Production HttpStore | Mirror sync, read/write URLs |
+| **1.1** | Multi-valued / lang / polymorphic query | TripleModel mapping first |
+| **1.2** | SHACL hook, bulk, ASK/CONSTRUCT | `triplemodel[shacl]` |
+| **1.3** | Production GA (SPECS P0+P1) | — |
+| **post-1.3** | Named graphs in apps if needed | Dataset APIs from TripleModel |
 
 Track upstream: [TripleModel ROADMAP](https://github.com/eddiethedean/triplemodel/blob/main/ROADMAP.md) · **SM-6** (SparqlModel 0.4 unified model)
 

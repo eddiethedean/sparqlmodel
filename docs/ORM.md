@@ -208,7 +208,7 @@ from triplemodel import TripleModel  # example — use your TripleModel classes
 # persons = Person.parse("data.ttl")
 ```
 
-**From SparqlModel today (serializers interim until 0.6):**
+**From SparqlModel today (serializers interim until 0.7):**
 
 ```python
 from sparqlmodel.serializers import export_model
@@ -227,7 +227,7 @@ Roadmap: SparqlModel export becomes a thin wrapper over TripleModel `serialize`;
 | `session.put` graph writes | SparqlModel cascade + TripleModel `sync_to_graph` | Direct on instances (**0.4**) |
 | `session.get` / query hydrate | SparqlModel depth + `from_graph` | Unified subclass (**0.4**) |
 | Interim `_triple.py` adapter | Shipped 0.3 | **Remove 0.4** |
-| Turtle / JSON-LD export | Interim `serializers.py` | TripleModel `serialize` (**0.6**) |
+| Turtle / JSON-LD export | Interim `serializers.py` | TripleModel `serialize` (**0.7**) |
 | Query compiler | SparqlModel only | Stays in SparqlModel |
 
 See [ROADMAP.md](ROADMAP.md) for milestones.
@@ -238,14 +238,14 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 
 **Today (0.2.0):** Suitable for prototypes, tests, single-process apps (`MemoryStore`), and early FastAPI services. Remote `HttpStore` requires understanding the [mirror model](SPECS.md#httpstore) (query vs `get`).
 
-**Target (1.2):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
+**Target (1.3):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
 
-- [Production checklist](SPECS.md#production-orm-checklist-12-ga-gate) — normative P0 / P1 / P2 gates
-- [Roadmap](ROADMAP.md) — versions 0.4–1.2
+- [Production checklist](SPECS.md#production-orm-checklist-13-ga-gate) — normative P0 / P1 / P2 gates
+- [Roadmap — Forward roadmap](ROADMAP.md#forward-roadmap-07--13) — versions 0.7–1.3
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Async session and stores** shipped in **0.6.0**.
+**Not yet available (planned):** delegated file I/O cleanup (**0.7**), `offset` / `order_by` / `count` on queries (**0.8**), `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Async session and stores** shipped in **0.6.0**.
 
 ---
 

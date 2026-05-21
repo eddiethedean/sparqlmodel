@@ -21,9 +21,9 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 
 ---
 
-# Production ORM checklist (1.2 GA gate)
+# Production ORM checklist (1.3 GA gate) {#production-orm-checklist-13-ga-gate}
 
-Normative checklist for declaring SparqlModel **production-ready** (version **1.2**). See [ROADMAP.md](ROADMAP.md) for milestone versions.
+Normative checklist for declaring SparqlModel **production-ready** (version **1.3**). See [ROADMAP.md — Forward roadmap](ROADMAP.md#forward-roadmap-07--13) for milestone versions.
 
 **Parity tiers:** **P0** = required for production HTTP/API apps; **P1** = SQLModel / [SPARQLMojo](https://pypi.org/project/sparqlmojo/) parity; **P2** = advanced RDF / ecosystem.
 
@@ -43,23 +43,23 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] `AsyncQuery` — `async def all()` / `first()`; same expression DSL as sync — **0.6.0**
 - [x] FastAPI `AsyncSessionDep` + `async_http_store_lifespan` — **0.6.0**
 - [x] Async/sync parity contract tests on memory and HTTP stores — **0.6.0**
-- [ ] `Query.offset(n)` — **0.7**
-- [ ] `Query.order_by(...)` — **0.7**
-- [ ] `Query.count()` — **0.7**
-- [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.7**
-- [ ] HttpStore mirror sync or remote-authoritative `get` contract — **0.9**
-- [ ] Scoped session pattern documented (FastAPI + scripts) — **0.8**
+- [ ] `Query.offset(n)` — **0.8**
+- [ ] `Query.order_by(...)` — **0.8**
+- [ ] `Query.count()` — **0.8**
+- [ ] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8**
+- [ ] HttpStore mirror sync or remote-authoritative `get` contract — **1.0**
+- [ ] Scoped session pattern documented (FastAPI + scripts) — **0.9**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
 ## P1 — SQLModel / SPARQLMojo parity
 
-- [ ] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.8**
-- [ ] Multi-valued scalar and relationship fields — **1.0** (TripleModel + SparqlModel hydrate)
-- [ ] Language-tagged literals (`@lang`) — **1.0** (TripleModel)
-- [ ] Polymorphic queries (`rdf:type` subclasses) — **1.0**
-- [ ] HttpStore separate read/write endpoint URLs — **0.9**
-- [ ] Optional SHACL validation on `put` — **1.1**
-- [ ] Inverse / `back_populates` relationship navigation (where modeled) — **1.0**
+- [ ] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.9**
+- [ ] Multi-valued scalar and relationship fields — **1.1** (TripleModel + SparqlModel hydrate)
+- [ ] Language-tagged literals (`@lang`) — **1.1** (TripleModel)
+- [ ] Polymorphic queries (`rdf:type` subclasses) — **1.1**
+- [ ] HttpStore separate read/write endpoint URLs — **1.0**
+- [ ] Optional SHACL validation on `put` — **1.2**
+- [ ] Inverse / `back_populates` relationship navigation (where modeled) — **1.1**
 
 ## P2 — Advanced
 
@@ -268,7 +268,7 @@ works_for: Organization | None = Relationship("schema:worksFor", model=Organizat
 - `list[T]` / collection fields for multi-valued literals and IRIs (via TripleModel) — **1.0**
 - Language-tagged fields (`LangString`, multi-lang maps) — **1.0** (TripleModel)
 - Polymorphic `session.query(Base).where(...)` matching subclasses — **1.0**
-- Compiler emits `OPTIONAL` for nullable relationship paths in filters — **0.7**
+- Compiler emits `OPTIONAL` for nullable relationship paths in filters — **0.8**
 - Optional `Relationship(..., back_populates=...)` for inverse navigation — **1.0**
 
 ---
@@ -337,11 +337,11 @@ External writers or SELECT-only visibility without a matching mirror update can 
 | Capability | Notes |
 |------------|--------|
 | `query` | SPARQL 1.1 SELECT (required) |
-| `update` | Atomic SPARQL Update sequences where endpoint supports — **0.9** |
-| `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **P2** |
-| HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **0.9** |
-| Mirror sync | GSP GET, post-query hydrate, or documented remote-authoritative mode — **0.9** |
-| Retries, timeouts, batch size limits | Production HttpStore — **0.9** |
+| `update` | Atomic SPARQL Update sequences where endpoint supports — **1.0** |
+| `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **1.2** (P2) |
+| HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **1.0** |
+| Mirror sync | GSP GET, post-query hydrate, or documented remote-authoritative mode — **1.0** |
+| Retries, timeouts, batch size limits | Production HttpStore — **1.0** |
 | `OxigraphStore` / embedded backends | Optional — **1.2+** |
 
 Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.1 Update](https://www.w3.org/TR/sparql11-update/), [Graph Store HTTP](https://www.w3.org/TR/sparql11-http-rdf-update/).
@@ -352,12 +352,12 @@ Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.
 
 **Current (0.5+):** Filter values serialized via SparqlModel N3 helpers (`rdf_n3`) on pyoxigraph terms and string IRIs. IRIs with invalid characters raise `QueryError`. Predicates come from model metadata (trusted code).
 
-**Target (1.2):**
+**Target (1.3 GA):**
 
 - No public API that concatenates untrusted strings into SPARQL text
 - Predicates and class IRIs remain declaration-time only
 - `LIMIT` / `OFFSET` remain integer-typed at API boundary
-- Security review documented before 1.2 GA
+- Security review documented before 1.3 GA
 
 ---
 
@@ -386,7 +386,7 @@ Parallel to the sync stack; sync API remains supported.
 |------|----------|
 | Dual model types | 0.3 uses interim `_triple.py` dynamic adapter; **0.4** unifies on `SPARQLModel(TripleModel)` |
 
-## Until 0.7 (query)
+## Until 0.8 (query)
 
 | Area | Behavior |
 |------|----------|
@@ -394,14 +394,14 @@ Parallel to the sync stack; sync API remains supported.
 | Absence / null filters | No `OPTIONAL` for nullable relationships in DSL |
 | Aggregates | No `count()` on `Query` |
 
-## Until 0.9 (HttpStore)
+## Until 1.0 (HttpStore)
 
 | Area | Behavior |
 |------|----------|
 | Mirror vs remote | `get` / cascade use mirror; `query` uses remote |
 | Multi-writer endpoints | External updates invisible to mirror until sync |
 
-## Until 1.0 (mapping)
+## Until 1.1 (mapping)
 
 | Area | Behavior |
 |------|----------|

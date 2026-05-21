@@ -17,7 +17,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Single model class (Option A, shipped 0.4.0):** `SPARQLModel` **subclasses** `TripleModel`. `Field` and `Relationship` are ORM sugar; session I/O uses `rdf_bridge` and `from_graph` on the **same** instances. The 0.3 `_triple.py` adapter was removed in **0.4**.
 
-**1.2** = production SPARQL ORM GA (SQLModel of SPARQL) — [SPECS production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
+**1.3** = production SPARQL ORM GA (SQLModel of SPARQL) — [SPECS production checklist](SPECS.md#production-orm-checklist-13-ga-gate).
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` delegates to TripleModel `load_graph` / `dump_graph` — full retirement of duplicate format tables in **0.7**. `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **0.7 — file I/O delegated**. **0.6** async end-to-end shipped **2026-05-20**; Pyoxigraph engine in **0.5.0**; unified model (Option A) in **0.4.0**.
+**Current focus (next release):** **[0.7 — Delegated file I/O](#07--delegated-file-io)**. **0.6** async shipped **2026-05-20**. Forward plan: [0.7 → 1.3](#forward-roadmap-07--13).
 
 ---
 
@@ -230,7 +230,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | Large imports iterate `add` per triple | `bulk_load`, `bulk_extend`, `extend` | SparqlModel session + TripleModel | **1.2** (bulk `put`) |
 | Cascade / orphan scans graph broadly | `quads_for_pattern` | SparqlModel `graph.py` | **1.2** (perf) |
 | Default graph only (no named graphs) | `Quad`, `Dataset`, `add_graph`, `named_graphs` | TripleModel Dataset + SparqlModel session scope | **post-1.3** |
-| Blank-node merge on import | `parse(..., rename_blank_nodes=True)`, `Dataset.canonicalize` | TripleModel | **1.1** / **0.7** docs |
+| Blank-node merge on import | `parse(..., rename_blank_nodes=True)`, `Dataset.canonicalize` | TripleModel | **1.1** (document in **0.7**) |
 | Directional literals | `Literal.direction` | TripleModel | **1.1** |
 | Full RDF-star in models (not just UPDATE N3) | `RdfFormat.supports_rdf_star`, quoted triple fields | TripleModel + SparqlModel | **post-1.3** |
 | Negotiated export uses string format names | `RdfFormat.from_media_type`, `QueryResultsFormat` | TripleModel + FastAPI extra | **0.7** / **1.2** |
@@ -294,113 +294,200 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ---
 
-## 0.7 — File I/O delegated
+## Forward roadmap (0.7 → 1.3)
 
-**Goal:** no format logic in SparqlModel.
+**Shipped:** [0.6 — Async end-to-end](#06--async-end-to-end) (2026-05-20). **Next release:** **0.7**.
 
-- [ ] `serializers.py` → thin wrappers over TripleModel `parse` / `serialize`
-- [ ] Examples and docs use TripleModel for file round-trip
-- [ ] Delete duplicate format tables and parsers from SparqlModel
-- [ ] TripleModel exposes pyoxigraph `RdfFormat` / `from_media_type` for FastAPI `negotiated_response` (no parallel format tables in SparqlModel)
+Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
-**Exit criteria:** All format round-trips go through TripleModel; SparqlModel export helpers are thin wrappers only.
+### At a glance
 
-**Still SparqlModel:** session, compiler, stores, cascade, FastAPI.
+| Release | Track | Primary outcome |
+|---------|-------|-----------------|
+| **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry |
+| **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters |
+| **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns |
+| **1.0** | Stores | **Production HttpStore** — mirror sync, read/write URLs, robust remote SELECT |
+| **1.1** | Modeling | **Richer RDF fields** — multi-valued, `@lang`, polymorphic query, inverse nav |
+| **1.2** | Operations | **SHACL, bulk I/O, ASK/CONSTRUCT, disk store**, performance and logging |
+| **1.3** | GA | [SPECS P0 + P1](SPECS.md#production-orm-checklist-13-ga-gate) complete; stable public API |
 
-**Pydantic:** keep `model_validate_jsonld` / `model_dump_jsonld` as the public parse API; delegate implementation to TripleModel.
+### Tracks (what each line of work owns)
 
----
+| Track | Versions | SparqlModel owns | TripleModel owns |
+|-------|----------|------------------|------------------|
+| **Integration** | 0.7 | Thin `serializers.py`, FastAPI `Accept` → format | `parse`, `serialize`, `infer_format`, parsers |
+| **Query & API** | 0.8 | Compiler, `Query` / `AsyncQuery`, OPTIONAL for nullable hops | Literal/term encoding (unchanged) |
+| **Session** | 0.9 | Identity map, merge/refresh/expunge, scoped session docs | `from_graph` / validation on reload |
+| **Remote stores** | 1.0 | `HttpStore` / `AsyncHttpStore`, mirror contract, `parse_query_results` | — |
+| **Modeling** | 1.1 | Hydration, cascade, compiler for collections & polymorphism | Multi-valued, `LangString`, dispatch |
+| **Operations** | 1.2 | SHACL hook on `put`, bulk helpers, `OxigraphStore`, logging | `triplemodel[shacl]` engine |
+| **GA** | 1.3 | Checklist, security review, migration guide | Frozen mapping API for apps |
 
-## 0.8 — Query production
+```mermaid
+flowchart LR
+  subgraph integration [Integration]
+    v07["0.7 File I/O"]
+  end
+  subgraph api [API layer]
+    v08["0.8 Query lists"]
+    v09["0.9 Session cache"]
+  end
+  subgraph deploy [Deployment]
+    v10["1.0 HttpStore"]
+  end
+  subgraph data [Data model]
+    v11["1.1 RDF fields"]
+  end
+  subgraph ops [Operations]
+    v12["1.2 Ops"]
+  end
+  subgraph ga [GA]
+    v13["1.3 Production GA"]
+  end
+  v07 --> v08 --> v09 --> v10 --> v11 --> v12 --> v13
+```
 
-**Goal:** SQLModel-grade list APIs over SPARQL.
-
-- [ ] `Query.offset(n)` → `OFFSET`
-- [ ] `Query.order_by(FieldRef, *, desc=False)` → `ORDER BY`
-- [ ] `Query.count()` → efficient count pattern
-- [ ] OPTIONAL / absence filters for `Relationship | None` and existence checks
-- [ ] Compiler tests + [ORM.md](ORM.md) pagination examples
-
-**Exit criteria:** FastAPI list endpoints can paginate and sort without raw SPARQL; SPECS P0 query items checked.
-
-**Pydantic:** filter values remain typed Python literals compiled to RDF; `FieldRef` unchanged.
-
----
-
-## 0.9 — Session lifecycle
-
-**Goal:** SQLAlchemy session parity for app code.
-
-- [ ] `merge`, `refresh`, `expunge`, `expunge_all`
-- [ ] Identity map rules documented (depth, materialized relationships)
-- [ ] `scoped_session` helper or documented FastAPI `SessionDep` pattern
-- [ ] Threading / concurrency guide
-
-**Exit criteria:** SPECS session lifecycle table implemented; ORM guide covers detach/merge flows.
-
-**Pydantic:** `merge` / `refresh` must produce validated `SPARQLModel` instances (`model_validate` after graph merge).
-
----
-
-## 1.0 — HttpStore production
-
-**Goal:** safe remote SPARQL for multi-instance apps (within documented constraints).
-
-- [ ] Separate `read_endpoint` / `write_endpoint` (Fuseki-style)
-- [ ] Mirror sync strategy (GSP GET, selective hydrate, or explicit remote-authoritative `get`)
-- [ ] Batched UPDATE / size limits; retries and timeouts
-- [ ] [PRODUCTION.md](PRODUCTION.md) deployment patterns
-- [ ] Replace `stores/sparql_json.py` with `pyoxigraph.parse_query_results` (JSON/XML) for remote SELECT bindings — typed terms, less custom JSON code
-
-**Exit criteria:** Documented mirror contract; integration tests for read/write split; SPECS P0 HttpStore item checked.
+**Why this order:** list endpoints (**0.8**) do not require remote-store work but unblock FastAPI apps; session cache (**0.9**) clarifies identity before multi-instance HttpStore (**1.0**); richer fields (**1.1**) depend on TripleModel mapping releases; ops (**1.2**) assume stable query/store/model APIs; **1.3** is checklist closure only (no new features).
 
 ---
 
-## 1.1 — RDF modeling
+### 0.7 — Delegated file I/O
 
-**Goal:** SPARQLMojo-class field coverage via TripleModel.
+**Track:** Integration · **Depends on:** 0.6 (shipped)
 
-- [ ] Multi-valued scalar and relationship fields (`list[...]`)
-- [ ] Language-tagged literals (TripleModel `LangString` / equivalents)
-- [ ] Polymorphic `session.query(Base)` with `rdf:type` branches
-- [ ] Optional inverse / `back_populates` on `Relationship`
+**Goal:** Zero format logic in SparqlModel — only TripleModel (pyoxigraph) parses and serializes RDF documents.
 
-**Exit criteria:** Contract tests for multi-valued and lang fields; SPECS P1 modeling items checked.
+| Deliverable | Owner |
+|-------------|--------|
+| `serializers.py` — thin wrappers calling `TripleModel.serialize` / `load_graph` / `infer_format` | SparqlModel |
+| Remove `SUPPORTED_FORMATS` and duplicate alias tables from SparqlModel | SparqlModel |
+| Docs and examples: file round-trip via `Model.parse` / `Model.serialize` or `triplemodel.io` | SparqlModel docs |
+| FastAPI `negotiated_response` uses `infer_format` or `RdfFormat.from_media_type` (no local media map) | SparqlModel `[fastapi]` |
+| `model_dump_jsonld` / `model_validate_jsonld` — public API kept; implementation delegated upstream or via graph JSON-LD round-trip (document semantics) | SparqlModel + TripleModel |
 
-**Owner split:** mapping in **TripleModel**; hydration, compiler, cascade in **SparqlModel**.
+**Exit criteria:** Every Turtle/JSON-LD/NT file path goes through TripleModel; `make ci` green; no new format names added only in SparqlModel.
 
-**Pydantic:** `list[str]`, `list[Organization]`, etc. with standard list validation; hydration returns typed lists.
-
----
-
-## 1.2 — Ops and quality
-
-**Goal:** production operability.
-
-- [ ] Optional SHACL validation hook on `put` (`triplemodel[shacl]`) — runs after Pydantic validation passes
-- [ ] Bulk `put` / `delete` helpers for large imports — use pyoxigraph `bulk_load` / `bulk_extend` on `MemoryStore.graph` where applicable
-- [ ] `session.execute` / store layer: ASK (`QueryBoolean`) and CONSTRUCT (`QueryTriples`) via pyoxigraph result types, not SELECT-only
-- [ ] `OxigraphStore` backend — disk `pyoxigraph.Store(path)`, optional `read_only`, `backup` / `optimize` for single-node deployments
-- [ ] `graph.py` cascade/orphan hot paths — prefer `quads_for_pattern` over full-graph iteration where measurable
-- [ ] Structured query logging (SPARQL + timing)
-- [ ] Performance guidelines (identity map, query shape, HttpStore batching)
-
-**Exit criteria:** Operators can validate writes and observe queries in production.
+**Out of scope:** `offset` / `order_by` / `count` (**0.8**); HttpStore mirror sync (**1.0**); deleting the `sparqlmodel.serializers` module (keep thin re-exports for backward compatibility).
 
 ---
 
-## 1.3 — Production ORM GA
+### 0.8 — Query lists
 
-**Goal:** **SQLModel of SPARQL** for backend teams — feature-complete per [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
+**Track:** Query & API · **Depends on:** 0.7
 
-- [ ] All SPECS **P0** and **P1** items checked
-- [ ] Document supported Pydantic features matrix (constraints, unions, `ForwardRef`, JSON Schema for OpenAPI)
-- [ ] Security review on SPARQL generation
-- [ ] Stable public API; migration guide from 0.3.x
-- [ ] **P2** items remain optional follow-ups (ASK/CONSTRUCT helpers, named graphs, Oxigraph disk store)
-- [ ] Pyoxigraph utilization table above — P0/P1 rows closed; P2 rows either shipped or explicitly deferred
+**Goal:** SQLModel-grade **list** endpoints — paginate, sort, and count without hand-written SPARQL.
 
-**Out of scope for 1.2:** OWL editor, built-in reasoner, mapping-only features in SparqlModel.
+| Deliverable | Notes |
+|-------------|--------|
+| `Query.offset(n)` / `AsyncQuery.offset(n)` | `OFFSET` in compiled SELECT |
+| `Query.order_by(FieldRef, *, desc=False)` | `ORDER BY` on bound variables |
+| `Query.count()` | Efficient count pattern (subquery or `COUNT` — implementation detail) |
+| OPTIONAL / absence for `Relationship \| None` | Compiler emits `OPTIONAL` where nullable hops need it |
+| Tests + [guides/queries.md](guides/queries.md) pagination examples | Sync and async parity |
+
+**Exit criteria:** FastAPI list routes can use `.limit().offset().order_by()` and `.count()`; SPECS **P0** query checklist items for **0.8** are checked.
+
+**Out of scope:** `merge` / `refresh` (**0.9**); HttpStore production (**1.0**).
+
+---
+
+### 0.9 — Session cache control
+
+**Track:** Session · **Depends on:** 0.8
+
+**Goal:** SQLAlchemy-style **identity map control** for long-lived processes and tests.
+
+| Deliverable | Notes |
+|-------------|--------|
+| `merge`, `refresh`, `expunge`, `expunge_all` on sync and async sessions | Validated instances via `model_validate` after graph merge |
+| Document identity map + hydration cache rules | [ORM.md](ORM.md) — depth, materialized relationships |
+| Scoped session helper or documented `SessionDep` / `AsyncSessionDep` pattern | FastAPI + scripts |
+| Threading guide (complement 0.6 asyncio docs) | One session per thread/task |
+
+**Exit criteria:** SPECS **P1** session lifecycle items for **0.9** checked; ORM guide covers detach/merge flows.
+
+**Out of scope:** Remote mirror reconciliation (**1.0**); multi-valued fields (**1.1**).
+
+---
+
+### 1.0 — Production HttpStore
+
+**Track:** Remote stores · **Depends on:** 0.9
+
+**Goal:** Documented, testable **multi-instance** use of `HttpStore` / `AsyncHttpStore` (within stated constraints).
+
+| Deliverable | Notes |
+|-------------|--------|
+| `read_endpoint` / `write_endpoint` (Fuseki-style split) | Optional constructor kwargs |
+| Mirror sync strategy | GSP GET, selective hydrate, or remote-authoritative `get` mode |
+| Batched UPDATE limits, retries, timeouts | [PRODUCTION.md](PRODUCTION.md) patterns |
+| Replace `stores/sparql_json.py` with `pyoxigraph.parse_query_results` | Typed bindings for remote SELECT |
+| Integration tests | Read/write split + mirror contract |
+
+**Exit criteria:** SPECS **P0** HttpStore items for **1.0** checked; operators know when `get` vs `execute` is authoritative.
+
+**Out of scope:** Multi-valued / lang fields (**1.1**); disk-backed `OxigraphStore` (**1.2**).
+
+---
+
+### 1.1 — Richer RDF models
+
+**Track:** Modeling · **Depends on:** TripleModel releases for collections/lang · **Parallel with:** 1.0 acceptable if mapping lands upstream first
+
+**Goal:** SPARQLMojo-class **field expressiveness** without duplicating TripleModel mapping.
+
+| Deliverable | Owner |
+|-------------|--------|
+| Multi-valued scalar and relationship fields (`list[...]`) | TripleModel map + SparqlModel hydrate/compiler/cascade |
+| Language-tagged literals (`LangString`, etc.) | TripleModel |
+| Polymorphic `session.query(Base)` with `rdf:type` branches | SparqlModel compiler |
+| `Relationship(..., back_populates=...)` (optional inverse) | SparqlModel + TripleModel metadata |
+
+**Exit criteria:** Contract tests for multi-valued and lang fields; SPECS **P1** modeling items for **1.1** checked.
+
+**Out of scope:** SHACL on `put` (**1.2**); named graphs (**post-1.3**).
+
+---
+
+### 1.2 — Production operations
+
+**Track:** Operations · **Depends on:** 1.0–1.1 feature APIs stable
+
+**Goal:** Teams can **operate** SparqlModel in production (validate, import at scale, observe, tune).
+
+| Deliverable | Notes |
+|-------------|--------|
+| Optional SHACL validation hook on `put` | `triplemodel[shacl]` after Pydantic passes |
+| Bulk `put` / `delete` helpers | pyoxigraph `bulk_load` / `bulk_extend` where applicable |
+| `session.execute` / stores: ASK and CONSTRUCT result types | Not SELECT-only |
+| `OxigraphStore` backend | Disk `pyoxigraph.Store(path)`, backup/optimize |
+| `graph.py` hot paths | `quads_for_pattern` where measurable |
+| Structured SPARQL logging + performance guide | Identity map, query shape, HttpStore batching |
+
+**Exit criteria:** Operators can validate writes and observe queries; SPECS **P2** items either shipped or explicitly deferred with owners.
+
+**Out of scope:** GA checklist sign-off (**1.3**); OWL editor / reasoner.
+
+---
+
+### 1.3 — Production GA
+
+**Track:** GA · **Depends on:** 1.2
+
+**Goal:** Declare SparqlModel **production-ready** — the SQLModel of SPARQL for backend teams.
+
+| Deliverable | Notes |
+|-------------|--------|
+| All SPECS **P0** and **P1** items checked | [Production checklist](SPECS.md#production-orm-checklist-13-ga-gate) |
+| Pydantic features matrix for OpenAPI | Constraints, unions, `ForwardRef`, JSON Schema |
+| Security review on SPARQL generation | Documented threat model for filter compilation |
+| Stable public API + migration guide | 0.3.x → current |
+| Pyoxigraph utilization table | P0/P1 rows closed; P2 deferred with targets |
+
+**Exit criteria:** Version **1.3.0** tagged; README and ORM guide state production readiness; no open P0/P1 checklist items.
+
+**Out of scope:** Named graphs, RDF-star entity fields, federation, alternate non-Oxigraph backends (**post-1.3**).
 
 ---
 
@@ -427,14 +514,14 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | `Session.add` / `commit` | `add` / `put` + context `flush` | Shipped |
 | `session.get(PK)` | `get(Model, iri)` | Shipped |
 | `select().where()` | `query().where()` | Shipped |
-| `limit` / `offset` | `limit` / `offset` | Partial (offset **0.7**) |
-| `order_by` | `order_by` | **0.7** |
-| `count` | `count()` | **0.7** |
+| `limit` / `offset` | `limit` / `offset` | `limit` shipped; `offset` **0.8** |
+| `order_by` | `order_by` | **0.8** |
+| `count` | `count()` | **0.8** |
 | Relationships + eager load | `Relationship`, `depth` | Shipped (depth 0–2) |
-| `merge` / `refresh` / `expunge` | same | **0.8** |
-| Transactions | pending queue + store updates | Partial (**0.9** remote) |
+| `merge` / `refresh` / `expunge` | same | **0.9** |
+| Transactions | pending queue + store updates | Partial (remote txn **1.0**) |
 | FastAPI `Depends(Session)` | `SessionDep` | Shipped |
-| Async session / routes | `AsyncSPARQLSession`, `AsyncSessionDep` | **0.5** |
+| Async session / routes | `AsyncSPARQLSession`, `AsyncSessionDep` | Shipped (**0.6**) |
 | Single model class (SQLModel pattern) | `SPARQLModel(TripleModel)` | **0.4** |
 
 ---
@@ -447,12 +534,12 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 |---------|------------|-------------|
 | Query compiler + session | Yes | Yes (0.2) |
 | Identity map | Yes | Yes (0.2) |
-| Lang / multi-lang literals | Yes | **1.0** (TripleModel) |
-| Collection fields (`LiteralList`, …) | Yes | **1.0** (TripleModel) |
-| Polymorphic queries | Yes | **1.0** |
-| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); extend **0.7** |
-| Read/write endpoint split | Yes | **0.9** |
-| Async ORM + HTTP store | No | **0.5** |
+| Lang / multi-lang literals | Yes | **1.1** (TripleModel) |
+| Collection fields (`LiteralList`, …) | Yes | **1.1** (TripleModel) |
+| Polymorphic queries | Yes | **1.1** |
+| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); OPTIONAL nullable hops **0.8** |
+| Read/write endpoint split | Yes | **1.0** |
+| Async ORM + HTTP store | No | Shipped (**0.6**) |
 | FastAPI integration | No | Yes (0.2) |
 | TripleModel mapping substrate | No | Yes (required) |
 | Unified model (SQLModel pattern) | N/A | **0.4** (Option A) |
@@ -462,16 +549,17 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ---
 
-## Priorities
+## Priorities (forward work)
 
-1. **0.7 file I/O delegated** — serializers → TripleModel `serialize` / `load_graph`; align media types with pyoxigraph `RdfFormat`.
-2. **Do not expand** interim mapping — retire duplicate serializer tables in **0.7**.
-3. **P0 query + HttpStore** for production APIs (**0.8–1.0**); **1.0** — `parse_query_results` for HTTP SELECT.
-4. **P1 session lifecycle + RDF types** (**0.9–1.1**).
-5. **Pyoxigraph depth** — ASK/CONSTRUCT, disk store, `bulk_load`, `quads_for_pattern` (**1.2**); named graphs / RDF-star (**post-1.3**).
-6. Keep sync `SPARQLSession` / `Field` / `session.put` stable; add async counterparts in parallel.
-7. Contract tests on every integration PR; SPECS checklist drives **1.2** GA.
-8. Document behavior in [ORM.md](ORM.md) and [PRODUCTION.md](PRODUCTION.md).
+1. **0.7** — Retire SparqlModel format tables; document TripleModel file I/O; thin `serializers.py` only.
+2. **0.8** — Query lists (`offset`, `order_by`, `count`, OPTIONAL nullable hops) — unblocks production HTTP list APIs.
+3. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
+4. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
+5. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
+6. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
+7. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
+8. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
+9. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **1.3** GA.
 
 ---
 

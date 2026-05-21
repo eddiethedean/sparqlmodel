@@ -82,7 +82,7 @@ On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.asy
 ```
 
 ```{note}
-`offset`, `order_by`, and `count()` are planned for **0.7–0.8**. Until then use `.limit()` only or raw `session.execute`.
+`offset`, `order_by`, and `count()` are planned for **0.8** ([ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#08--query-lists)). Until then use `.limit()` only or raw `session.execute`.
 ```
 
 ## Raw SPARQL

@@ -12,7 +12,7 @@ Guides: [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP
 
 ---
 
-# Production ORM definition (1.2 GA north star)
+# Production ORM definition (1.3 GA north star)
 
 SparqlModel **1.2** means a **fully featured production SPARQL ORM** — the [SQLModel](https://sqlmodel.tiangolo.com/) of SPARQL for backend and FastAPI teams:
 
@@ -25,7 +25,7 @@ SparqlModel **1.2** means a **fully featured production SPARQL ORM** — the [SQ
 
 **Explicit non-goals:** OWL editor, built-in reasoner, reimplementing TripleModel in `graph.py`.
 
-GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-12-ga-gate).
+GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-13-ga-gate).
 
 ---
 
@@ -135,13 +135,13 @@ SparqlModel **depends** on `triplemodel>=0.10` and **pyoxigraph** (0.5+). Remain
 | **0.4** | **Unified model (Option A)** — `SPARQLModel(TripleModel)`; delete `_triple.py` | Direct `sync_to_graph` / `from_graph` on app instances |
 | **0.5** | **Pyoxigraph + TM 0.10** (`triplemodel.Store`, no core rdflib) | — |
 | **0.6** | **Async end-to-end** (`AsyncSPARQLSession`, `AsyncHttpStore`, FastAPI) | — |
-| **0.7** | Thin `serializers.py` | `parse` / `serialize` only |
-| **0.7** | Query production (`offset`, `order_by`, `count`, OPTIONAL) | — |
-| **0.8** | Session lifecycle (`merge`, `refresh`, `expunge`, scoped session) | — |
-| **0.9** | HttpStore production (read/write URLs, mirror sync) | — |
-| **1.0** | RDF modeling in ORM layer | Multi-valued, lang tags, polymorphic query |
-| **1.1** | Ops (SHACL hook, bulk, logging) | SHACL validation |
-| **1.2** | Production GA (SPECS P0+P1 complete) | Stable mapping substrate |
+| **0.7** | Delegated file I/O | Thin `serializers.py`; TripleModel `parse` / `serialize` only |
+| **0.8** | Query lists | `offset`, `order_by`, `count`, OPTIONAL nullable hops |
+| **0.9** | Session cache | `merge`, `refresh`, `expunge`, scoped session docs |
+| **1.0** | Production HttpStore | Read/write URLs, mirror sync, `parse_query_results` |
+| **1.1** | Richer RDF models | Multi-valued, lang tags, polymorphic query (TripleModel + ORM) |
+| **1.2** | Production operations | SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging |
+| **1.3** | Production GA | SPECS P0+P1 complete; stable public API |
 
 ---
 
@@ -203,9 +203,12 @@ SparqlModel **depends** on `triplemodel>=0.10` and **pyoxigraph** (0.5+). Remain
 | **0.5** | Pyoxigraph + TripleModel 0.10 |
 | **0.6** | Async end-to-end |
 | **0.7** | Delegated file I/O |
-| **0.7–0.9** | Production query + session + HttpStore |
-| **1.0–1.1** | RDF modeling + ops |
-| **1.2** | Production GA |
+| **0.8** | Query lists |
+| **0.9** | Session cache |
+| **1.0** | Production HttpStore |
+| **1.1** | Richer RDF models |
+| **1.2** | Production operations |
+| **1.3** | Production GA |
 
 Detail: [ROADMAP.md](ROADMAP.md)
 
@@ -231,4 +234,4 @@ Detail: [ROADMAP.md](ROADMAP.md)
 4. Preserve ORM public API (`Field`, `Relationship`, `session.put`); change internals on unified `SPARQLModel(TripleModel)` base
 5. Document semantics in [ORM.md](ORM.md), [SPECS.md](SPECS.md), [PRODUCTION.md](PRODUCTION.md)
 6. Contract tests: SparqlModel `put` triple sets align with TripleModel `sync_to_graph` + cascade rules
-7. **SPECS Production checklist** is the **1.2** GA gate
+7. **SPECS Production checklist** is the **1.3** GA gate

@@ -58,7 +58,7 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 - Filtering `Person.name` on a `query(Organization)` chain
 - Combining OR and AND with `&`, e.g. `((A | B) & C)` — use `.where((A | B), C)` instead
 
-**Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.7** (compiler OPTIONAL for nullable relationships).
+**Fix:** Adjust filters; use raw `execute()` for OPTIONAL / absence patterns until **0.8** (compiler OPTIONAL for nullable relationships).
 
 ## `QueryError: Cannot combine OR and AND`
 
