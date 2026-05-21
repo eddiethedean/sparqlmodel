@@ -66,10 +66,10 @@ total = session.query(Person).where(...).count()
 ## Identity map and caching
 
 - After `put`, `get(Model, iri, depth=0)` returns the same instance when relationships are not materialized on the in-memory object.
-- `expire(Model, iri)` clears cache for that resource.
+- `expire(Model, iri)` clears cache for that resource (and drops a pending `put` for that IRI).
+- `expunge(model)` / `expunge_all()` detach instances from the session without changing the store.
+- `refresh(model, *, depth=0)` reloads from the store; `merge(model)` reconciles a detached instance with the identity map (no store write).
 - `depth=0` vs `depth=1` may cache separate hydrated views.
-
-**Planned (0.9):** `refresh`, `merge`, `expunge` for explicit cache control.
 
 ---
 
@@ -78,7 +78,7 @@ total = session.query(Person).where(...).count()
 | Concern | Today | Planned |
 |---------|-------|---------|
 | Write validation | Pydantic on `SPARQLModel` at construct / `put` | SHACL on `put` (**1.0**, TripleModel) — complements Pydantic |
-| Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **0.9** |
+| Load validation | Pydantic via hydration (`HydrationError` on type mismatch) | Same; multi-valued fields **1.1** |
 | Query logging | None | Structured SPARQL log (**1.0**) |
 | Bulk import | Repeated `put` | Bulk helpers (**1.0**) |
 | Async FastAPI routes | Sync `SessionDep` (blocking) | `AsyncSessionDep` + `AsyncHttpStore` (**0.6+**) |

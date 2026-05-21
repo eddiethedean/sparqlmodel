@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 
 from sparqlmodel import IRI, SPARQLSession
-from sparqlmodel.exceptions import StaleTripleWarning
+from sparqlmodel.exceptions import ConfigurationError, StaleTripleWarning
+from sparqlmodel.graph import (
+    cascade_subjects_for_removal,
+    owned_triples_for_subjects,
+    triples_to_graph,
+)
+from sparqlmodel.rdf_bridge import model_to_graph
 from tests.models import Person
 
 
@@ -239,6 +245,90 @@ def test_session_state_unit() -> None:
     state.add_pending(p)
     assert state.pending == [p]
     state.clear_pending()
+    state.expunge_all()
+    assert state.get_identity(identity_key(p)) is None
+
+
+def test_merge_returns_cached_identity(session: SPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    session.expunge(plain)
+    detached = Person(id=plain.id, name="Detached")
+    merged = session.merge(detached)
+    again = session.get(Person, plain.id)
+    assert merged is again
+    assert merged.name == "Detached"
+
+
+def test_merge_updates_cached_instance(session: SPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    cached = session.get(Person, plain.id)
+    assert cached is not None
+    detached = Person(id=plain.id, name="MergedName")
+    result = session.merge(detached)
+    assert result is cached
+    assert cached.name == "MergedName"
+
+
+def test_refresh_updates_identity_in_place(session: SPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    cached = session.get(Person, plain.id)
+    assert cached is plain
+    updated = Person(id=plain.id, name="Refreshed")
+    subjects = cascade_subjects_for_removal(updated, session.graph, for_put=True)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    add_g = model_to_graph(updated)
+    session.store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
+    assert cached.name == "Plain"
+    refreshed = session.refresh(cached)
+    assert refreshed is cached
+    assert cached.name == "Refreshed"
+
+
+def test_refresh_attaches_when_not_in_identity_map(session: SPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    detached = Person(id=plain.id, name="Plain")
+    session.expunge(detached)
+    loaded = session.refresh(detached)
+    assert loaded is not detached
+    assert loaded.name == "Plain"
+    assert session.get(Person, plain.id) is loaded
+
+
+def test_refresh_missing_subject_raises(session: SPARQLSession) -> None:
+    orphan = Person(id=IRI("urn:person:orphan"), name="Nobody")
+    with pytest.raises(ConfigurationError, match="not in store"):
+        session.refresh(orphan)
+
+
+def test_expunge_then_get_returns_new_instance(session: SPARQLSession, odos: Person) -> None:
+    session.put(odos)
+    first = session.get(Person, odos.id)
+    session.expunge(first)
+    second = session.get(Person, odos.id)
+    assert first is not None
+    assert second is not None
+    assert first is not second
+
+
+def test_expunge_all_clears_cache_keeps_pending(session: SPARQLSession, odos: Person) -> None:
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    session.autoflush = False
+    session.put(odos)
+    session.get(Person, odos.id)
+    session.put(other, flush=False)
+    assert len(session._state.pending) == 1
+    session.expunge_all()
+    assert len(session._state.pending) == 1
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    assert session._state.get_identity(identity_key_for_iri(Person, odos.id)) is None
+    session.flush()
+    assert session.get(Person, odos.id) is not None
+    assert session.get(Person, other.id) is not None
 
 
 def test_delete_expires_identity(session: SPARQLSession, odos: Person) -> None:

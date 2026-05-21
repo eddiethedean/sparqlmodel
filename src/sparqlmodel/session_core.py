@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from triplemodel import Store
 
+from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.fields import get_field_metadata, relationship_allows_iri
 from sparqlmodel.graph import (
     _predicate_pattern,
@@ -22,6 +23,7 @@ from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.session_state import (
     _HYDRATION_MISS,
     SessionState,
+    identity_key,
     identity_key_for_iri,
 )
 from sparqlmodel.stores.async_base import AsyncStoreProtocol
@@ -268,6 +270,65 @@ def expire_impl(
     state.evict_identity_prefix(key[0], key[1])
     state.invalidate_hydration_for(key[0], key[1])
     state.remove_pending_for(key[0], key[1])
+
+
+def _copy_validated_state(target: SPARQLModel, source: SPARQLModel) -> SPARQLModel:
+    """Copy validated field values from ``source`` onto ``target`` (same object id)."""
+    model_cls = type(target)
+    validated = model_cls.model_validate(source.model_dump())
+    for name in model_cls.model_fields:
+        setattr(target, name, getattr(validated, name))
+    return target
+
+
+def expunge_impl(state: SessionState, model: SPARQLModel) -> None:
+    """Remove ``model`` from the identity map and hydration cache."""
+    state.expire_model(model)
+
+
+def expunge_all_impl(state: SessionState) -> None:
+    """Clear identity map and hydration cache (pending queue unchanged)."""
+    state.expunge_all()
+
+
+def refresh_impl(
+    state: SessionState,
+    store: StoreProtocol | AsyncStoreProtocol,
+    model: SPARQLModel,
+    *,
+    depth: int,
+) -> SPARQLModel:
+    """Reload ``model`` from the store graph at ``depth``."""
+    validate_depth(depth)
+    model.ensure_id()
+    model_cls = type(model)
+    assert model.id is not None
+    loaded = hydrate_one(model_cls, model.id, store, depth=depth)
+    if loaded is None:
+        raise ConfigurationError(
+            f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
+        )
+    id_key = identity_key(model)
+    identity = state.get_identity(id_key)
+    if identity is not None:
+        _copy_validated_state(identity, loaded)
+        hkey = (model_cls, id_key[1], depth)
+        state.set_hydration(hkey, identity)
+        return identity
+    state.set_identity(loaded)
+    state.set_hydration((model_cls, id_key[1], depth), loaded)
+    return loaded
+
+
+def merge_impl(state: SessionState, model: SPARQLModel) -> SPARQLModel:
+    """Attach or reconcile ``model`` with the session identity map (no store write)."""
+    model.ensure_id()
+    id_key = identity_key(model)
+    identity = state.get_identity(id_key)
+    if identity is not None:
+        return _copy_validated_state(identity, model)
+    state.set_identity(model)
+    return model
 
 
 async def put_impl_async(

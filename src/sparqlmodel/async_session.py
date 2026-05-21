@@ -146,6 +146,28 @@ class AsyncSPARQLSession:
         self._check_open()
         session_core.expire_impl(self._state, model_cls, iri)
 
+    async def expunge(self, model: SPARQLModel) -> None:
+        """Detach ``model`` from the identity map and hydration cache (store unchanged)."""
+        self._check_open()
+        session_core.expunge_impl(self._state, model)
+
+    async def expunge_all(self) -> None:
+        """Clear the identity map and hydration cache; pending ``put`` queue is kept."""
+        self._check_open()
+        session_core.expunge_all_impl(self._state)
+
+    async def refresh(self, model: SPARQLModel, *, depth: int = 0) -> SPARQLModel:
+        """Reload ``model`` from the store at ``depth`` (updates cached instance when present)."""
+        self._check_open()
+        await self._maybe_autoflush()
+        return session_core.refresh_impl(self._state, self._store, model, depth=depth)
+
+    async def merge(self, model: SPARQLModel) -> SPARQLModel:
+        """Return the session instance for ``model``'s identity key (no store write)."""
+        self._check_open()
+        await self._maybe_autoflush()
+        return session_core.merge_impl(self._state, model)
+
     async def _maybe_autoflush(self) -> None:
         if self.autoflush and self._state.pending:
             await self.flush()

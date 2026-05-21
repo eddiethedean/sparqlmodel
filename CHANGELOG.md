@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-21
+
+### Added
+
+- **`SPARQLSession.merge` / `refresh` / `expunge` / `expunge_all`** — SQLAlchemy-style identity map control (sync and async)
+- **`AsyncSPARQLSession`** — same cache-control methods
+
+### Changed
+
+- Field updates on `merge` and `refresh` use Pydantic `model_validate` when copying graph state onto cached instances
+
+### Documentation
+
+- Sessions guide — cache control flows and object states
+- ORM, PRODUCTION, FastAPI — scoped session pattern, threading, lifecycle tables
+- SPECS P1 session items checked; ROADMAP **0.9** shipped
+
 ## [0.8.1] - 2026-05-21
 
 ### Fixed

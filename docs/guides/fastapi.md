@@ -74,6 +74,18 @@ Do not share one `SPARQLSession` across concurrent requests. Inject `SessionDep`
 With `init_app` / `http_store_lifespan`, prefer `SessionDep` or `get_session` (they keep `close_on_exit=False` on the shared store). Do not override with `session_dependency(close_on_exit=True)` when using a shared `HttpStore` — that would close the HTTP client after the first request.
 ```
 
+## Scoped session pattern (0.9+)
+
+SparqlModel does not ship a `scoped_session()` factory. Use the same pattern as SQLAlchemy + FastAPI:
+
+| Piece | Role |
+|-------|------|
+| `app.state.sparql_store` | One `HttpStore` / `MemoryStore` for the process (via `init_app` or `http_store_lifespan`) |
+| `SessionDep` / `AsyncSessionDep` | One session per request; `close_on_exit=False` on the shared store |
+| `merge` / `refresh` / `expunge` | Optional cache control inside a long handler or background job (see {doc}`sessions`) |
+
+Scripts can use `with SPARQLSession(store=shared_store, close_on_exit=False) as session:` per unit of work, or open a new session per thread when sharing a store across threads (sessions are not thread-safe).
+
 ## Content negotiation
 
 `negotiated_response(request, model)` inspects `Accept` and returns Turtle or JSON-LD. For APIs that always return JSON-LD, call `jsonld_response(model)` directly.

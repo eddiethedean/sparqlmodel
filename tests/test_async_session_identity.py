@@ -5,6 +5,14 @@ from __future__ import annotations
 import pytest
 
 from sparqlmodel import IRI, AsyncSPARQLSession
+from sparqlmodel.exceptions import ConfigurationError
+from sparqlmodel.graph import (
+    cascade_subjects_for_removal,
+    owned_triples_for_subjects,
+    triples_to_graph,
+)
+from sparqlmodel.rdf_bridge import model_to_graph
+from sparqlmodel.session_state import identity_key_for_iri
 from sparqlmodel.stores.async_memory import AsyncMemoryStore
 from tests.models import Person
 
@@ -339,3 +347,58 @@ async def test_async_query_options(async_session: AsyncSPARQLSession) -> None:
     sparql = q._compile()
     assert "SELECT" in sparql
     assert len(await q.all()) >= 1
+
+
+async def test_async_merge_returns_cached_identity(async_session: AsyncSPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    await async_session.put(plain)
+    await async_session.expunge(plain)
+    detached = Person(id=plain.id, name="Detached")
+    merged = await async_session.merge(detached)
+    again = await async_session.get(Person, plain.id)
+    assert merged is again
+    assert merged.name == "Detached"
+
+
+async def test_async_refresh_updates_identity(async_session: AsyncSPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    await async_session.put(plain)
+    cached = await async_session.get(Person, plain.id)
+    assert cached is plain
+    updated = Person(id=plain.id, name="Refreshed")
+    subjects = cascade_subjects_for_removal(updated, async_session.graph, for_put=True)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, async_session.graph))
+    add_g = model_to_graph(updated)
+    await async_session.store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
+    refreshed = await async_session.refresh(cached)
+    assert refreshed is cached
+    assert cached.name == "Refreshed"
+
+
+async def test_async_expunge_then_get_new_instance(
+    async_session: AsyncSPARQLSession, odos: Person
+) -> None:
+    first = await async_session.get(Person, odos.id)
+    await async_session.expunge(first)
+    second = await async_session.get(Person, odos.id)
+    assert first is not None
+    assert second is not None
+    assert first is not second
+
+
+async def test_async_expunge_all_keeps_pending(async_session: AsyncSPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    other = Person(id=IRI("urn:person:other"), name="Other")
+    async_session.autoflush = False
+    await async_session.put(plain)
+    await async_session.put(other, flush=False)
+    assert len(async_session._state.pending) == 1
+    await async_session.expunge_all()
+    assert len(async_session._state.pending) == 1
+    assert async_session._state.get_identity(identity_key_for_iri(Person, plain.id)) is None
+
+
+async def test_async_refresh_missing_raises(async_session: AsyncSPARQLSession) -> None:
+    orphan = Person(id=IRI("urn:person:orphan"), name="Nobody")
+    with pytest.raises(ConfigurationError, match="not in store"):
+        await async_session.refresh(orphan)

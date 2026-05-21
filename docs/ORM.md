@@ -99,6 +99,10 @@ You generally **do not** import `triplemodel` in application code unless you are
 | **`flush()`** / **`rollback_pending()`** | Apply or discard queued `put(..., flush=False)` writes. |
 | **`close()`** | Close the backing store when it implements `close()` (e.g. `HttpStore`). |
 | **`expire(Model, iri)`** | Evict cached instances for an IRI. |
+| **`expunge(model)`** | Detach one instance from the identity map (store unchanged). |
+| **`expunge_all()`** | Clear identity map and hydration cache (pending queue unchanged). |
+| **`refresh(model, *, depth=0)`** | Reload from the store; update cached instance when present. |
+| **`merge(model)`** | Return the session’s canonical instance for that identity key (no store write). |
 
 ```python
 with SPARQLSession() as session:
@@ -245,7 +249,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** `merge` / `refresh` / `expunge` (**0.9**), production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
+**Not yet available (planned):** production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Session cache control** (`merge`, `refresh`, `expunge`, `expunge_all`) shipped in **0.9.0**. **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
 
 ---
 

@@ -31,7 +31,11 @@ with SPARQLSession() as session:
 | `query(Model).where(...)` | Fluent SELECT compiled to SPARQL |
 | `execute(sparql)` | Raw SPARQL SELECT |
 | `flush()` / `rollback_pending()` | Control `put(..., flush=False)` queue |
-| `expire(Model, iri)` | Evict identity map / hydration cache |
+| `expire(Model, iri)` | Evict cache by IRI (also drops matching pending `put`) |
+| `expunge(model)` | Detach one instance from identity / hydration cache (store unchanged) |
+| `expunge_all()` | Clear all identity and hydration entries (pending queue kept) |
+| `refresh(model, *, depth=0)` | Reload from the store into the cached instance when present |
+| `merge(model)` | Attach or reconcile with the session identity map (no store write) |
 
 ## Pending flush queue
 
@@ -50,9 +54,25 @@ Pending models are not written to the store until `flush()` (or successful conte
 
 ## Identity map
 
-After `put`, `get(Model, iri, depth=0)` returns the **same Python instance** when relationships are not materialized on the object. Use `expire(Model, iri)` after external graph changes.
+After `put`, `get(Model, iri, depth=0)` returns the **same Python instance** when relationships are not materialized on the object. Different `depth` values may cache separate hydrated views.
 
-Different `depth` values may cache separate hydrated views.
+### Cache control (0.9+)
+
+| Method | When to use |
+|--------|-------------|
+| `expire(Model, iri)` | External graph change for one IRI; also removes a queued pending `put` for that subject |
+| `expunge(model)` | Detach a specific instance (e.g. before long-lived work on a copy) |
+| `expunge_all()` | Reset session caches between test cases; does **not** flush or clear the pending queue |
+| `refresh(model, depth=...)` | Reload attributes from the store (updates the identity-map object in place when cached) |
+| `merge(model)` | Re-attach a detached instance or copy field state onto the canonical session instance |
+
+```text
+transient → (add|put) → persistent (in store + identity map)
+persistent → expunge → detached (may merge again)
+persistent → refresh → persistent (reloaded from store)
+```
+
+`refresh` and `merge` do not write to the store — use `put` to persist changes. If `depth=0` but the instance has materialized nested `SPARQLModel` attributes, reload only shallow fields unless you `refresh(..., depth=1)` or `expunge` then `get` at the needed depth.
 
 ## Choosing a store
 

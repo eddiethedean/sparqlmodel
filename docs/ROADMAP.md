@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **[0.9 — Session cache](#09--session-cache-control)**. **0.8** query lists shipped **2026-05-21**. Forward plan: [0.9 → 1.3](#forward-roadmap-07--13).
+**Current focus (next release):** **[1.0 — Production HttpStore](#10--production-httpstore)**. **0.9** session cache shipped **2026-05-21**. Forward plan: [1.0 → 1.3](#forward-roadmap-07--13).
 
 ---
 
@@ -296,7 +296,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 1.3)
 
-**Shipped:** [0.8 — Query lists](#08--query-lists) (2026-05-21). **Next release:** **0.9**.
+**Shipped:** [0.9 — Session cache](#09--session-cache-control) (2026-05-21). **Next release:** **1.0**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
@@ -306,7 +306,7 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 |---------|-------|-----------------|
 | **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry — **shipped** |
 | **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters — **shipped** |
-| **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns |
+| **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns — **shipped** |
 | **1.0** | Stores | **Production HttpStore** — mirror sync, read/write URLs, robust remote SELECT |
 | **1.1** | Modeling | **Richer RDF fields** — multi-valued, `@lang`, polymorphic query, inverse nav |
 | **1.2** | Operations | **SHACL, bulk I/O, ASK/CONSTRUCT, disk store**, performance and logging |
@@ -375,16 +375,18 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 ### 0.9 — Session cache control
 
-**Track:** Session · **Depends on:** 0.8
+**Status:** shipped as **0.9.0** (2026-05-21).
+
+**Track:** Session · **Depends on:** 0.8 (shipped)
 
 **Goal:** SQLAlchemy-style **identity map control** for long-lived processes and tests.
 
 | Deliverable | Notes |
 |-------------|--------|
-| `merge`, `refresh`, `expunge`, `expunge_all` on sync and async sessions | Validated instances via `model_validate` after graph merge |
-| Document identity map + hydration cache rules | [ORM.md](ORM.md) — depth, materialized relationships |
-| Scoped session helper or documented `SessionDep` / `AsyncSessionDep` pattern | FastAPI + scripts |
-| Threading guide (complement 0.6 asyncio docs) | One session per thread/task |
+| [x] `merge`, `refresh`, `expunge`, `expunge_all` on sync and async sessions | Validated field copy via `model_validate` after graph reload |
+| [x] Document identity map + hydration cache rules | [ORM.md](ORM.md), [guides/sessions.md](guides/sessions.md) |
+| [x] Scoped session pattern documented | [guides/fastapi.md](guides/fastapi.md) — `SessionDep` / `AsyncSessionDep`, `close_on_exit=False` |
+| [x] Threading guide | [PRODUCTION.md](PRODUCTION.md), sessions guide — one session per thread/task |
 
 **Exit criteria:** SPECS **P1** session lifecycle items for **0.9** checked; ORM guide covers detach/merge flows.
 
@@ -499,7 +501,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | `order_by` | `order_by` | Shipped (**0.8**) |
 | `count` | `count()` | Shipped (**0.8**) |
 | Relationships + eager load | `Relationship`, `depth` | Shipped (depth 0–2) |
-| `merge` / `refresh` / `expunge` | same | **0.9** |
+| `merge` / `refresh` / `expunge` | same | Shipped (**0.9**) |
 | Transactions | pending queue + store updates | Partial (remote txn **1.0**) |
 | FastAPI `Depends(Session)` | `SessionDep` | Shipped |
 | Async session / routes | `AsyncSPARQLSession`, `AsyncSessionDep` | Shipped (**0.6**) |
@@ -532,8 +534,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities (forward work)
 
-1. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
-2. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
+1. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
 3. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
 4. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
 5. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.

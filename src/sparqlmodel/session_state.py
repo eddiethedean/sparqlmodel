@@ -101,6 +101,11 @@ class SessionState:
             self.evict_identity_prefix(model_cls, iri_key)
             self.invalidate_hydration_for_iri(iri_key)
 
+    def expunge_all(self) -> None:
+        """Clear identity map and hydration cache (pending queue unchanged)."""
+        self._identity.clear()
+        self._hydration.clear()
+
 
 class _HydrationMiss:
     pass

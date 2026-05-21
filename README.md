@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#081---2026-05-21) (0.8.1)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#090---2026-05-21) (0.9.0)
 
 ---
 
@@ -227,11 +227,11 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.8.1)
+## Known limitations (0.9.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))
-- `merge` / `refresh` / `expunge` planned **0.9** ([roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#09--session-cache-control))
+- Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching
 - `==`, `<`, `>`, and `in_` on optional paths still exclude unbound values (SPARQL-native)

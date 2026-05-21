@@ -50,12 +50,12 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] `Query.count()` — **0.8.0**
 - [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
 - [ ] HttpStore mirror sync or remote-authoritative `get` contract — **1.0**
-- [ ] Scoped session pattern documented (FastAPI + scripts) — **0.9**
+- [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
 ## P1 — SQLModel / SPARQLMojo parity
 
-- [ ] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.9**
+- [x] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.9.0**
 - [ ] Multi-valued scalar and relationship fields — **1.1** (TripleModel + SparqlModel hydrate)
 - [ ] Language-tagged literals (`@lang`) — **1.1** (TripleModel)
 - [ ] Polymorphic queries (`rdf:type` subclasses) — **1.1**
@@ -97,6 +97,11 @@ with SPARQLSession() as session:
 | `execute(sparql)` | Raw SELECT; auto-prefixes when configured |
 | `flush()` / `rollback_pending()` | Apply or discard pending `put` queue |
 | `close()` | Call `store.close()` when available |
+| `expire(model_cls, iri)` | Evict identity and hydration cache for an IRI (**0.9** also drops pending `put` for that subject) |
+| `expunge(model)` | Detach one instance from session cache (store unchanged) — **0.9** |
+| `expunge_all()` | Clear identity map and hydration cache (pending queue unchanged) — **0.9** |
+| `refresh(model, *, depth=0)` | Reload from store into cached instance when present — **0.9** |
+| `merge(model)` | Return canonical session instance for identity key (no store write) — **0.9** |
 
 ## Context manager
 
@@ -110,7 +115,7 @@ On clean exit: `flush()` if the pending queue is non-empty. On exception: `rollb
 
 ## Session lifecycle (target API)
 
-**Current (0.2):** Context manager flushes pending `put` queue on success; `rollback_pending` on error; `expire(model_cls, iri)` evicts identity and hydration cache. No `merge`, `refresh`, or `expunge`. Not thread-safe.
+**Current (0.9):** Context manager flushes pending `put` queue on success; `rollback_pending` on error; `expire(model_cls, iri)` evicts identity and hydration cache; `merge`, `refresh`, `expunge`, and `expunge_all` for explicit cache control (sync and async). Not thread-safe.
 
 **Target (1.2):**
 
