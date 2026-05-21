@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-20
+
+### Changed
+
+- **`serializers`** — file I/O delegates format resolution to TripleModel `infer_format`; removed `SUPPORTED_FORMATS` and local alias tables
+- **`export_model`** — uses `SPARQLModel.serialize()` (TripleModel) instead of `model_to_graph` + `dump_graph`
+- **FastAPI** — `negotiated_response` resolves `Accept` via `infer_format`; models serialize directly for HTTP bodies
+
+### Documentation
+
+- JSON-LD: `model_dump_jsonld()` / `model_validate_jsonld()` remain ORM dict helpers (cascade-aware); file/HTTP JSON-LD uses `serialize(format="json-ld")` or `export_model`
+- README, ORM guide, and SPECS updated for delegated file I/O; prefer `Model.parse` / `Model.serialize` for files
+
+### Notes
+
+- `sparqlmodel.serializers` (`export_graph`, `import_graph`, `export_model`) remains for backward compatibility — thin wrappers only
+- Unsupported format errors now come from TripleModel (`Unknown RDF format`)
+
 ## [0.6.0] - 2026-05-20
 
 ### Added

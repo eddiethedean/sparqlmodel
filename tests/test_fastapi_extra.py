@@ -12,8 +12,10 @@ from starlette.testclient import TestClient  # noqa: E402
 
 from sparqlmodel import IRI  # noqa: E402
 from sparqlmodel.fastapi import (  # noqa: E402
+    _DEFAULT_JSONLD,
+    _DEFAULT_TURTLE,
     SessionDep,
-    _negotiate_format_kind,
+    _negotiate_rdf_format,
     init_app,
     jsonld_response,
     negotiated_response,
@@ -51,13 +53,13 @@ def test_negotiated_response_jsonld() -> None:
     assert response.media_type == "application/ld+json"
 
 
-def test_negotiate_format_kind_edge_cases() -> None:
-    mapping = {"text/turtle": "turtle", "application/ld+json": "jsonld"}
-    assert _negotiate_format_kind("", mapping) == "turtle"
-    assert _negotiate_format_kind("*/*", mapping) == "turtle"
-    assert _negotiate_format_kind("  , text/turtle", mapping) == "turtle"
-    assert _negotiate_format_kind("application/ld+json;q=not-a-number", mapping) == "jsonld"
-    assert _negotiate_format_kind("*/*;q=0.5", mapping) == "turtle"
+def test_negotiate_rdf_format_edge_cases() -> None:
+    media = (_DEFAULT_TURTLE, _DEFAULT_JSONLD)
+    assert _negotiate_rdf_format("", media) == "turtle"
+    assert _negotiate_rdf_format("*/*", media) == "turtle"
+    assert _negotiate_rdf_format("  , text/turtle", media) == "turtle"
+    assert _negotiate_rdf_format("application/ld+json;q=not-a-number", media) == "json-ld"
+    assert _negotiate_rdf_format("*/*;q=0.5", media) == "turtle"
 
 
 def test_negotiated_response_respects_q_values() -> None:

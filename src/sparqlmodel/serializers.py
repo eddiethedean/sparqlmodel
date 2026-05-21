@@ -1,41 +1,70 @@
-"""Optional RDF export (interim); prefer TripleModel parse/serialize. Not required for the ORM."""
+"""Thin RDF file I/O wrappers over TripleModel; ORM JSON-LD dict helpers.
+
+File parse/serialize: use ``SPARQLModel.serialize()``, ``SPARQLModel.parse()``,
+or ``triplemodel.load_graph``. Dict JSON-LD: ``model_to_jsonld`` / ``model_from_jsonld``
+(cascade-aware; not identical to graph JSON-LD export).
+"""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, TypeVar, get_args, get_origin
 
 from triplemodel import Store, load_graph
-from triplemodel.io.files import dump_graph
+from triplemodel.io import dump_graph, infer_format
 
 from sparqlmodel.fields import get_field_metadata
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.types import IRI, compact_iri, expand_iri
 
 T = TypeVar("T", bound=SPARQLModel)
 
-SUPPORTED_FORMATS = frozenset({"turtle", "ttl", "nt", "ntriples", "xml", "json-ld", "jsonld"})
+
+def _resolve_rdf_format(format: str) -> str:
+    """Resolve a format hint via TripleModel ``infer_format``."""
+    hint = format.strip()
+    if not hint:
+        raise ValueError("Cannot infer RDF format: pass format= explicitly.")
+    try:
+        return infer_format(hint)
+    except ValueError:
+        pass
+    try:
+        return infer_format(Path(f"_.{hint.lstrip('.')}"))
+    except ValueError:
+        pass
+    return infer_format(None, explicit_format=hint.replace("_", "-"))
 
 
-def export_graph(graph: Store, format: str = "turtle") -> str:
-    """Serialize a graph to a string."""
-    fmt = _normalize_format(format)
-    result = dump_graph(graph, format=fmt)
+def _normalize_format(format: str) -> str:
+    """Backward-compatible alias for :func:`_resolve_rdf_format`."""
+    return _resolve_rdf_format(format)
+
+
+def _serialize_result_to_str(result: str | bytes | None) -> str:
+    if result is None:
+        return ""
     if isinstance(result, bytes):
         return result.decode("utf-8")
-    assert isinstance(result, str)
     return result
 
 
+def export_graph(graph: Store, format: str = "turtle") -> str:
+    """Serialize a graph to a string (delegates to TripleModel ``dump_graph``)."""
+    fmt = _resolve_rdf_format(format)
+    return _serialize_result_to_str(dump_graph(graph, format=fmt))
+
+
 def import_graph(data: str, format: str = "turtle") -> Store:
-    """Parse RDF data into a :class:`~triplemodel.Store`."""
-    fmt = _normalize_format(format)
+    """Parse RDF data into a :class:`~triplemodel.Store` (delegates to ``load_graph``)."""
+    fmt = _resolve_rdf_format(format)
     return load_graph(data, format=fmt)
 
 
 def export_model(model: SPARQLModel, format: str = "turtle") -> str:
-    """Serialize a model instance to RDF."""
-    return export_graph(model_to_graph(model), format)
+    """Serialize a model instance to RDF (delegates to ``SPARQLModel.serialize``)."""
+    fmt = _resolve_rdf_format(format)
+    return _serialize_result_to_str(model.serialize(format=fmt))
 
 
 def _annotation_allows_iri(annotation: Any) -> bool:
@@ -122,7 +151,12 @@ def _jsonld_node_body(
 
 
 def model_to_jsonld(model: SPARQLModel) -> dict[str, Any]:
-    """Convert a model to a JSON-LD document."""
+    """Build a JSON-LD document dict for API use (ORM presentation layer).
+
+    Cascade ``Relationship`` embeds are nested; non-cascade embeds are omitted.
+    For full graph JSON-LD (all triples), use :func:`export_model` or
+    ``SPARQLModel.serialize(format=\"json-ld\")``.
+    """
     prefixes = model.get_prefixes()
     ctx: dict[str, Any] = {"@context": dict(prefixes)}
     node = _jsonld_node_body(model, visited=set())
@@ -130,7 +164,11 @@ def model_to_jsonld(model: SPARQLModel) -> dict[str, Any]:
 
 
 def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
-    """Deserialize a model from JSON-LD."""
+    """Deserialize a model from a JSON-LD document dict (ORM presentation layer).
+
+    Complements :meth:`~sparqlmodel.model.SPARQLModel.model_validate_jsonld`.
+    For RDF files, prefer ``SPARQLModel.parse()`` or :func:`import_graph`.
+    """
     prefixes = {**model_cls.get_prefixes()}
     context = data.get("@context", {})
     if isinstance(context, dict):
@@ -209,17 +247,3 @@ def model_from_jsonld(model_cls: type[T], data: dict[str, Any]) -> T:
             kwargs[name] = IRI(str(rel_data))
 
     return model_cls.model_validate(kwargs)
-
-
-def _normalize_format(format: str) -> str:
-    fmt = format.lower().replace("_", "-")
-    mapping = {
-        "ttl": "turtle",
-        "nt": "nt",
-        "ntriples": "nt",
-        "jsonld": "json-ld",
-    }
-    normalized = mapping.get(fmt, fmt)
-    if normalized not in SUPPORTED_FORMATS and fmt not in SUPPORTED_FORMATS:
-        raise ValueError(f"Unsupported format: {format}")
-    return normalized

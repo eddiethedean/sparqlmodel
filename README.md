@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#060---2026-05-20) (0.6.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#070---2026-05-20) (0.7.0)
 
 ---
 
@@ -97,7 +97,7 @@ class Person(SPARQLModel):
 
 - **`extra="forbid"`** — unknown fields on a model raise at validation time (safer for APIs).
 - **FastAPI** — reuse the same `SPARQLModel` classes for request/response bodies (see [FastAPI](#fastapi) below).
-- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` on each model (serializers delegate to TripleModel; prefer TripleModel `load_graph` / `dump_graph` for file I/O).
+- **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` for API dicts (cascade-aware); files and HTTP bodies use `model.serialize(format="json-ld")` or `Person.parse(...)`.
 
 Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md#pydantic-integration)
 
@@ -199,12 +199,14 @@ def person(iri: str, request: Request, session: SessionDep) -> object:
 ## Export
 
 ```python
-from sparqlmodel.serializers import export_model
+print(odos.serialize(format="turtle"))
 
+# or backward-compatible wrappers:
+from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
-Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/triplemodel) `parse` / `serialize`; see the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md).
+File parse/serialize is implemented by [TripleModel](https://github.com/eddiethedean/triplemodel) (`parse`, `serialize`, `load_graph`). See the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--13).
 
 ---
 
@@ -224,7 +226,7 @@ Long term, file I/O moves to [TripleModel](https://github.com/eddiethedean/tripl
 
 ---
 
-## Known limitations (0.6.0)
+## Known limitations (0.7.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore`: mirror may lag behind the remote dataset for `get` / cascade; `query().all()` / `.first()` only hydrate IRIs present in the mirror (production mirror sync planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore))

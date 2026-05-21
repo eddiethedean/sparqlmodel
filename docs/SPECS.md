@@ -15,13 +15,15 @@ This document specifies the **SparqlModel ORM layer**: session API, query compil
 | Cascade / orphans on `put` | Yes | No |
 | Hydration `depth` | Yes | No |
 | Stores | Yes | No |
-| Model ↔ triples, terms, files | `SPARQLModel(TripleModel)` (0.4+); serializers interim until 0.6 | Yes |
+| Model ↔ triples, terms, files | `SPARQLModel(TripleModel)` (0.4+); thin `serializers` wrappers (0.7) | Yes |
 
 [ORM.md](ORM.md) · [ECOSYSTEM.md](ECOSYSTEM.md) · [ROADMAP.md](ROADMAP.md) · [PRODUCTION.md](PRODUCTION.md)
 
 ---
 
-# Production ORM checklist (1.3 GA gate) {#production-orm-checklist-13-ga-gate}
+(production-orm-checklist-13-ga-gate)=
+
+# Production ORM checklist (1.3 GA gate)
 
 Normative checklist for declaring SparqlModel **production-ready** (version **1.3**). See [ROADMAP.md — Forward roadmap](ROADMAP.md#forward-roadmap-07--13) for milestone versions.
 
@@ -299,7 +301,7 @@ Remove owned triples for cascade subject set (no re-add).
 
 **Dependencies (0.5+):** `triplemodel>=0.10.0,<2`, `pyoxigraph>=0.5,<0.6` in `pyproject.toml` (no core `rdflib`).
 
-**Today (0.5+):** `SPARQLModel(TripleModel)`; session graphs are `triplemodel.Store`; `graph.py` holds cascade/orphan policy; `rdf_bridge` owns graph I/O. `serializers.py` delegates to TripleModel file I/O; full retirement planned **0.7**.
+**Today (0.7+):** `SPARQLModel(TripleModel)`; session graphs are `triplemodel.Store`; `graph.py` holds cascade/orphan policy; `rdf_bridge` owns graph I/O. `serializers.py` is thin wrappers over TripleModel `infer_format`, `load_graph`, and `serialize`.
 
 **Target wiring (0.4+):**
 
@@ -420,7 +422,7 @@ Parallel to the sync stack; sync API remains supported.
 | `flush()` | Not a full remote transaction; partial failure re-queues remainder (0.2+) |
 | Sessions | Not thread-safe; one session per task unless scoped externally |
 | Closed session | After `close()`, all CRUD/query methods raise `RuntimeError`; share the store via a new session |
-| Interim mapping | **0.3.0:** `_triple.py` adapter; **0.4** Option A removes it; `serializers.py` interim until **0.7** |
+| Interim mapping | **0.3.0:** `_triple.py` adapter; **0.4** Option A removes it; `serializers.py` thin wrappers since **0.7** |
 
 ## Other (current)
 
@@ -493,7 +495,7 @@ sparqlmodel/
   model.py         # SPARQLModel(TripleModel) — 0.4+
   fields.py        # Field/Relationship sugar → rdf_field / Predicate
   graph.py         # cascade/orphan policy only
-  serializers.py   # → TripleModel parse/serialize (retiring 0.6)
+  serializers.py   # thin TripleModel parse/serialize wrappers (0.7)
   stores/
   rdf_bridge.py    # graph I/O (Option A; replaced _triple.py in 0.4)
 ```

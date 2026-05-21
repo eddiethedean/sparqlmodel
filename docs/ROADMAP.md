@@ -26,9 +26,9 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Dependency:** `triplemodel>=0.10.0,<2`, `pyoxigraph>=0.5,<0.6` — **shipped** in **0.5.0** (`pyproject.toml`). Core install has **no rdflib**.
 
-**Integration debt:** `serializers.py` delegates to TripleModel `load_graph` / `dump_graph` — full retirement of duplicate format tables in **0.7**. `graph.py` is cascade/orphan policy only.
+**Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus (next release):** **[0.7 — Delegated file I/O](#07--delegated-file-io)**. **0.6** async shipped **2026-05-20**. Forward plan: [0.7 → 1.3](#forward-roadmap-07--13).
+**Current focus (next release):** **[0.8 — Query lists](#08--query-lists)**. **0.7** delegated file I/O shipped **2026-05-20**. Forward plan: [0.8 → 1.3](#forward-roadmap-07--13).
 
 ---
 
@@ -67,7 +67,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 |---------|--------|
 | `triplemodel>=0.9.0,<2` required dependency | Done |
 | Interim mapping in `graph.py` | **Removed 0.3.0** — cascade-only |
-| Interim `serializers.py` (to retire) | Thin wrappers over TripleModel I/O — full retirement **0.7** |
+| Interim `serializers.py` | Thin wrappers over TripleModel I/O — **0.7** shipped |
 
 ---
 
@@ -216,7 +216,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | [Store](https://pyoxigraph.readthedocs.io/en/stable/store.html) — in-memory `add` / `remove` / `query` | Via `triplemodel.Store` in `MemoryStore`, `HttpStore` mirror, `rdf_bridge` |
 | RDF-star quoted triples in UPDATE | `term_to_n3` emits `<< s p o >>` |
 | SPARQL SELECT | `MemoryStore.query` → `Store.query`; compiler + session `execute` |
-| File parse/serialize (Turtle, JSON-LD, N-Triples, …) | Via TripleModel `load_graph` / `dump_graph` (`serializers.py` wrappers until **0.7**) |
+| File parse/serialize (Turtle, JSON-LD, N-Triples, …) | Via TripleModel `load_graph` / `dump_graph` (`serializers.py` thin wrappers, **0.7**) |
 
 #### Gaps — add to roadmap (by owner)
 
@@ -233,7 +233,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | Blank-node merge on import | `parse(..., rename_blank_nodes=True)`, `Dataset.canonicalize` | TripleModel | **1.1** (document in **0.7**) |
 | Directional literals | `Literal.direction` | TripleModel | **1.1** |
 | Full RDF-star in models (not just UPDATE N3) | `RdfFormat.supports_rdf_star`, quoted triple fields | TripleModel + SparqlModel | **post-1.3** |
-| Negotiated export uses string format names | `RdfFormat.from_media_type`, `QueryResultsFormat` | TripleModel + FastAPI extra | **0.7** / **1.2** |
+| Negotiated export uses string format names | `infer_format` on `Accept` | FastAPI extra | **0.7** shipped |
 | `pyoxigraph.Variable` in compiler | `Variable` | SparqlModel (optional) | **post-1.3** |
 
 **Intentionally delegated (not SparqlModel gaps):** `parse` / `serialize` / TriG / N-Quads / N3 parsers live in **TripleModel** per [ECOSYSTEM.md](ECOSYSTEM.md). SparqlModel **0.7** retires duplicate format tables; verify TripleModel passes through pyoxigraph `lenient`, `rename_blank_nodes`, and `without_named_graphs` where appropriate.
@@ -296,7 +296,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 1.3)
 
-**Shipped:** [0.6 — Async end-to-end](#06--async-end-to-end) (2026-05-20). **Next release:** **0.7**.
+**Shipped:** [0.7 — Delegated file I/O](#07--delegated-file-io) (2026-05-20). **Next release:** **0.8**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
@@ -304,7 +304,7 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 | Release | Track | Primary outcome |
 |---------|-------|-----------------|
-| **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry |
+| **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry — **shipped** |
 | **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters |
 | **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns |
 | **1.0** | Stores | **Production HttpStore** — mirror sync, read/write URLs, robust remote SELECT |
@@ -324,28 +324,9 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 | **Operations** | 1.2 | SHACL hook on `put`, bulk helpers, `OxigraphStore`, logging | `triplemodel[shacl]` engine |
 | **GA** | 1.3 | Checklist, security review, migration guide | Frozen mapping API for apps |
 
-```mermaid
-flowchart LR
-  subgraph integration [Integration]
-    v07["0.7 File I/O"]
-  end
-  subgraph api [API layer]
-    v08["0.8 Query lists"]
-    v09["0.9 Session cache"]
-  end
-  subgraph deploy [Deployment]
-    v10["1.0 HttpStore"]
-  end
-  subgraph data [Data model]
-    v11["1.1 RDF fields"]
-  end
-  subgraph ops [Operations]
-    v12["1.2 Ops"]
-  end
-  subgraph ga [GA]
-    v13["1.3 Production GA"]
-  end
-  v07 --> v08 --> v09 --> v10 --> v11 --> v12 --> v13
+```text
+0.7 File I/O → 0.8 Query lists → 0.9 Session cache → 1.0 HttpStore
+  → 1.1 RDF fields → 1.2 Ops → 1.3 Production GA
 ```
 
 **Why this order:** list endpoints (**0.8**) do not require remote-store work but unblock FastAPI apps; session cache (**0.9**) clarifies identity before multi-instance HttpStore (**1.0**); richer fields (**1.1**) depend on TripleModel mapping releases; ops (**1.2**) assume stable query/store/model APIs; **1.3** is checklist closure only (no new features).
@@ -354,21 +335,19 @@ flowchart LR
 
 ### 0.7 — Delegated file I/O
 
+**Status:** shipped as **0.7.0** (2026-05-20).
+
 **Track:** Integration · **Depends on:** 0.6 (shipped)
 
 **Goal:** Zero format logic in SparqlModel — only TripleModel (pyoxigraph) parses and serializes RDF documents.
 
-| Deliverable | Owner |
-|-------------|--------|
-| `serializers.py` — thin wrappers calling `TripleModel.serialize` / `load_graph` / `infer_format` | SparqlModel |
-| Remove `SUPPORTED_FORMATS` and duplicate alias tables from SparqlModel | SparqlModel |
-| Docs and examples: file round-trip via `Model.parse` / `Model.serialize` or `triplemodel.io` | SparqlModel docs |
-| FastAPI `negotiated_response` uses `infer_format` or `RdfFormat.from_media_type` (no local media map) | SparqlModel `[fastapi]` |
-| `model_dump_jsonld` / `model_validate_jsonld` — public API kept; implementation delegated upstream or via graph JSON-LD round-trip (document semantics) | SparqlModel + TripleModel |
+- [x] `serializers.py` — thin wrappers calling `TripleModel.serialize` / `load_graph` / `infer_format`
+- [x] Remove `SUPPORTED_FORMATS` and duplicate alias tables from SparqlModel
+- [x] Docs and examples: file round-trip via `Model.parse` / `Model.serialize` or `triplemodel.io`
+- [x] FastAPI `negotiated_response` uses `infer_format` (no local format registry)
+- [x] `model_dump_jsonld` / `model_validate_jsonld` — public API kept; ORM dict semantics documented vs graph JSON-LD export
 
 **Exit criteria:** Every Turtle/JSON-LD/NT file path goes through TripleModel; `make ci` green; no new format names added only in SparqlModel.
-
-**Out of scope:** `offset` / `order_by` / `count` (**0.8**); HttpStore mirror sync (**1.0**); deleting the `sparqlmodel.serializers` module (keep thin re-exports for backward compatibility).
 
 ---
 
@@ -551,15 +530,14 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ## Priorities (forward work)
 
-1. **0.7** — Retire SparqlModel format tables; document TripleModel file I/O; thin `serializers.py` only.
-2. **0.8** — Query lists (`offset`, `order_by`, `count`, OPTIONAL nullable hops) — unblocks production HTTP list APIs.
-3. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
-4. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
-5. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
-6. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
-7. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
-8. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
-9. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **1.3** GA.
+1. **0.8** — Query lists (`offset`, `order_by`, `count`, OPTIONAL nullable hops) — unblocks production HTTP list APIs.
+2. **0.9** — Session cache (`merge`, `refresh`, `expunge`, scoped session docs).
+3. **1.0** — HttpStore production (mirror sync, read/write URLs, `parse_query_results`).
+4. **1.1** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
+5. **1.2** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
+6. **1.3** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
+7. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
+8. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **1.3** GA.
 
 ---
 

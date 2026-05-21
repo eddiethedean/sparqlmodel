@@ -173,6 +173,11 @@ def test_export_graph_bytes_decode() -> None:
         assert export_graph(MemoryStore().graph, format="turtle").startswith("@prefix")
 
 
+def test_export_graph_none_result() -> None:
+    with patch("sparqlmodel.serializers.dump_graph", return_value=None):
+        assert export_graph(MemoryStore().graph, format="turtle") == ""
+
+
 def test_session_exit_suppresses_close_error_when_original_exception(
     odos: Person,
 ) -> None:

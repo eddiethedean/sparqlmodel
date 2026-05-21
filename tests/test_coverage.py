@@ -459,7 +459,14 @@ def test_jsonld_non_dict_context() -> None:
 def test_normalize_format_aliases() -> None:
     assert _normalize_format("ttl") == "turtle"
     assert _normalize_format("jsonld") == "json-ld"
-    assert _normalize_format("ntriples") == "nt"
+    assert _normalize_format("ntriples") in ("nt", "ntriples")
+
+
+def test_resolve_rdf_format_empty() -> None:
+    from sparqlmodel.serializers import _resolve_rdf_format
+
+    with pytest.raises(ValueError, match="Cannot infer RDF format"):
+        _resolve_rdf_format("   ")
 
 
 def test_export_graph_turtle(session, odos: Person) -> None:
@@ -1318,14 +1325,28 @@ def test_fastapi_import_and_graph_helpers() -> None:
         assert t_resp.body == b"@prefix x: <http://example/> ."
     j_resp = jsonld_response(person)
     assert j_resp.media_type == "application/ld+json"
-    with patch("sparqlmodel.fastapi.export_graph", return_value=b"{}") as mock_export:
+    with patch.object(Person, "serialize", return_value=b"{}") as mock_serialize:
         j_resp2 = jsonld_response(person)
-        mock_export.assert_called()
+        mock_serialize.assert_called()
         assert j_resp2.body == b"{}"
     req = MagicMock()
     req.headers = {"accept": "text/plain"}
     fallback = negotiated_response(req, person)
     assert fallback.media_type == "text/turtle"
+
+    req_custom = MagicMock()
+    req_custom.headers = {"accept": "application/ld+json"}
+    with patch.object(Person, "serialize", return_value="{}"):
+        custom = negotiated_response(
+            req_custom,
+            person,
+            formats={"application/ld+json": "json-ld"},
+        )
+    assert custom.media_type == "application/ld+json"
+
+    with patch.object(Person, "serialize", return_value=None):
+        empty_body = jsonld_response(person)
+    assert empty_body.body == b""
 
     with patch.dict("sys.modules", {"fastapi": None}):
         from sparqlmodel import fastapi as fastapi_mod

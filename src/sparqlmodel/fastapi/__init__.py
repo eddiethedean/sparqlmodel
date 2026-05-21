@@ -19,8 +19,7 @@ from sparqlmodel.fastapi.deps import (
     session_dependency,
 )
 from sparqlmodel.model import SPARQLModel
-from sparqlmodel.rdf_bridge import model_to_graph
-from sparqlmodel.serializers import export_graph
+from sparqlmodel.serializers import _resolve_rdf_format, export_graph
 
 __all__ = [
     "AsyncSessionDep",
@@ -42,6 +41,9 @@ if TYPE_CHECKING:
     from fastapi import Request
     from starlette.responses import Response
 
+_DEFAULT_TURTLE = "text/turtle"
+_DEFAULT_JSONLD = "application/ld+json"
+
 
 def _require_fastapi() -> tuple[Any, Any]:
     try:
@@ -54,23 +56,26 @@ def _require_fastapi() -> tuple[Any, Any]:
     return FastAPIRequest, FastAPIResponse
 
 
-def _graph_from_model(model: SPARQLModel | Store) -> Store:
-    if isinstance(model, Store):
-        return model
-    return model_to_graph(model)
-
-
 def _body_bytes(body: str | bytes) -> bytes:
     return body if isinstance(body, bytes) else body.encode("utf-8")
 
 
-def _negotiate_format_kind(accept: str, mapping: dict[str, str]) -> str:
-    """Pick the highest-q format kind from an Accept header (defaults to Turtle)."""
+def _serialize_rdf_body(model: SPARQLModel | Store, fmt: str) -> bytes:
+    if isinstance(model, SPARQLModel):
+        result = model.serialize(format=fmt)
+        if result is None:
+            return b""
+        return _body_bytes(result)
+    return _body_bytes(export_graph(model, format=fmt))
+
+
+def _negotiate_rdf_format(accept: str, media_types: tuple[str, ...]) -> str:
+    """Pick the highest-q media type from ``Accept`` and resolve via ``infer_format``."""
     if not accept.strip() or accept.strip() == "*/*":
-        return "turtle"
+        return _resolve_rdf_format(_DEFAULT_TURTLE)
 
     best_q = -1.0
-    best_kind = "turtle"
+    best_media = _DEFAULT_TURTLE
     for part in accept.split(","):
         piece = part.strip()
         if not piece:
@@ -88,13 +93,13 @@ def _negotiate_format_kind(accept: str, mapping: dict[str, str]) -> str:
         if media == "*/*":
             if q > best_q:
                 best_q = q
-                best_kind = "turtle"
+                best_media = _DEFAULT_TURTLE
             continue
-        for media_type, kind in mapping.items():
-            if media == media_type and q > best_q:
+        for candidate in media_types:
+            if media == candidate and q > best_q:
                 best_q = q
-                best_kind = kind
-    return best_kind
+                best_media = candidate
+    return _resolve_rdf_format(best_media)
 
 
 def turtle_response(
@@ -104,9 +109,9 @@ def turtle_response(
 ) -> Response:
     """Return a Turtle HTTP response for a model or graph."""
     _, ResponseCls = _require_fastapi()
-    graph = _graph_from_model(model)
-    content = _body_bytes(export_graph(graph, format="turtle"))
-    return ResponseCls(content=content, media_type="text/turtle", status_code=status_code)
+    fmt = _resolve_rdf_format(_DEFAULT_TURTLE)
+    content = _serialize_rdf_body(model, fmt)
+    return ResponseCls(content=content, media_type=_DEFAULT_TURTLE, status_code=status_code)
 
 
 def jsonld_response(
@@ -116,11 +121,11 @@ def jsonld_response(
 ) -> Response:
     """Return a JSON-LD HTTP response for a model or graph."""
     _, ResponseCls = _require_fastapi()
-    graph = _graph_from_model(model)
-    content = _body_bytes(export_graph(graph, format="json-ld"))
+    fmt = _resolve_rdf_format(_DEFAULT_JSONLD)
+    content = _serialize_rdf_body(model, fmt)
     return ResponseCls(
         content=content,
-        media_type="application/ld+json",
+        media_type=_DEFAULT_JSONLD,
         status_code=status_code,
     )
 
@@ -133,11 +138,12 @@ def negotiated_response(
 ) -> Response:
     """Return Turtle or JSON-LD based on ``Accept`` (defaults to Turtle)."""
     _require_fastapi()
-    accept = request.headers.get("accept", "text/turtle")
-    mapping = formats or {
-        "text/turtle": "turtle",
-        "application/ld+json": "jsonld",
-    }
-    if _negotiate_format_kind(accept, mapping) == "jsonld":
+    accept = request.headers.get("accept", _DEFAULT_TURTLE)
+    if formats is not None:
+        media_types = tuple(formats.keys())
+    else:
+        media_types = (_DEFAULT_TURTLE, _DEFAULT_JSONLD)
+    resolved = _negotiate_rdf_format(accept, media_types)
+    if resolved.replace("_", "-") == "json-ld":
         return jsonld_response(model)
     return turtle_response(model)

@@ -48,8 +48,20 @@ def test_export_nt(odos: Person) -> None:
 def test_unsupported_format(odos: Person) -> None:
     from sparqlmodel.serializers import export_model
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown RDF format"):
         export_model(odos, format="unsupported")
+
+
+def test_export_model_uses_serialize(odos: Person, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_serialize(self: Person, *, format: str = "turtle", **kwargs: object) -> str:
+        calls.append(format)
+        return "@prefix x: <http://example/> .\n"
+
+    monkeypatch.setattr(SPARQLModel, "serialize", fake_serialize)
+    export_model(odos, format="ttl")
+    assert calls == ["turtle"]
 
 
 def test_model_validate_jsonld(odos: Person) -> None:

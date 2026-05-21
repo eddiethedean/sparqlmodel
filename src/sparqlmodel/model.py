@@ -148,14 +148,22 @@ class SPARQLModel(TripleModel, metaclass=SPARQLModelMetaclass):
         return super().subject_uri()
 
     def model_dump_jsonld(self) -> dict[str, Any]:
-        """Serialize model to a JSON-LD compatible dict."""
+        """Serialize to a JSON-LD dict for APIs (cascade-aware ORM view).
+
+        For RDF files or HTTP bodies with all triples, use ``serialize(format="json-ld")``
+        (inherited from TripleModel) instead.
+        """
         from sparqlmodel.serializers import model_to_jsonld
 
         return model_to_jsonld(self)
 
     @classmethod
     def model_validate_jsonld(cls, data: dict[str, Any]) -> Self:
-        """Deserialize model from JSON-LD dict."""
+        """Deserialize from a JSON-LD dict (ORM presentation layer).
+
+        For RDF files, use ``parse()`` (inherited from TripleModel) or
+        :func:`~sparqlmodel.serializers.import_graph`.
+        """
         from sparqlmodel.serializers import model_from_jsonld
 
         return model_from_jsonld(cls, data)
