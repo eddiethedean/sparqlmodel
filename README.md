@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0100---2026-05-22) (0.10.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0120---2026-05-22) (0.12.0)
 
 ---
 
@@ -21,7 +21,7 @@ Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with 
 | **RDF mapping** | `rdf_type`, compact predicates, TripleModel `sync_to_graph` / `from_graph` under the hood |
 | **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue (sync and **async** since 0.6) |
 | **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, comparisons, multi-hop) |
-| **Stores** | `MemoryStore` / `AsyncMemoryStore`; `HttpStore` / `AsyncHttpStore` for Fuseki/Jena (`[http]`) |
+| **Stores** | `MemoryStore` / `AsyncMemoryStore`; `HttpStore` / `AsyncHttpStore` for Fuseki/Jena (`[http]`); GSP `sync_mirror()` (**0.12**) |
 | **FastAPI** | `SessionDep` or `AsyncSessionDep`, lifespan helpers, Turtle/JSON-LD responses |
 | **Cascade** | Composition on `put`/`delete`; `Relationship(..., cascade=False)` for references |
 
@@ -162,7 +162,12 @@ with SPARQLSession() as session:
 ```python
 from sparqlmodel import HttpStore, SPARQLSession
 
-with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
+with SPARQLSession(
+    store=HttpStore(
+        "http://localhost:3030/ds/sparql",
+        graph_store_url="http://localhost:3030/ds/data",
+    )
+) as session:
     session.put(odos)
 ```
 
@@ -229,10 +234,10 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.11.0)
+## Known limitations (0.12.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+) or `pull_subjects_into_mirror` when reads must match remote updates. Replace-on-pull (0.10+) clears stale predicates per IRI on pull. Retries and batched UPDATE shipped in **0.11** ([PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#http-resilience-011)); GSP full-graph `sync_mirror` remains **0.12** ([Production HttpStore](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#production-httpstore))
+- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+), `pull_subjects_into_mirror`, or **`sync_mirror()`** (0.12+, requires `graph_store_url`) when reads must match remote updates. Retries and batched UPDATE: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#http-resilience-011); GSP mirror sync: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#mirror-sync-012)
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching

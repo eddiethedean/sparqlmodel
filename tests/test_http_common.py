@@ -135,3 +135,109 @@ async def test_async_request_with_retry_recovers_from_connect_error() -> None:
         )
     assert response.status_code == 200
     assert attempts["n"] == 2
+
+
+def test_default_graph_store_url_fuseki() -> None:
+    assert (
+        http_common.default_graph_store_url("http://localhost:3030/ds/sparql")
+        == "http://localhost:3030/ds/data"
+    )
+    assert (
+        http_common.default_graph_store_url(
+            "http://localhost:3030/ds/sparql?default-graph-uri=http://ex/g"
+        )
+        == "http://localhost:3030/ds/data?default-graph-uri=http://ex/g"
+    )
+    assert http_common.default_graph_store_url("http://example.org/query") is None
+
+
+def test_replace_mirror_from_graph() -> None:
+    target = Store()
+    target.add(("http://ex/s", "http://ex/p", "http://ex/old"))
+    remote = Store()
+    remote.add(("http://ex/s", "http://ex/p", "http://ex/new"))
+    http_common.replace_mirror_from_graph(target, remote)
+    assert len(target) == 1
+
+
+def test_replace_mirror_from_graph_empty_clears() -> None:
+    target = Store()
+    target.add(("http://ex/s", "http://ex/p", "http://ex/o"))
+    http_common.replace_mirror_from_graph(target, None)
+    assert len(target) == 0
+
+
+def test_parse_gsp_response_empty() -> None:
+    graph = http_common.parse_gsp_response(b"", None)
+    assert len(graph) == 0
+
+
+def test_parse_gsp_response_turtle() -> None:
+    body = b"@prefix ex: <http://ex/> .\nex:s ex:p ex:o .\n"
+    graph = http_common.parse_gsp_response(body, "text/turtle")
+    assert len(graph) == 1
+
+
+def test_parse_gsp_response_nt_content_type() -> None:
+    body = b"<http://ex/s> <http://ex/p> <http://ex/o> .\n"
+    graph = http_common.parse_gsp_response(body, "application/n-triples")
+    assert len(graph) == 1
+
+
+def test_parse_gsp_response_unknown_content_type_uses_turtle() -> None:
+    body = b"@prefix ex: <http://ex/> .\nex:s ex:p ex:o .\n"
+    graph = http_common.parse_gsp_response(body, "application/rdf+xml")
+    assert len(graph) == 1
+
+
+def test_parse_gsp_response_missing_content_type() -> None:
+    body = b"@prefix ex: <http://ex/> .\nex:s ex:p ex:o .\n"
+    graph = http_common.parse_gsp_response(body, None)
+    assert len(graph) == 1
+
+
+def test_gsp_format_from_content_type_trig() -> None:
+    assert http_common._gsp_format_from_content_type("application/x-trig") == "trig"
+    assert http_common._gsp_format_from_content_type("application/x-turtle") == "turtle"
+
+
+def test_default_graph_store_url_non_sparql() -> None:
+    assert http_common.default_graph_store_url("http://example.org/endpoint") is None
+
+
+def test_parse_gsp_response_invalid_raises() -> None:
+    from sparqlmodel.exceptions import QueryError
+
+    with pytest.raises(QueryError, match="Failed to parse Graph Store"):
+        http_common.parse_gsp_response(b"not valid turtle {{{", "text/turtle")
+
+
+def test_fetch_graph_store() -> None:
+    turtle = b"@prefix ex: <http://ex/> .\nex:s ex:p ex:o .\n"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url == httpx.URL("http://example.org/data")
+        return httpx.Response(200, content=turtle, headers={"Content-Type": "text/turtle"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    content, ctype = http_common.fetch_graph_store(
+        client, "http://example.org/data", max_retries=0, retry_backoff=0
+    )
+    assert ctype == "text/turtle"
+    graph = http_common.parse_gsp_response(content, ctype)
+    assert len(graph) == 1
+    client.close()
+
+
+@pytest.mark.asyncio
+async def test_async_fetch_graph_store() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        content, ctype = await http_common.async_fetch_graph_store(
+            client, "http://example.org/data", max_retries=0, retry_backoff=0
+        )
+    assert content == b""
+    assert ctype == "text/turtle"

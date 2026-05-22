@@ -32,6 +32,20 @@ See {doc}`PRODUCTION` — HttpStore mirror model and mirror modes.
 
 See {doc}`PRODUCTION` — mirror modes.
 
+## Mirror out of date after external bulk load
+
+**Symptom:** Many subjects changed on the remote endpoint (ETL, Fuseki UI, another service) but `get` and cascade still reflect old mirror data.
+
+**Cause:** The local mirror only updates on this store's writes, per-subject CONSTRUCT pull, or `remote_authoritative` reads — not automatically after bulk remote changes.
+
+**Mitigations (0.12.0+):**
+
+- Call {meth}`~sparqlmodel.stores.http.HttpStore.sync_mirror` (requires `graph_store_url=`, e.g. Fuseki `.../data`)
+- Or {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs
+- Or `mirror_mode="remote_authoritative"` when every `get` must re-pull that subject
+
+See {doc}`PRODUCTION` — [Mirror sync (0.12+)](PRODUCTION.md#mirror-sync-012).
+
 ## Duplicate triples after UPDATE retry
 
 **Symptom:** Remote dataset contains duplicated `INSERT DATA` rows after a transient **503** during `put` / `update_graph`.

@@ -8,7 +8,7 @@ from pyoxigraph import Literal
 from triplemodel import Store
 
 from sparqlmodel import IRI, Field, SPARQLModel, SPARQLSession
-from sparqlmodel.exceptions import QueryError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.stores import http_common
 from sparqlmodel.stores.http import HttpStore, _graph_to_delete_data, _graph_to_insert_data
 from sparqlmodel.stores.http_common import is_select_query
@@ -985,4 +985,85 @@ def test_http_store_construct_wraps_non_query_error(
     store = HttpStore("http://example.org/sparql", client=client)
     with pytest.raises(QueryError, match="SPARQL CONSTRUCT failed: boom"):
         store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+    store.close()
+
+
+def test_http_store_sync_mirror_requires_graph_store_url() -> None:
+    store = HttpStore("http://example.org/sparql")
+    with pytest.raises(ConfigurationError, match="graph_store_url"):
+        store.sync_mirror()
+    store.close()
+
+
+def test_http_store_sync_mirror_replaces_mirror() -> None:
+    remote_turtle = (
+        b"@prefix schema: <https://schema.org/> .\n"
+        b'<http://example.org/person/1> a schema:Person ; schema:name "Remote" .\n'
+    )
+    stale = Store()
+    stale.add(
+        (
+            "http://example.org/person/1",
+            "https://schema.org/name",
+            Literal("Stale"),
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/data"):
+            return httpx.Response(
+                200, content=remote_turtle, headers={"Content-Type": "text/turtle"}
+            )
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/ds/sparql",
+        client=client,
+        graph=stale,
+        graph_store_url="http://example.org/ds/data",
+        prefixes={"schema": "https://schema.org/"},
+    )
+    store.sync_mirror()
+    assert len(store.graph) >= 2
+    assert any("Remote" in str(o) for _s, _p, o in store.graph)
+    assert not any("Stale" in str(o) for _s, _p, o in store.graph)
+    store.close()
+
+
+def test_http_store_sync_mirror_empty_remote_clears_mirror() -> None:
+    stale = Store()
+    stale.add(("http://ex/s", "http://ex/p", "http://ex/o"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        graph=stale,
+        graph_store_url="http://example.org/data",
+    )
+    store.sync_mirror()
+    assert len(store.graph) == 0
+    store.close()
+
+
+def test_http_store_sync_mirror_closed_raises() -> None:
+    store = HttpStore(
+        "http://example.org/sparql",
+        graph_store_url="http://example.org/data",
+    )
+    store.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        store.sync_mirror()
+
+
+def test_http_store_graph_store_url_property() -> None:
+    store = HttpStore(
+        "http://example.org/sparql/",
+        graph_store_url="http://example.org/data/",
+    )
+    assert store.graph_store_url == "http://example.org/data"
     store.close()

@@ -86,8 +86,14 @@ Load an existing RDF file into a session with {meth}`~sparqlmodel.session.SPARQL
 ```python
 from sparqlmodel import HttpStore, SPARQLSession
 
-with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
+store = HttpStore(
+    "http://localhost:3030/ds/sparql",
+    graph_store_url="http://localhost:3030/ds/data",
+)
+with SPARQLSession(store=store) as session:
     session.put(model)
+# After external bulk changes to the remote dataset (0.12+)
+store.sync_mirror()
 
 # Multi-reader: re-sync each get from remote (0.10+)
 with SPARQLSession(

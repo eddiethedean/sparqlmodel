@@ -9,9 +9,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      fuseki:
+        image: stain/jena-fuseki:5.1.0
+        ports:
+          - 3030:3030
+        env:
+          FUSEKI_DATASET_1: sparqlmodel_test
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      FUSEKI_BASE_URL: http://127.0.0.1:3030
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +40,17 @@ jobs:
 
       - name: ty
         run: ty check
+
+      - name: Wait for Fuseki
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf "${FUSEKI_BASE_URL}/$/ping"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Fuseki did not become ready in time"
+          exit 1
 
       - name: Pytest
         run: pytest --cov=sparqlmodel --cov-fail-under=100 --cov-report=term-missing

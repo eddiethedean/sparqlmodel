@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sparqlmodel"
-version = "0.11.0"
+version = "0.12.0"
 description = "SPARQL ORM for Python — sessions, queries, and graph persistence on RDF stores"
 readme = "README.md"
 license = "MIT"
@@ -71,6 +71,9 @@ include = ["src/sparqlmodel", "README.md", "LICENSE", "CHANGELOG.md"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers -p no:green-light"
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that require a running Fuseki instance (FUSEKI_BASE_URL)",
+]
 filterwarnings = [
     "ignore:.*async fixture 'ensure_greenlet_context'.*:pytest.PytestRemovedIn9Warning",
 ]
@@ -99,6 +102,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/sparqlmodel/model.py" = ["E501"]
 "src/sparqlmodel/graph.py" = ["E501"]
 "tests/test_fastapi_extra.py" = ["E402"]
+"tests/conftest.py" = ["E402"]
 "tests/test_coverage.py" = ["SIM117", "B017"]
 
 [tool.ty]

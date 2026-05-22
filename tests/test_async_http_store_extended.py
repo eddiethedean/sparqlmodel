@@ -9,7 +9,7 @@ from triplemodel import Store
 
 from sparqlmodel import IRI, Field, SPARQLModel
 from sparqlmodel.async_session import AsyncSPARQLSession
-from sparqlmodel.exceptions import QueryError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.stores import http_common
 from sparqlmodel.stores.async_http import AsyncHttpStore
 
@@ -501,4 +501,47 @@ async def test_async_http_construct_wraps_non_query_error(
         store = AsyncHttpStore("http://example.org/sparql", client=client)
         with pytest.raises(QueryError, match="SPARQL CONSTRUCT failed: boom"):
             await store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+        await store.aclose()
+
+
+@pytest.mark.asyncio
+async def test_async_http_graph_store_url_property() -> None:
+    store = AsyncHttpStore(
+        "http://example.org/sparql/",
+        graph_store_url="http://example.org/data/",
+    )
+    assert store.graph_store_url == "http://example.org/data"
+    await store.aclose()
+
+
+@pytest.mark.asyncio
+async def test_async_http_sync_mirror_requires_graph_store_url() -> None:
+    store = AsyncHttpStore("http://example.org/sparql")
+    with pytest.raises(ConfigurationError, match="graph_store_url"):
+        await store.sync_mirror()
+    await store.aclose()
+
+
+@pytest.mark.asyncio
+async def test_async_http_sync_mirror_replaces_mirror() -> None:
+    remote_turtle = b'@prefix ex: <http://ex/> .\n<http://ex/s> <http://ex/p> "v" .\n'
+    stale = Store()
+    stale.add(("http://ex/s", "http://ex/p", "http://ex/old"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(
+                200, content=remote_turtle, headers={"Content-Type": "text/turtle"}
+            )
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            graph=stale,
+            graph_store_url="http://example.org/data",
+        )
+        await store.sync_mirror()
+        assert len(store.graph) == 1
         await store.aclose()

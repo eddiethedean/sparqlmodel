@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     async with http_store_lifespan(
         app,
         "http://localhost:3030/ds/sparql",
+        graph_store_url="http://localhost:3030/ds/data",
         max_retries=2,
         query_method="get",
     ):

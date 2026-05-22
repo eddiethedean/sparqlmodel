@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus:** **[Production HttpStore](#production-httpstore)** — phase **[0.12 — Mirror contract](#012--mirror-contract)**. **0.11.0** shipped **2026-05-22** (HTTP resilience). **0.10.0** shipped **2026-05-22** (mirror semantics). Forward plan: [0.12 → 0.15](#forward-roadmap-07--015).
+**Current focus:** **0.13** — richer RDF models ([SPARQLMojo parity backlog](#sparqlmojo-parity-backlog)). **0.12.0** shipped **2026-05-22** (Production HttpStore / GSP `sync_mirror`). **0.11.0** shipped **2026-05-22** (HTTP resilience). Forward plan: [0.13 → 0.15](#forward-roadmap-07--015).
 
 ---
 
@@ -227,7 +227,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | ~~Hand-rolled SPARQL Results JSON parser~~ | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results) — **shipped 0.9.1** | SparqlModel `stores/` | — |
 | HttpStore mirror replace-on-pull / `mirror_mode` | CONSTRUCT per subject | SparqlModel `stores/` | **0.10** (shipped) |
 | HttpStore retries + batched UPDATE | `httpx` retry, chunked INSERT/DELETE | SparqlModel `stores/` | **0.11** (shipped) |
-| HttpStore GSP full mirror sync | Graph Store HTTP GET | SparqlModel `stores/` | **0.12** (Production HttpStore) |
+| HttpStore GSP full mirror sync | Graph Store HTTP GET | SparqlModel `stores/` | **0.12.0** (shipped) |
 | HttpStore UPDATE as string templates only | Remote endpoints need HTTP; local mirror could use `Store.update()` for dev tooling | SparqlModel | **0.12** (optional) or **0.14** |
 | No disk-backed store | `Store(path)`, `backup`, `optimize`, `flush`, `read_only` | SparqlModel `stores/` | **0.14** (`OxigraphStore` backend) |
 | Large imports iterate `add` per triple | `bulk_load`, `bulk_extend`, `extend` | SparqlModel session + TripleModel | **0.14** (bulk `put`) |
@@ -301,7 +301,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 0.15)
 
-**Shipped:** **0.11.0** (2026-05-22) — HTTP retries, batched UPDATE, SELECT GET/POST; **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next:** [Production HttpStore](#production-httpstore) — phase **0.12**.
+**Shipped:** **0.12.0** (2026-05-22) — GSP `sync_mirror`, Fuseki integration tests; **0.11.0** (2026-05-22) — HTTP retries, batched UPDATE, SELECT GET/POST; **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration. **Next:** **0.13** — modeling.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → [Production HttpStore](#production-httpstore) (0.10–0.12) → modeling (0.13) → operations (0.14) → GA (0.15)**. Each **0.x** line is one theme; Production HttpStore is one milestone with ordered **phases** (0.10, 0.11, 0.12).
 
@@ -486,15 +486,17 @@ Safe large writes and transient failure handling — still single-writer per end
 
 #### Phase 0.12 — Mirror contract
 
+**Status:** shipped in **0.12.0** (2026-05-22).
+
 **Depends on:** phase 0.11
 
 Full mirror option, integration coverage, stores-track sign-off.
 
 | Deliverable | Notes |
 |-------------|--------|
-| Full mirror sync | `sync_mirror()` via Graph Store HTTP GET when `graph_store_url` configured |
-| Integration tests | Read/write split + mirror contract (`tests/test_http_store_integration.py`) |
-| Docs | README/PRODUCTION — milestone guarantees vs deferred **0.14** work |
+| [x] Full mirror sync | `sync_mirror()` via Graph Store HTTP GET when `graph_store_url` configured |
+| [x] Integration tests | Fuseki-backed `tests/test_http_store_integration.py` (CI service) |
+| [x] Docs | README/PRODUCTION — Production HttpStore milestone; deferred ops in **0.14** |
 
 **Phase exit:** Integration tests green; SPECS **P0** HttpStore row complete.
 
@@ -597,7 +599,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | `count` | `count()` | Shipped (**0.8**) |
 | Relationships + eager load | `Relationship`, `depth` | Shipped (depth 0–2) |
 | `merge` / `refresh` / `expunge` | same | Shipped (**0.9**) |
-| Transactions | pending queue + store updates | Partial (remote txn **0.12**) |
+| Transactions | pending queue + store updates | Partial (no remote txn; use `sync_mirror` **0.12**) |
 | FastAPI `Depends(Session)` | `SessionDep` | Shipped |
 | Async session / routes | `AsyncSPARQLSession`, `AsyncSessionDep` | Shipped (**0.6**) |
 | Single model class (SQLModel pattern) | `SPARQLModel(TripleModel)` | **0.4** |
@@ -620,7 +622,7 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | Prefixes / compact IRIs | Yes | Shipped (`__prefixes__`) | — |
 | `limit` / `offset` / `order_by` / `count` | Partial | Shipped (0.8) | — |
 | Nullable `OPTIONAL` filters | Yes | Shipped (0.8) | — |
-| Read/write endpoint split | Yes | Shipped (0.9.1); contract **0.12** | [Production HttpStore](#production-httpstore) |
+| Read/write endpoint split | Yes | Shipped (0.9.1); contract **0.12.0** | — |
 | Async ORM + HTTP store | No | Shipped (0.6) | **Ahead** |
 | FastAPI `SessionDep` | No | Shipped (0.2) | **Ahead** |
 | TripleModel / pyoxigraph I/O | No | Shipped (0.5–0.7) | **Ahead** |
@@ -655,11 +657,11 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 | 4 | Prefix management | Yes | Shipped | — |
 | 5 | Pagination / sort / count | Partial | Shipped (0.8) | — |
 | 6 | Read/write SPARQL URLs | Yes | Shipped (0.9.1) | — |
-| 7 | HttpStore mirror + production contract | Partial | Partial (0.11.0) | **0.12** |
+| 7 | HttpStore mirror + production contract | Partial | Shipped (0.12.0) | — |
 | 8 | Replace-on-pull + `mirror_mode` | N/A | Shipped (0.10.0) | — |
 | 9 | Retries + batched UPDATE | Batch writes | Shipped (0.11.0) | — |
 | 10 | SELECT `GET` vs `POST` | Yes | Shipped (0.11.0) | — |
-| 11 | GSP / `sync_mirror` + integration tests | N/A | Missing | **0.12** |
+| 11 | GSP / `sync_mirror` + integration tests | N/A | Shipped (0.12.0) | — |
 | 12 | Multi-valued / list fields | Yes | First value only | **0.13** |
 | 13 | Lang + multi-lang literals | Yes | No public API | **0.13** |
 | 14 | Polymorphic `query(Base)` | Yes | No | **0.13** |
@@ -680,8 +682,7 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 
 ## Priorities (forward work)
 
-1. **[Production HttpStore](#production-httpstore)** — phase **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
-2. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
+1. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
 3. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
 4. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
 5. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.

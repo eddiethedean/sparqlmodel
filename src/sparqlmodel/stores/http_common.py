@@ -11,7 +11,7 @@ from typing import Any, Literal, cast
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
-from triplemodel import Store
+from triplemodel import Store, load_graph
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.graph import _subject_pattern
@@ -373,3 +373,92 @@ SPARQL_UPDATE_HEADERS = {
     "Content-Type": "application/sparql-update",
     "Accept": "*/*",
 }
+
+GSP_ACCEPT_HEADERS = {
+    "Accept": "text/turtle, application/n-triples;q=0.9, */*;q=0.1",
+}
+
+
+def default_graph_store_url(sparql_endpoint: str) -> str | None:
+    """Heuristic Fuseki GSP URL from a SPARQL endpoint (``.../sparql`` → ``.../data``)."""
+    base, sep, query = sparql_endpoint.partition("?")
+    path = base.rstrip("/")
+    if path.endswith("/sparql"):
+        gsp = path[: -len("/sparql")] + "/data"
+        return f"{gsp}?{query}" if sep else gsp
+    return None
+
+
+def replace_mirror_from_graph(target: Store, remote: Store | None) -> None:
+    """Replace all triples in ``target`` with triples from ``remote`` (empty clears mirror)."""
+    for triple in list(target):
+        target.remove(triple)
+    if remote is not None:
+        for triple in remote:
+            target.add(triple)
+
+
+def _gsp_format_from_content_type(content_type: str | None) -> str:
+    if not content_type:
+        return "turtle"
+    media = content_type.split(";", 1)[0].strip().lower()
+    if media in ("text/turtle", "application/x-turtle"):
+        return "turtle"
+    if media in ("application/n-triples", "text/plain"):
+        return "nt"
+    if media in ("application/trig", "application/x-trig"):
+        return "trig"
+    return "turtle"
+
+
+def parse_gsp_response(content: bytes, content_type: str | None) -> Store:
+    """Parse a Graph Store HTTP GET body into a :class:`~triplemodel.Store`."""
+    if not content.strip():
+        return Store()
+    fmt = _gsp_format_from_content_type(content_type)
+    try:
+        return load_graph(data=content, format=fmt)
+    except Exception as exc:
+        raise QueryError(f"Failed to parse Graph Store response: {exc}") from exc
+
+
+def fetch_graph_store(
+    client: httpx.Client,
+    url: str,
+    *,
+    max_retries: int,
+    retry_backoff: float,
+) -> tuple[bytes, str | None]:
+    """GET an RDF graph via Graph Store HTTP; return body and ``Content-Type``."""
+    response = request_with_retry(
+        client,
+        "GET",
+        url,
+        operation="Graph Store GET",
+        max_retries=max_retries,
+        retry_backoff=retry_backoff,
+        headers=GSP_ACCEPT_HEADERS,
+    )
+    content_type = response.headers.get("Content-Type")
+    return response.content, content_type
+
+
+async def async_fetch_graph_store(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    max_retries: int,
+    retry_backoff: float,
+) -> tuple[bytes, str | None]:
+    """Async GET for Graph Store HTTP."""
+    response = await async_request_with_retry(
+        client,
+        "GET",
+        url,
+        operation="Graph Store GET",
+        max_retries=max_retries,
+        retry_backoff=retry_backoff,
+        headers=GSP_ACCEPT_HEADERS,
+    )
+    content_type = response.headers.get("Content-Type")
+    return response.content, content_type

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-22
+
+### Added
+
+- **`HttpStore` / `AsyncHttpStore` `graph_store_url`** — Graph Store HTTP endpoint for full-graph mirror sync
+- **`sync_mirror()`** — replace the local mirror from remote via GSP GET (requires `graph_store_url`)
+- **`http_common.default_graph_store_url()`** — Fuseki heuristic (`.../sparql` → `.../data`)
+- **Fuseki integration tests** — `tests/test_http_store_integration.py` (CI runs against `stain/jena-fuseki`)
+
 ### Fixed
 
 - **GET SELECT** — preserve existing query parameters on `read_endpoint` / `sparql_url` (Fuseki `default-graph-uri`, etc.)
@@ -17,7 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- PRODUCTION — UPDATE retry non-idempotency, replace-on-pull subject-only scope, GET URL merge, compact IRI prefixes
+- PRODUCTION — mirror sync (`sync_mirror`), Fuseki URL table; Production HttpStore milestone complete
+- ROADMAP — phase **0.12** shipped; focus **0.13** (modeling)
+- SPECS — P0 HttpStore `sync_mirror` checked
+- Makefile — `fuseki-up` / `fuseki-down` for local integration parity with CI
 
 ## [0.11.0] - 2026-05-22
 

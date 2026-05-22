@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest_plugins = ["tests.conftest_fuseki"]
+
 from sparqlmodel import IRI, SPARQLSession
 from tests.models import Organization, Person
 

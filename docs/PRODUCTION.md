@@ -11,7 +11,7 @@ Operator and architect guide for running SparqlModel in production. Normative AP
 | **MemoryStore** | Unit tests, local prototypes, single-process tools |
 | **HttpStore** | Remote Fuseki/Jena/compatible SPARQL 1.1 endpoint |
 
-Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore) (full reconciliation planned **1.0**). Prefer one writer per endpoint. Since **0.9.1**, `get` can CONSTRUCT-pull individual subjects into the mirror when they are missing locally; since **0.9.2**, `refresh` does the same.
+Do not use `HttpStore` as a shared cache across many writers without a [mirror sync strategy](SPECS.md#httpstore). Prefer one writer per endpoint. Since **0.9.1**, `get` can CONSTRUCT-pull individual subjects into the mirror when they are missing locally; since **0.9.2**, `refresh` does the same. Since **0.12.0**, `sync_mirror()` reloads the entire default graph into the mirror via Graph Store HTTP GET.
 
 ---
 
@@ -35,7 +35,44 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Shipped (0.11.0):** Retries, batched UPDATE, optional SELECT GET — see [HTTP resilience (0.11+)](#http-resilience-011).
 
-**Planned (0.12):** GSP `sync_mirror()`. **Planned (1.0):** Full mirror reconciliation.
+**Shipped (0.12.0):** GSP `sync_mirror()` when `graph_store_url` is set — see [Mirror sync (0.12+)](#mirror-sync-012).
+
+---
+
+## Mirror sync (0.12+)
+
+When another process or admin UI changes the remote dataset, reconcile the local mirror with **`sync_mirror()`** (read-only on the server):
+
+```python
+from sparqlmodel import HttpStore, SPARQLSession
+
+store = HttpStore(
+    "http://localhost:3030/myds/sparql",
+    read_endpoint="http://localhost:3030/myds/sparql",
+    write_endpoint="http://localhost:3030/myds/sparql",
+    graph_store_url="http://localhost:3030/myds/data",
+)
+with SPARQLSession(store=store) as session:
+    store.sync_mirror()
+    person = session.get(Person, IRI("http://example.org/p/1"))
+```
+
+| Mechanism | Scope | When to use |
+|-----------|--------|-------------|
+| `pull_subjects_into_mirror([iri, ...])` | Listed subjects (CONSTRUCT) | Targeted refresh after known IRIs changed |
+| `mirror_mode="remote_authoritative"` | Per `get` / `refresh` | Every read must match remote for that IRI |
+| **`sync_mirror()`** | **Entire default graph** (GSP GET) | Bulk external load, admin UI edits, startup warm-cache |
+
+**Fuseki URLs (typical):**
+
+| Service | Path |
+|---------|------|
+| SPARQL query/update | `http://host:3030/{dataset}/sparql` |
+| Graph Store HTTP | `http://host:3030/{dataset}/data` |
+
+`http_common.default_graph_store_url(sparql_endpoint)` guesses `.../sparql` → `.../data`; production apps should pass an explicit `graph_store_url`.
+
+**CI / local integration tests:** run Fuseki (`make fuseki-up`), set `FUSEKI_BASE_URL=http://127.0.0.1:3030`, then `pytest` (includes `tests/test_http_store_integration.py`).
 
 ---
 
@@ -50,7 +87,7 @@ Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan` / `as
 | `max_triples_per_update` | `500` | Chunk size for `INSERT DATA` / `DELETE DATA` per HTTP request |
 | `query_method` | `"post"` | `"get"` sends SELECT via query string ([SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/#query-operation)) |
 
-**Retries apply to:** remote SELECT (`query`), CONSTRUCT pull (`pull_subjects_into_mirror`), and each UPDATE chunk. Retried status codes: **502**, **503**, **504**, plus `httpx` connection/timeouts. **4xx** and other errors fail immediately (no retry).
+**Retries apply to:** remote SELECT (`query`), CONSTRUCT pull (`pull_subjects_into_mirror`), Graph Store GET (`sync_mirror`), and each UPDATE chunk. Retried status codes: **502**, **503**, **504**, plus `httpx` connection/timeouts. **4xx** and other errors fail immediately (no retry).
 
 **Batched UPDATE:** `update_graph` sends all DELETE chunks first, then all INSERT chunks. The local mirror is updated **only after every remote chunk succeeds**. If chunk *k* fails after earlier chunks succeeded, the remote dataset may be partially updated; the mirror is **not** changed — treat as an operator incident and reconcile manually.
 
@@ -73,7 +110,7 @@ Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan(..., m
 | **`writer`** (default) | Only when the subject has **no** triples in the mirror | This app is the primary writer for the endpoint |
 | **`remote_authoritative`** | **Every** `get` / `refresh` (CONSTRUCT + replace-on-pull) | Read replicas, admin UIs, or multi-reader apps that must see remote truth |
 
-Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: outgoing mirror triples `(subject, ?, ?)` for each requested IRI are removed before remote triples are merged. Triples where the IRI appears only as object are not removed (full star-shaped sync remains **0.12**).
+Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: outgoing mirror triples `(subject, ?, ?)` for each requested IRI are removed before remote triples are merged. Triples where the IRI appears only as object are not removed by per-subject pull; use **`sync_mirror()`** for a full-graph refresh.
 
 **Authority:**
 

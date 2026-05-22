@@ -52,7 +52,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **0.
 - [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**; on `refresh` — **0.9.2**
 - [x] HttpStore replace-on-pull + `mirror_mode` (`writer` / `remote_authoritative`) — **0.10.0**
 - [x] HttpStore retries, batched UPDATE, SELECT `query_method` GET/POST — **0.11.0**
-- [ ] HttpStore full mirror sync (GSP `sync_mirror`) — **0.12** ([Production HttpStore](ROADMAP.md#production-httpstore))
+- [x] HttpStore full mirror sync (GSP `sync_mirror`) — **0.12.0**
 - [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
@@ -375,7 +375,7 @@ Mirror updates run only after **all** remote UPDATE chunks succeed. Mid-batch re
 | `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **0.14** (P2) |
 | HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **0.9.1** (shipped) |
 | Replace-on-pull, `mirror_mode` | Shipped **0.10.0** |
-| Mirror sync (GSP `sync_mirror`) | **0.12** |
+| Mirror sync (GSP `sync_mirror`) | Shipped **0.12.0** (`graph_store_url`, `sync_mirror`) |
 | Retries, batch size limits | Shipped **0.11.0** (`max_retries`, `max_triples_per_update`) |
 | `OxigraphStore` / embedded backends | Optional — **0.14+** |
 
@@ -421,12 +421,13 @@ Parallel to the sync stack; sync API remains supported.
 |------|----------|
 | Dual model types | 0.3 uses interim `_triple.py` dynamic adapter; **0.4** unifies on `SPARQLModel(TripleModel)` |
 
-## Until Production HttpStore (0.12)
+## HttpStore mirror (0.12+)
 
 | Area | Behavior |
 |------|----------|
 | Mirror vs remote | `get` / cascade use mirror; `query` uses remote |
-| Multi-writer endpoints | External updates invisible to mirror until sync |
+| External writers | Use `pull_subjects_into_mirror`, `mirror_mode="remote_authoritative"`, or **`sync_mirror()`** (GSP GET; requires `graph_store_url`) |
+| Multi-writer endpoints | Assume single writer per endpoint; reconcile with `sync_mirror()` after bulk external changes |
 
 ## Until 0.13 (mapping)
 

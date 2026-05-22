@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from triplemodel import Store, load_graph
 
-from sparqlmodel.exceptions import QueryError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.rdf_n3 import validate_iri_token
 from sparqlmodel.stores import http_common
 from sparqlmodel.stores.sparql_json import parse_sparql_json_bindings
@@ -36,8 +36,9 @@ class HttpStore:
     **Mirror limitations:** Data written outside this store instance (another app,
     admin UI, or raw SPARQL UPDATE) is visible to ``query`` / ``execute`` but not to
     ``graph``, ``get``, or cascade/orphan logic until the mirror is updated. Use
-    :meth:`pull_subjects_into_mirror` or ``get`` (which pulls automatically) to
-    hydrate subjects from the remote dataset. Prefer
+    :meth:`pull_subjects_into_mirror`, :meth:`sync_mirror` (Graph Store HTTP GET when
+    ``graph_store_url`` is set), or ``get`` (which pulls automatically) to hydrate the
+    mirror from the remote dataset. Prefer
     :class:`~sparqlmodel.stores.memory.MemoryStore` for single-process apps and tests.
     Assume a single writer per endpoint when using ``HttpStore``.
 
@@ -63,6 +64,7 @@ class HttpStore:
         retry_backoff: float = 0.5,
         max_triples_per_update: int = 500,
         query_method: http_common.QueryMethod = "post",
+        graph_store_url: str | None = None,
     ) -> None:
         http_common.validate_http_resilience(
             max_retries=max_retries,
@@ -77,6 +79,7 @@ class HttpStore:
         self._endpoint = endpoint.rstrip("/")
         self._read_endpoint = (read_endpoint or endpoint).rstrip("/")
         self._write_endpoint = (write_endpoint or endpoint).rstrip("/")
+        self._graph_store_url = graph_store_url.rstrip("/") if graph_store_url else None
         self._graph = graph or Store()
         self._registry = NamespaceRegistry(prefixes)
         self._registry.bind(self._graph)
@@ -144,6 +147,33 @@ class HttpStore:
     def query_method(self) -> http_common.QueryMethod:
         """How remote SELECT queries are sent — ``post`` (default) or ``get``."""
         return self._query_method
+
+    @property
+    def graph_store_url(self) -> str | None:
+        """Graph Store HTTP URL for :meth:`sync_mirror` (optional)."""
+        return self._graph_store_url
+
+    def sync_mirror(self) -> None:
+        """Replace the local mirror with the remote default graph (Graph Store HTTP GET).
+
+        Requires ``graph_store_url`` on construction. Does not modify the remote dataset.
+        For per-subject hydration use :meth:`pull_subjects_into_mirror` instead.
+        """
+        self._check_open()
+        if self._graph_store_url is None:
+            raise ConfigurationError(
+                "HttpStore.sync_mirror() requires graph_store_url=; "
+                "use pull_subjects_into_mirror() for partial sync"
+            )
+        content, content_type = http_common.fetch_graph_store(
+            self._client,
+            self._graph_store_url,
+            max_retries=self._max_retries,
+            retry_backoff=self._retry_backoff,
+        )
+        remote = http_common.parse_gsp_response(content, content_type)
+        http_common.replace_mirror_from_graph(self._graph, remote)
+        self._registry.bind(self._graph)
 
     def close(self) -> None:
         if self._closed:
