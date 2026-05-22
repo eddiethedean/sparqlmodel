@@ -62,7 +62,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install package
-        run: pip install -e .
+        run: pip install -e ".[http]"
 
       - name: Run real-world examples
         run: |
