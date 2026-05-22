@@ -32,6 +32,14 @@ See {doc}`PRODUCTION` — HttpStore mirror model and mirror modes.
 
 See {doc}`PRODUCTION` — mirror modes.
 
+## Duplicate triples after UPDATE retry
+
+**Symptom:** Remote dataset contains duplicated `INSERT DATA` rows after a transient **503** during `put` / `update_graph`.
+
+**Cause (0.11.0+):** UPDATE chunks are retried on 502/503/504. The server may have applied the first attempt before returning an error.
+
+**Mitigation:** Set `max_retries=0` on the store for critical writes, or ensure chunks are idempotent. See {doc}`PRODUCTION` — UPDATE retries.
+
 ## Transient HTTP errors (503 / timeouts)
 
 **Symptom:** `QueryError: SPARQL query failed` or UPDATE failures during brief endpoint outages.

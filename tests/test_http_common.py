@@ -46,6 +46,39 @@ def test_build_update_chunks_empty() -> None:
     assert list(http_common.iter_graph_chunks(Store(), max_triples=10)) == []
 
 
+def test_sparql_url_preserves_query_string() -> None:
+    url = http_common.sparql_url(
+        "http://fuseki.example/ds/sparql?default-graph-uri=http://example.org/g"
+    )
+    assert url == "http://fuseki.example/ds/sparql?default-graph-uri=http://example.org/g"
+
+
+def test_append_query_params_preserves_existing_query() -> None:
+    url = http_common.append_query_params(
+        "http://fuseki.example/ds/sparql?default-graph-uri=http://example.org/g",
+        query="SELECT * WHERE { ?s ?p ?o }",
+    )
+    assert url.startswith("http://fuseki.example/ds/sparql?")
+    assert "default-graph-uri=" in url
+    assert "query=SELECT" in url
+    assert url.count("?") == 1
+
+
+def test_expand_subject_iris_compact() -> None:
+    expanded = http_common.expand_subject_iris(
+        ["schema:Person/1"],
+        {"schema": "https://schema.org/"},
+    )
+    assert expanded == ["https://schema.org/Person/1"]
+
+
+def test_expand_subject_iris_unknown_prefix_raises() -> None:
+    from sparqlmodel.exceptions import QueryError
+
+    with pytest.raises(QueryError, match="Invalid IRI for CONSTRUCT"):
+        http_common.expand_subject_iris(["bad:Thing/1"], {})
+
+
 def test_validate_query_method_rejects_invalid() -> None:
     with pytest.raises(ValueError, match="query_method"):
         http_common.validate_query_method("put")

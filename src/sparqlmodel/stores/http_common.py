@@ -8,15 +8,15 @@ import re
 import time
 from collections.abc import Iterable, Iterator, Mapping
 from typing import Any, Literal, cast
-from urllib.parse import urlencode, urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
 from triplemodel import Store
 
-from sparqlmodel.exceptions import QueryError
+from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.graph import _subject_pattern
 from sparqlmodel.rdf_n3 import triple_to_n3
-from sparqlmodel.types import IRI
+from sparqlmodel.types import IRI, expand_iri
 
 QueryMethod = Literal["post", "get"]
 _VALID_QUERY_METHODS = frozenset({"post", "get"})
@@ -109,6 +109,29 @@ def build_update_chunks(
     return chunks
 
 
+def append_query_params(url: str, **params: str) -> str:
+    """Append query parameters to ``url``, preserving any existing query string."""
+    parsed = urlparse(url)
+    query_items = list(parse_qsl(parsed.query, keep_blank_values=True))
+    query_items.extend(params.items())
+    return urlunparse(parsed._replace(query=urlencode(query_items)))
+
+
+def expand_subject_iris(
+    iris: Iterable[str | IRI],
+    prefixes: dict[str, str],
+) -> list[str]:
+    """Expand compact IRIs to absolute form for CONSTRUCT VALUES and mirror sync."""
+    unique_raw = list(dict.fromkeys(str(i) for i in iris))
+    expanded: list[str] = []
+    for raw in unique_raw:
+        try:
+            expanded.append(expand_iri(raw, prefixes))
+        except ConfigurationError as exc:
+            raise QueryError(f"Invalid IRI for CONSTRUCT: {exc}") from exc
+    return expanded
+
+
 def request_with_retry(
     client: httpx.Client,
     method: str,
@@ -127,6 +150,7 @@ def request_with_retry(
             if is_retryable_status(response.status_code):
                 if attempt >= max_retries:
                     response.raise_for_status()
+                response.close()
                 time.sleep(_backoff_seconds(retry_backoff, attempt))
                 continue
             response.raise_for_status()
@@ -157,6 +181,7 @@ async def async_request_with_retry(
             if is_retryable_status(response.status_code):
                 if attempt >= max_retries:
                     response.raise_for_status()
+                await response.aclose()
                 await asyncio.sleep(_backoff_seconds(retry_backoff, attempt))
                 continue
             response.raise_for_status()
@@ -180,7 +205,7 @@ def execute_select(
 ) -> httpx.Response:
     """Run a remote SELECT using GET or POST."""
     if query_method == "get":
-        query_url = f"{url}?{urlencode({'query': sparql})}"
+        query_url = append_query_params(url, query=sparql)
         return request_with_retry(
             client,
             "GET",
@@ -213,7 +238,7 @@ async def async_execute_select(
 ) -> httpx.Response:
     """Run a remote SELECT using GET or POST (async)."""
     if query_method == "get":
-        query_url = f"{url}?{urlencode({'query': sparql})}"
+        query_url = append_query_params(url, query=sparql)
         return await async_request_with_retry(
             client,
             "GET",
@@ -277,20 +302,31 @@ def graph_to_delete_data(graph: Store) -> str:
 
 
 def sparql_url(endpoint: str) -> str:
-    if endpoint.endswith("/sparql") or endpoint.endswith("/query"):
-        return endpoint
-    return urljoin(endpoint + "/", "sparql")
+    """Normalize a SPARQL endpoint URL, preserving an existing query string."""
+    base, sep, query = endpoint.partition("?")
+    if base.endswith("/sparql") or base.endswith("/query"):
+        path = base
+    else:
+        path = urljoin(base.rstrip("/") + "/", "sparql")
+    if sep:
+        return f"{path}?{query}"
+    return path
 
 
 _SPARQL_QUERY_KIND = re.compile(
     r"\b(SELECT|ASK|CONSTRUCT|DESCRIBE|INSERT|DELETE)\b",
     re.IGNORECASE,
 )
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def _strip_block_comments(text: str) -> str:
+    return _BLOCK_COMMENT_RE.sub("", text)
 
 
 def is_select_query(sparql: str) -> bool:
     """Return True when ``sparql`` appears to be a SPARQL SELECT (not ASK/CONSTRUCT/DESCRIBE)."""
-    text = sparql
+    text = _strip_block_comments(sparql)
     while True:
         stripped = text.lstrip()
         if not stripped:

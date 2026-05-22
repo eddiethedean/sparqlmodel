@@ -20,7 +20,7 @@ from sparqlmodel.model import SPARQLModel
 from sparqlmodel.query import Query
 from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.serializers import _resolve_rdf_format
-from sparqlmodel.session_state import SessionState, identity_key_for_iri
+from sparqlmodel.session_state import SessionState, identity_key, identity_key_for_iri
 from sparqlmodel.stores.base import StoreProtocol
 from sparqlmodel.stores.memory import MemoryStore
 from sparqlmodel.types import IRI, NamespaceRegistry
@@ -237,10 +237,13 @@ class SPARQLSession:
         self._check_open()
         self._maybe_autoflush()
         model.ensure_id()
+        id_key = identity_key(model)
+        self._state.remove_pending_for(type(model), id_key[1])
         session_core.check_stale_add(self._store.graph, model)
         g = model_to_graph(model)
         self._store.update_graph(add=g)
         self._state.set_identity(model)
+        session_core._register_embedded_identities(self._state, model)
         session_core.invalidate_cascade_keys(self._state, self._store.graph, model, for_put=False)
         return model
 

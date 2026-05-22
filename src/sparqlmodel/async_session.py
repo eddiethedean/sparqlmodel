@@ -17,7 +17,7 @@ from sparqlmodel.graph import (
 )
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_bridge import model_to_graph
-from sparqlmodel.session_state import SessionState, identity_key_for_iri
+from sparqlmodel.session_state import SessionState, identity_key, identity_key_for_iri
 from sparqlmodel.stores.async_base import AsyncStoreProtocol
 from sparqlmodel.stores.async_memory import AsyncMemoryStore
 from sparqlmodel.types import IRI, NamespaceRegistry
@@ -177,10 +177,13 @@ class AsyncSPARQLSession:
         self._check_open()
         await self._maybe_autoflush()
         model.ensure_id()
+        id_key = identity_key(model)
+        self._state.remove_pending_for(type(model), id_key[1])
         session_core.check_stale_add(self._store.graph, model)
         g = model_to_graph(model)
         await self._store.update_graph(add=g)
         self._state.set_identity(model)
+        session_core._register_embedded_identities(self._state, model)
         session_core.invalidate_cascade_keys(self._state, self._store.graph, model, for_put=False)
         return model
 

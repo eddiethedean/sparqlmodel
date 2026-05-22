@@ -202,7 +202,8 @@ class HttpStore:
     def pull_subjects_into_mirror(self, iris: Iterable[str | IRI]) -> None:
         """Fetch triples for ``iris`` from the remote endpoint into the local mirror."""
         self._check_open()
-        unique = list(dict.fromkeys(str(i) for i in iris))
+        prefixes = dict(self._registry.prefixes)
+        unique = http_common.expand_subject_iris(iris, prefixes)
         if not unique:
             return
         values = " ".join(f"<{validate_iri_token(iri)}>" for iri in unique)
@@ -232,7 +233,6 @@ class HttpStore:
                 remote = load_graph(data=response.content, format="turtle")
             except Exception as exc:
                 raise QueryError(f"Failed to parse CONSTRUCT response: {exc}") from exc
-        prefixes = dict(self._registry.prefixes)
         http_common.apply_construct_to_mirror(
             self._graph,
             remote,

@@ -54,7 +54,11 @@ Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan` / `as
 
 **Batched UPDATE:** `update_graph` sends all DELETE chunks first, then all INSERT chunks. The local mirror is updated **only after every remote chunk succeeds**. If chunk *k* fails after earlier chunks succeeded, the remote dataset may be partially updated; the mirror is **not** changed — treat as an operator incident and reconcile manually.
 
-**GET SELECT:** Useful behind caches or strict read-only proxies. Very long queries can exceed URL length limits on some servers; prefer POST for large SELECT text. CONSTRUCT pull always uses POST.
+**UPDATE retries:** Retries are safe for idempotent chunks only. If the server applies an UPDATE then returns **503**, a retry may send the same `INSERT DATA` / `DELETE DATA` again. Use `max_retries=0` for sensitive writes or design remote data so duplicate chunks are harmless.
+
+**GET SELECT:** Useful behind caches or strict read-only proxies. Very long queries can exceed URL length limits on some servers; prefer POST for large SELECT text. CONSTRUCT pull always uses POST. When `read_endpoint` already includes query parameters (for example Fuseki `default-graph-uri`), GET merges `query=` with `&` rather than adding a second `?`.
+
+**Compact IRIs:** Pass `prefixes=` on the HTTP store (or use absolute IRIs) so `pull_subjects_into_mirror` expands `schema:Person/1` consistently in CONSTRUCT `VALUES` and mirror removal.
 
 Set `max_retries=0` in tests or when you need immediate failure without transport retries.
 
@@ -69,7 +73,7 @@ Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan(..., m
 | **`writer`** (default) | Only when the subject has **no** triples in the mirror | This app is the primary writer for the endpoint |
 | **`remote_authoritative`** | **Every** `get` / `refresh` (CONSTRUCT + replace-on-pull) | Read replicas, admin UIs, or multi-reader apps that must see remote truth |
 
-Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: mirror triples for each requested IRI are removed before remote triples are merged.
+Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: outgoing mirror triples `(subject, ?, ?)` for each requested IRI are removed before remote triples are merged. Triples where the IRI appears only as object are not removed (full star-shaped sync remains **0.12**).
 
 **Authority:**
 

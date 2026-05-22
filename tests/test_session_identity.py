@@ -282,6 +282,38 @@ def test_merge_preserves_unset_relationships(session: SPARQLSession, odos: Perso
     assert cached.works_for.name == "Acme Corp"
 
 
+def test_get_none_when_mirror_lacks_person_rdf_type(session: SPARQLSession) -> None:
+    from pyoxigraph import Literal
+
+    from sparqlmodel.graph import _subject_pattern
+
+    iri = IRI("urn:p:no-person-type")
+    subj = _subject_pattern(iri, Person.get_prefixes())
+    session.store.graph.add((subj, "https://schema.org/name", Literal("Orphan")))
+    assert session.get(Person, iri) is None
+
+
+def test_merge_registers_embedded_organization_identity(session: SPARQLSession) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    org = Organization(id=IRI("urn:org:acme"), name="Acme")
+    detached = Person(id=IRI("urn:person:1"), name="Pat", works_for=org)
+    session.merge(detached)
+    org_key = identity_key_for_iri(Organization, org.id)
+    assert session._state.get_identity(org_key) is detached.works_for
+
+
+def test_add_drops_pending_put_for_same_subject(session: SPARQLSession) -> None:
+    iri = IRI("urn:person:pending-add")
+    session.autoflush = False
+    session.put(Person(id=iri, name="Pending"), flush=False)
+    session.add(Person(id=iri, name="Added"))
+    session.flush()
+    loaded = session.get(Person, iri)
+    assert loaded is not None
+    assert loaded.name == "Added"
+
+
 def test_merge_drops_pending_put_for_same_subject(session: SPARQLSession) -> None:
     plain = Person(id=IRI("urn:person:plain"), name="Plain")
     session.put(plain)

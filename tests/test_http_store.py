@@ -38,6 +38,10 @@ def test_is_select_query_inline_prefix_and_comments() -> None:
     assert not is_select_query("# only a comment")
 
 
+def test_is_select_query_rejects_block_comment_disguised_ask() -> None:
+    assert not is_select_query("/* SELECT */ ASK { ?s ?p ?o }")
+
+
 def test_http_store_pull_empty_iris_no_request() -> None:
     posts: list[str] = []
 
@@ -773,6 +777,88 @@ def test_http_store_query_get_method() -> None:
     store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
     assert seen[0][0] == "GET"
     assert "query=SELECT" in seen[0][1]
+    store.close()
+
+
+def test_http_store_query_get_preserves_endpoint_query_params() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://fuseki.example/ds/sparql",
+        read_endpoint="http://fuseki.example/ds/sparql?default-graph-uri=http://example.org/g",
+        client=client,
+        query_method="get",
+        max_retries=0,
+    )
+    store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+    assert len(seen) == 1
+    assert "default-graph-uri=" in seen[0]
+    assert "query=SELECT" in seen[0]
+    assert seen[0].count("?") == 1
+    store.close()
+
+
+def test_http_store_pull_expands_compact_iri_in_construct() -> None:
+    bodies: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.content.decode())
+        return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+        max_retries=0,
+    )
+    store.pull_subjects_into_mirror([IRI("schema:Person/1")])
+    assert len(bodies) == 1
+    assert "https://schema.org/Person/1" in bodies[0]
+    assert "schema:Person/1" not in bodies[0]
+    store.close()
+
+
+def test_http_store_get_pulls_when_mirror_lacks_person_rdf_type() -> None:
+    from pyoxigraph import Literal, NamedNode
+
+    remote_iri = "http://example.org/person/wrong-type"
+    construct_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            construct_calls.append(body)
+            return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
+    subj = NamedNode(remote_iri)
+    store.graph.add(
+        (
+            subj,
+            NamedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+            NamedNode("https://schema.org/Organization"),
+        )
+    )
+    store.graph.add((subj, NamedNode("https://schema.org/name"), Literal("Wrong")))
+    session = SPARQLSession(store=store)
+    loaded = session.get(Person, IRI(remote_iri))
+    assert loaded is None
+    assert len(construct_calls) == 1
     store.close()
 
 

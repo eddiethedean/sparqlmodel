@@ -404,6 +404,44 @@ async def test_async_query_options(async_session: AsyncSPARQLSession) -> None:
     assert len(await q.all()) >= 1
 
 
+async def test_async_get_none_when_mirror_lacks_person_rdf_type(
+    async_session: AsyncSPARQLSession,
+) -> None:
+    from pyoxigraph import Literal
+
+    from sparqlmodel.graph import _subject_pattern
+
+    iri = IRI("urn:p:no-person-type")
+    subj = _subject_pattern(iri, Person.get_prefixes())
+    async_session.store.graph.add((subj, "https://schema.org/name", Literal("Orphan")))
+    assert await async_session.get(Person, iri) is None
+
+
+async def test_async_merge_registers_embedded_organization_identity(
+    async_session: AsyncSPARQLSession,
+) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    org = Organization(id=IRI("urn:org:acme"), name="Acme")
+    detached = Person(id=IRI("urn:person:1"), name="Pat", works_for=org)
+    await async_session.merge(detached)
+    org_key = identity_key_for_iri(Organization, org.id)
+    assert async_session._state.get_identity(org_key) is detached.works_for
+
+
+async def test_async_add_drops_pending_put_for_same_subject(
+    async_session: AsyncSPARQLSession,
+) -> None:
+    iri = IRI("urn:person:pending-add")
+    async_session.autoflush = False
+    await async_session.put(Person(id=iri, name="Pending"), flush=False)
+    await async_session.add(Person(id=iri, name="Added"))
+    await async_session.flush()
+    loaded = await async_session.get(Person, iri)
+    assert loaded is not None
+    assert loaded.name == "Added"
+
+
 async def test_async_merge_returns_cached_identity(async_session: AsyncSPARQLSession) -> None:
     plain = Person(id=IRI("urn:person:plain"), name="Plain")
     await async_session.put(plain)

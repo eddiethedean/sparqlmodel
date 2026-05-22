@@ -15,6 +15,7 @@ from sparqlmodel.graph import (
     _subject_pattern,
     cascade_subjects_for_removal,
     owned_triples_for_subjects,
+    subject_has_rdf_type,
     triples_to_graph,
 )
 from sparqlmodel.hydration import hydrate_one, validate_depth
@@ -58,7 +59,7 @@ def _should_pull_subject_for_read(
         return False
     if getattr(store, "mirror_mode", "writer") == "remote_authoritative":
         return True
-    return not _subject_exists_in_store(store_graph, model_cls, iri)
+    return not subject_has_rdf_type(model_cls, iri, store_graph)
 
 
 def _evict_read_cache_for_pull(
@@ -104,15 +105,13 @@ async def _pull_subject_for_read_async(
             await result
 
 
-def _subject_exists_in_store(
+def _subject_loadable_in_store(
     store_graph: Store,
     model_cls: type[SPARQLModel],
     iri: str | IRI,
 ) -> bool:
-    """Return whether ``iri`` still has any triples in ``store_graph``."""
-    prefixes = model_cls.get_prefixes()
-    subj_ref = _subject_pattern(iri, prefixes)
-    return any(store_graph.triples((subj_ref, None, None)))
+    """Return whether ``iri`` has the expected ``rdf:type`` in ``store_graph``."""
+    return subject_has_rdf_type(model_cls, iri, store_graph)
 
 
 def depth_satisfied(model: SPARQLModel, depth: int) -> bool:
@@ -226,9 +225,9 @@ def get_impl(
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
         if hydrated is None:
-            if not _subject_exists_in_store(store.graph, model_cls, iri):
+            if not _subject_loadable_in_store(store.graph, model_cls, iri):
                 return None
-        elif _subject_exists_in_store(store.graph, model_cls, iri):
+        elif _subject_loadable_in_store(store.graph, model_cls, iri):
             cached = cast("SPARQLModel", hydrated)
             if depth_satisfied(cached, depth):
                 return cached
@@ -241,7 +240,7 @@ def get_impl(
     if identity is not None and depth_satisfied(identity, depth):
         if depth == 0 and relationships_materialized(identity):
             pass
-        elif _subject_exists_in_store(store.graph, model_cls, iri):
+        elif _subject_loadable_in_store(store.graph, model_cls, iri):
             state.set_hydration(hkey, identity)
             return identity
         else:
@@ -472,8 +471,10 @@ def merge_impl(state: SessionState, model: SPARQLModel) -> SPARQLModel:
     if identity is not None:
         _copy_validated_state(identity, model, exclude_unset=True)
         state.invalidate_hydration_for(model_cls, id_key[1])
+        _register_embedded_identities(state, identity)
         return identity
     state.set_identity(model)
+    _register_embedded_identities(state, model)
     return model
 
 
@@ -517,9 +518,9 @@ async def get_impl_async(
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
         if hydrated is None:
-            if not _subject_exists_in_store(store.graph, model_cls, iri):
+            if not _subject_loadable_in_store(store.graph, model_cls, iri):
                 return None
-        elif _subject_exists_in_store(store.graph, model_cls, iri):
+        elif _subject_loadable_in_store(store.graph, model_cls, iri):
             cached = cast("SPARQLModel", hydrated)
             if depth_satisfied(cached, depth):
                 return cached
@@ -532,7 +533,7 @@ async def get_impl_async(
     if identity is not None and depth_satisfied(identity, depth):
         if depth == 0 and relationships_materialized(identity):
             pass
-        elif _subject_exists_in_store(store.graph, model_cls, iri):
+        elif _subject_loadable_in_store(store.graph, model_cls, iri):
             state.set_hydration(hkey, identity)
             return identity
         else:

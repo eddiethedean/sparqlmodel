@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GET SELECT** — preserve existing query parameters on `read_endpoint` / `sparql_url` (Fuseki `default-graph-uri`, etc.)
+- **CONSTRUCT pull** — expand compact IRIs in `VALUES` using store `prefixes=` (aligned with mirror removal)
+- **Session `get` / pull** — auto-pull and cache checks use `rdf:type` (not merely any triple on the subject)
+- **`merge` / `add`** — register embedded models in the identity map; `add` clears pending `put(..., flush=False)` for the same subject
+- **HTTP retries** — close retryable responses before backoff (sync `close`, async `aclose`); `is_select_query` ignores `/* */` block comments
+
+### Documentation
+
+- PRODUCTION — UPDATE retry non-idempotency, replace-on-pull subject-only scope, GET URL merge, compact IRI prefixes
+
 ## [0.11.0] - 2026-05-22
 
 ### Added
