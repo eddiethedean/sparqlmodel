@@ -56,7 +56,7 @@ DELETE {{
 }}
 WHERE {{
   <{PERSON_IRI}> ?p ?o .
-}}
+}} ;
 INSERT DATA {{
   <{PERSON_IRI}> a schema:Person ;
     schema:name "{name}" .
