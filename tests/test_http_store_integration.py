@@ -48,9 +48,15 @@ def _async_http_store(endpoints: FusekiEndpoints) -> AsyncHttpStore:
 
 
 def _external_update(endpoints: FusekiEndpoints, name: str) -> None:
-    """Simulate another writer updating the remote dataset only."""
+    """Simulate another writer replacing subject triples on the remote dataset."""
     update = f"""
 PREFIX schema: <https://schema.org/>
+DELETE {{
+  <{PERSON_IRI}> ?p ?o .
+}}
+WHERE {{
+  <{PERSON_IRI}> ?p ?o .
+}}
 INSERT DATA {{
   <{PERSON_IRI}> a schema:Person ;
     schema:name "{name}" .
