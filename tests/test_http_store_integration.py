@@ -11,13 +11,40 @@ from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.stores.async_http import AsyncHttpStore
 from sparqlmodel.stores.http import HttpStore
 from sparqlmodel.stores.http_common import SPARQL_UPDATE_HEADERS
-from tests.conftest_fuseki import FusekiEndpoints, _fuseki_admin_auth, clear_fuseki_dataset
+from tests.conftest_fuseki import (
+    FusekiEndpoints,
+    _fuseki_admin_auth,
+    clear_fuseki_dataset,
+    fuseki_basic_auth_tuple,
+)
 from tests.models import Person
 
 pytestmark = pytest.mark.integration
 
 PREFIXES = {"schema": "https://schema.org/"}
 PERSON_IRI = "http://example.org/integration/person/1"
+
+
+def _http_store(endpoints: FusekiEndpoints) -> HttpStore:
+    return HttpStore(
+        endpoints.read_endpoint,
+        read_endpoint=endpoints.read_endpoint,
+        write_endpoint=endpoints.write_endpoint,
+        graph_store_url=endpoints.graph_store_url,
+        prefixes=PREFIXES,
+        auth=fuseki_basic_auth_tuple(),
+    )
+
+
+def _async_http_store(endpoints: FusekiEndpoints) -> AsyncHttpStore:
+    return AsyncHttpStore(
+        endpoints.read_endpoint,
+        read_endpoint=endpoints.read_endpoint,
+        write_endpoint=endpoints.write_endpoint,
+        graph_store_url=endpoints.graph_store_url,
+        prefixes=PREFIXES,
+        auth=fuseki_basic_auth_tuple(),
+    )
 
 
 def _external_update(endpoints: FusekiEndpoints, name: str) -> None:
@@ -66,15 +93,7 @@ SELECT ?name WHERE {{
 
 def test_fuseki_put_query_and_get_mirror(fuseki_clean: FusekiEndpoints) -> None:
     person = Person(id=IRI(PERSON_IRI), name="SessionWriter")
-    with SPARQLSession(
-        store=HttpStore(
-            fuseki_clean.read_endpoint,
-            read_endpoint=fuseki_clean.read_endpoint,
-            write_endpoint=fuseki_clean.write_endpoint,
-            graph_store_url=fuseki_clean.graph_store_url,
-            prefixes=PREFIXES,
-        )
-    ) as session:
+    with SPARQLSession(store=_http_store(fuseki_clean)) as session:
         session.put(person)
         assert _select_name(fuseki_clean) == "SessionWriter"
         loaded = session.get(Person, IRI(PERSON_IRI))
@@ -84,13 +103,7 @@ def test_fuseki_put_query_and_get_mirror(fuseki_clean: FusekiEndpoints) -> None:
 
 def test_fuseki_external_writer_sync_mirror(fuseki_clean: FusekiEndpoints) -> None:
     person = Person(id=IRI(PERSON_IRI), name="BeforeExternal")
-    store = HttpStore(
-        fuseki_clean.read_endpoint,
-        read_endpoint=fuseki_clean.read_endpoint,
-        write_endpoint=fuseki_clean.write_endpoint,
-        graph_store_url=fuseki_clean.graph_store_url,
-        prefixes=PREFIXES,
-    )
+    store = _http_store(fuseki_clean)
     try:
         with SPARQLSession(store=store) as session:
             session.put(person)
@@ -122,11 +135,7 @@ def test_fuseki_sync_mirror_without_graph_store_url_raises() -> None:
 def test_fuseki_sync_mirror_empty_remote_clears_mirror(fuseki_clean: FusekiEndpoints) -> None:
     clear_fuseki_dataset(fuseki_clean)
     person = Person(id=IRI(PERSON_IRI), name="Ghost")
-    store = HttpStore(
-        fuseki_clean.read_endpoint,
-        graph_store_url=fuseki_clean.graph_store_url,
-        prefixes=PREFIXES,
-    )
+    store = _http_store(fuseki_clean)
     try:
         with SPARQLSession(store=store) as session:
             session.put(person)
@@ -141,13 +150,7 @@ def test_fuseki_sync_mirror_empty_remote_clears_mirror(fuseki_clean: FusekiEndpo
 @pytest.mark.asyncio
 async def test_fuseki_async_external_writer_sync_mirror(fuseki_clean: FusekiEndpoints) -> None:
     person = Person(id=IRI(PERSON_IRI), name="AsyncBefore")
-    store = AsyncHttpStore(
-        fuseki_clean.read_endpoint,
-        read_endpoint=fuseki_clean.read_endpoint,
-        write_endpoint=fuseki_clean.write_endpoint,
-        graph_store_url=fuseki_clean.graph_store_url,
-        prefixes=PREFIXES,
-    )
+    store = _async_http_store(fuseki_clean)
     try:
         async with AsyncSPARQLSession(store=store) as session:
             await session.put(person)
@@ -169,13 +172,7 @@ def test_fuseki_read_write_endpoints_same_dataset(fuseki_clean: FusekiEndpoints)
     assert fuseki_clean.read_endpoint.endswith("/sparql")
     assert fuseki_clean.write_endpoint.endswith("/update")
     _external_update(fuseki_clean, "ViaWriteUrl")
-    store = HttpStore(
-        fuseki_clean.read_endpoint,
-        read_endpoint=fuseki_clean.read_endpoint,
-        write_endpoint=fuseki_clean.write_endpoint,
-        graph_store_url=fuseki_clean.graph_store_url,
-        prefixes=PREFIXES,
-    )
+    store = _http_store(fuseki_clean)
     try:
         bindings = store.query(
             f"PREFIX schema: <https://schema.org/> "

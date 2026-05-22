@@ -45,6 +45,13 @@ def _fuseki_admin_auth() -> httpx.BasicAuth | None:
     return httpx.BasicAuth(user, password)
 
 
+def fuseki_basic_auth_tuple() -> tuple[str, str]:
+    """Basic auth tuple for :class:`~sparqlmodel.stores.http.HttpStore` constructors."""
+    password = os.environ.get(FUSEKI_ADMIN_PASSWORD_ENV, "testadmin")
+    user = os.environ.get(FUSEKI_ADMIN_USER_ENV, "admin")
+    return (user, password)
+
+
 def _wait_for_fuseki(base: str, timeout: float = 60.0) -> None:
     deadline = time.monotonic() + timeout
     ping = f"{base}/$/ping"
