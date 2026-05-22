@@ -435,6 +435,8 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 **Out of scope for this milestone:** Multi-valued / lang fields (**0.13**); disk-backed `OxigraphStore` (**0.14**).
 
+(010--mirror-semantics)=
+
 #### Phase 0.10 — Mirror semantics
 
 **Depends on:** 0.9.2
@@ -449,6 +451,8 @@ Per-subject mirror sync is **correct** and **configurable** before retries or fu
 | Tests | Stale predicate removed after remote CONSTRUCT; sync/async parity |
 
 **Phase exit:** No stale predicates left for a subject after pull; operators can pick mirror mode per store.
+
+(011--http-resilience)=
 
 #### Phase 0.11 — HTTP resilience
 
@@ -465,6 +469,8 @@ Safe large writes and transient failure handling — still single-writer per end
 | Docs | [PRODUCTION.md](PRODUCTION.md) — batch sizes, retry defaults, GET vs POST tradeoffs |
 
 **Phase exit:** Large cascades do not send unbounded UPDATE strings; transient errors recover without app retry loops.
+
+(012--mirror-contract)=
 
 #### Phase 0.12 — Mirror contract
 

@@ -109,4 +109,4 @@ total = session.query(Person).where(...).count()
 
 - [ORM.md](ORM.md) — developer guide
 - [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-13-ga-gate)
-- [ROADMAP.md — 0.4–1.2](ROADMAP.md)
+- [ROADMAP.md — Forward roadmap](ROADMAP.md#forward-roadmap-07--015)

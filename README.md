@@ -208,7 +208,7 @@ from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
-File parse/serialize is implemented by [TripleModel](https://github.com/eddiethedean/triplemodel) (`parse`, `serialize`, `load_graph`). See the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--13).
+File parse/serialize is implemented by [TripleModel](https://github.com/eddiethedean/triplemodel) (`parse`, `serialize`, `load_graph`). See the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--015).
 
 ---
 
@@ -232,7 +232,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 ## Known limitations (0.9.2)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore` (0.9.1+): `get` and `refresh` (0.9.2+) pull missing subjects from the remote endpoint into the mirror (CONSTRUCT); full mirror reconciliation and multi-writer sync remain planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore)
+- `HttpStore` / `AsyncHttpStore` (0.9.1+): `get` and `refresh` (0.9.2+) pull missing subjects from the remote endpoint into the mirror (CONSTRUCT); full mirror reconciliation and multi-writer sync remain planned under [Production HttpStore](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#production-httpstore) (phases **0.10–0.12**)
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching

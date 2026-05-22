@@ -242,14 +242,14 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 
 **Today (0.2.0):** Suitable for prototypes, tests, single-process apps (`MemoryStore`), and early FastAPI services. Remote `HttpStore` requires understanding the [mirror model](SPECS.md#httpstore) (query vs `get`).
 
-**Target (1.3):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
+**Target (0.15):** Production-grade SPARQL ORM with SQLModel-parity sessions and queries. Track progress:
 
 - [Production checklist](SPECS.md#production-orm-checklist-13-ga-gate) — normative P0 / P1 / P2 gates
-- [Roadmap — Forward roadmap](ROADMAP.md#forward-roadmap-07--13) — versions 0.7–1.3
+- [Roadmap — Forward roadmap](ROADMAP.md#forward-roadmap-07--015) — versions 0.7–0.15
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** production HttpStore sync (**1.0**), multi-valued and language-tagged fields (**1.1**). **Session cache control** (`merge`, `refresh`, `expunge`, `expunge_all`) shipped in **0.9.0**. **HttpStore** partial mirror pull and hydration fixes shipped in **0.9.1**; **`refresh` mirror pull**, **`merge` partial-field fix**, and **IRI ref hydration** in **0.9.2**. **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
+**Not yet available (planned):** [Production HttpStore](ROADMAP.md#production-httpstore) (phases **0.10–0.12**), multi-valued and language-tagged fields (**0.13**). See [SPARQLMojo parity backlog](ROADMAP.md#sparqlmojo-parity-backlog). **Session cache control** (`merge`, `refresh`, `expunge`, `expunge_all`) shipped in **0.9.0**. **HttpStore** partial mirror pull and hydration fixes shipped in **0.9.1**; **`refresh` mirror pull**, **`merge` partial-field fix**, and **IRI ref hydration** in **0.9.2**. **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
 
 ---
 
