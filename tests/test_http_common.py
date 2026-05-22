@@ -46,6 +46,11 @@ def test_build_update_chunks_empty() -> None:
     assert list(http_common.iter_graph_chunks(Store(), max_triples=10)) == []
 
 
+def test_sparql_url_preserves_update_path() -> None:
+    url = http_common.sparql_url("http://fuseki.example/ds/update")
+    assert url == "http://fuseki.example/ds/update"
+
+
 def test_sparql_url_preserves_query_string() -> None:
     url = http_common.sparql_url(
         "http://fuseki.example/ds/sparql?default-graph-uri=http://example.org/g"

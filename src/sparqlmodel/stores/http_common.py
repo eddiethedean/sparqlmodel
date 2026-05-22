@@ -304,7 +304,7 @@ def graph_to_delete_data(graph: Store) -> str:
 def sparql_url(endpoint: str) -> str:
     """Normalize a SPARQL endpoint URL, preserving an existing query string."""
     base, sep, query = endpoint.partition("?")
-    if base.endswith("/sparql") or base.endswith("/query"):
+    if base.endswith("/sparql") or base.endswith("/query") or base.endswith("/update"):
         path = base
     else:
         path = urljoin(base.rstrip("/") + "/", "sparql")

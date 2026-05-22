@@ -67,7 +67,8 @@ with SPARQLSession(store=store) as session:
 
 | Service | Path |
 |---------|------|
-| SPARQL query/update | `http://host:3030/{dataset}/sparql` |
+| SPARQL query | `http://host:3030/{dataset}/sparql` |
+| SPARQL update | `http://host:3030/{dataset}/update` |
 | Graph Store HTTP | `http://host:3030/{dataset}/data` |
 
 `http_common.default_graph_store_url(sparql_endpoint)` guesses `.../sparql` → `.../data`; production apps should pass an explicit `graph_store_url`.

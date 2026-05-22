@@ -68,6 +68,11 @@ def _dataset_sparql_url(base: str, name: str) -> str:
     return f"{base}/{name}/sparql"
 
 
+def _dataset_update_url(base: str, name: str) -> str:
+    """Fuseki SPARQL Update endpoint (distinct from query ``/sparql``)."""
+    return f"{base}/{name}/update"
+
+
 def _dataset_is_ready(base: str, name: str) -> bool:
     """Return True when the dataset SPARQL endpoint accepts queries (no admin API)."""
     sparql = _dataset_sparql_url(base, name)
@@ -124,12 +129,11 @@ def _ensure_dataset(base: str, name: str) -> None:
 
 
 def clear_fuseki_dataset(endpoints: FusekiEndpoints) -> None:
-    """Remove all triples from the dataset default graph."""
+    """Remove all triples from the dataset default graph (SPARQL UPDATE CLEAR ALL)."""
     auth = _fuseki_admin_auth()
-    update = "CLEAR ALL"
     response = httpx.post(
         endpoints.write_endpoint,
-        content=update.encode("utf-8"),
+        content=b"CLEAR ALL",
         headers={
             "Content-Type": "application/sparql-update",
             "Accept": "*/*",
@@ -137,17 +141,9 @@ def clear_fuseki_dataset(endpoints: FusekiEndpoints) -> None:
         auth=auth,
         timeout=30.0,
     )
-    if response.status_code == 200:
+    if response.status_code in (200, 204):
         return
-    try:
-        response = httpx.delete(endpoints.graph_store_url, auth=auth, timeout=30.0)
-        if response.status_code in (200, 204, 404):
-            return
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise RuntimeError(
-            f"Failed to clear Fuseki dataset at {endpoints.write_endpoint}: {exc}"
-        ) from exc
+    response.raise_for_status()
 
 
 @pytest.fixture(scope="session")
@@ -157,12 +153,13 @@ def fuseki_endpoints() -> FusekiEndpoints:
     _wait_for_fuseki(base)
     _ensure_dataset(base, FUSEKI_DATASET)
     sparql = _dataset_sparql_url(base, FUSEKI_DATASET)
+    update = _dataset_update_url(base, FUSEKI_DATASET)
     data = f"{base}/{FUSEKI_DATASET}/data"
     return FusekiEndpoints(
         base=base,
         dataset=FUSEKI_DATASET,
         read_endpoint=sparql,
-        write_endpoint=sparql,
+        write_endpoint=update,
         graph_store_url=data,
     )
 

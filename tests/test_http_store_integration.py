@@ -165,15 +165,14 @@ async def test_fuseki_async_external_writer_sync_mirror(fuseki_clean: FusekiEndp
 
 
 def test_fuseki_read_write_endpoints_same_dataset(fuseki_clean: FusekiEndpoints) -> None:
-    """Split read/write URLs (same Fuseki dataset) still share remote state."""
-    read_url = fuseki_clean.read_endpoint
-    write_url = fuseki_clean.write_endpoint
-    assert read_url == write_url
+    """Read/write split URLs (Fuseki ``/sparql`` vs ``/update``) share one dataset."""
+    assert fuseki_clean.read_endpoint.endswith("/sparql")
+    assert fuseki_clean.write_endpoint.endswith("/update")
     _external_update(fuseki_clean, "ViaWriteUrl")
     store = HttpStore(
-        read_url,
-        read_endpoint=read_url,
-        write_endpoint=write_url,
+        fuseki_clean.read_endpoint,
+        read_endpoint=fuseki_clean.read_endpoint,
+        write_endpoint=fuseki_clean.write_endpoint,
         graph_store_url=fuseki_clean.graph_store_url,
         prefixes=PREFIXES,
     )
