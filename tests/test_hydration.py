@@ -79,6 +79,50 @@ def test_load_from_graph_non_cascade_embed_without_iri_raises() -> None:
         load_from_graph(PersonNC, IRI("urn:p:nc"), Store(), depth=1)
 
 
+def test_load_from_graph_missing_related_type_without_iri_allowed() -> None:
+    """When IRI refs are not allowed, a string object without rdf:type becomes None."""
+
+    class StrictPerson(SPARQLModel):
+        rdf_type = "urn:test:StrictPerson"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+        works_for: Organization | None = Relationship(
+            "schema:worksFor",
+            model=Organization,
+            cascade=False,
+        )
+
+    raw = MagicMock()
+    raw.subject_uri.return_value = "urn:person:strict"
+    raw.name = "Pat"
+    raw.works_for = "urn:org:ghost"
+    with patch.object(StrictPerson, "from_graph", return_value=raw):
+        loaded = load_from_graph(StrictPerson, IRI("urn:person:strict"), Store(), depth=1)
+    assert loaded.works_for is None
+
+
+def test_load_from_graph_iri_ref_without_rdf_type() -> None:
+    """IRI-only relationship edges hydrate as IRI when the target has no rdf:type."""
+    from pyoxigraph import Literal
+
+    g = Store()
+    person_iri = "urn:person:1"
+    org_iri = "urn:org:ref"
+    g.add(
+        (
+            person_iri,
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
+        )
+    )
+    g.add((person_iri, "https://schema.org/name", Literal("Pat")))
+    g.add((person_iri, "https://schema.org/worksFor", org_iri))
+    loaded = load_from_graph(Person, IRI(person_iri), g, depth=1)
+    assert isinstance(loaded.works_for, IRI)
+    assert str(loaded.works_for) == org_iri
+
+
 def test_missing_related(session, odos: Person) -> None:
     session.put(odos)
     orphan = Person(id=IRI("urn:person:orphan"), name="Orphan", works_for=None)

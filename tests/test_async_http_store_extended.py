@@ -66,6 +66,29 @@ async def test_async_http_bearer_and_auth() -> None:
         await store2.aclose()
 
 
+async def test_async_http_basic_auth_over_bearer() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("authorization", ""))
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            auth=("user", "pass"),
+            bearer_token="secret",
+            client=client,
+        )
+        await store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+        assert seen[0].startswith("Basic ")
+        await store.aclose()
+
+
 async def test_async_http_aclose_twice() -> None:
     store = AsyncHttpStore("http://example.org/sparql")
     await store.aclose()

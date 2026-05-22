@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-21
+
+### Fixed
+
+- **`refresh` on HttpStore / AsyncHttpStore** — auto-pulls remote subjects into the mirror before reload (parity with `get`)
+- **`merge`** — partial detached instances no longer clear unset relationship fields; hydration cache invalidated after merge
+- **Hydration** — `Relationship | IRI` fields keep IRI object references when the target has no `rdf:type` in the graph
+
+### Changed
+
+- **CI** — smoke-run `examples/realworld/` scripts on Python 3.12
+
+### Documentation
+
+- README — dev install note for `pytest-asyncio` / `uv sync --extra dev`
+- Sessions guide and troubleshooting — `refresh` mirror pull on HTTP stores (0.9.2+)
+
 ## [0.9.1] - 2026-05-21
 
 ### Added

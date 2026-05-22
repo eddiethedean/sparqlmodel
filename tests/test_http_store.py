@@ -338,6 +338,66 @@ def test_http_store_update_remove_only() -> None:
     store.close()
 
 
+def test_http_store_basic_auth_over_bearer() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("authorization", ""))
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=transport)
+    store = HttpStore(
+        "http://example.org/sparql",
+        auth=("user", "pass"),
+        bearer_token="secret",
+        client=client,
+    )
+    store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+    assert seen[0].startswith("Basic ")
+    store.close()
+
+
+def test_http_store_refresh_pulls_remote_subject_into_mirror() -> None:
+    """refresh() CONSTRUCT-syncs remote subjects before hydration (parity with get)."""
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f"<{remote_iri}> a schema:Person ;\n"
+        '  schema:name "Remote" .\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=transport)
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
+    session = SPARQLSession(store=store)
+    detached = Person(id=IRI(remote_iri), name="Stale")
+    session.merge(detached)
+    refreshed = session.refresh(detached)
+    assert refreshed.name == "Remote"
+    assert len(store.graph) >= 2
+    store.close()
+
+
 def test_http_store_get_pulls_remote_subject_into_mirror() -> None:
     """get() CONSTRUCT-syncs remote subjects before hydration."""
     remote_iri = "http://example.org/person/remote"

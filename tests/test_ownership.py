@@ -1,6 +1,6 @@
 """Tests for nested resource cascade on put/delete."""
 
-from pyoxigraph import BlankNode
+from pyoxigraph import BlankNode, Literal
 
 from sparqlmodel import IRI
 from sparqlmodel.graph import expand_iri
@@ -126,3 +126,16 @@ def test_add_same_id_leaves_stale_literals(session) -> None:
     names = [term_str(o) for o in session.graph.objects(subj, pred)]
     assert "First" in names
     assert "Second" in names
+
+
+def test_put_delete_preserves_extension_triples(session) -> None:
+    """Undeclared predicates on a subject are not removed by put/delete."""
+    person = Person(id=IRI("urn:person:ext"), name="Pat")
+    session.put(person)
+    subj = str(person.id.expand(Person.get_prefixes()))
+    extra_pred = "http://example.org/extra"
+    session.graph.add((subj, extra_pred, Literal("keep")))
+    session.put(person)
+    assert len(list(session.graph.triples((subj, extra_pred, None)))) == 1
+    session.delete(person)
+    assert len(list(session.graph.triples((subj, extra_pred, None)))) == 1

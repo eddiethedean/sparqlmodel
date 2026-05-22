@@ -306,11 +306,18 @@ def expire_impl(
     state.remove_pending_for(key[0], key[1])
 
 
-def _copy_validated_state(target: SPARQLModel, source: SPARQLModel) -> SPARQLModel:
+def _copy_validated_state(
+    target: SPARQLModel,
+    source: SPARQLModel,
+    *,
+    exclude_unset: bool = False,
+) -> SPARQLModel:
     """Copy validated field values from ``source`` onto ``target`` (same object id)."""
     model_cls = type(target)
-    validated = model_cls.model_validate(source.model_dump())
+    validated = model_cls.model_validate(source.model_dump(exclude_unset=exclude_unset))
     for name in model_cls.model_fields:
+        if exclude_unset and name not in source.model_fields_set:
+            continue
         setattr(target, name, getattr(validated, name))
     return target
 
@@ -325,23 +332,14 @@ def expunge_all_impl(state: SessionState) -> None:
     state.expunge_all()
 
 
-def refresh_impl(
+def _apply_refresh_loaded(
     state: SessionState,
-    store: StoreProtocol | AsyncStoreProtocol,
     model: SPARQLModel,
+    loaded: SPARQLModel,
     *,
     depth: int,
 ) -> SPARQLModel:
-    """Reload ``model`` from the store graph at ``depth``."""
-    validate_depth(depth)
-    model.ensure_id()
     model_cls = type(model)
-    assert model.id is not None
-    loaded = hydrate_one(model_cls, model.id, store, depth=depth)
-    if loaded is None:
-        raise ConfigurationError(
-            f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
-        )
     id_key = identity_key(model)
     identity = state.get_identity(id_key)
     if identity is not None:
@@ -355,13 +353,61 @@ def refresh_impl(
     return loaded
 
 
+def refresh_impl(
+    state: SessionState,
+    store: StoreProtocol,
+    model: SPARQLModel,
+    *,
+    depth: int,
+) -> SPARQLModel:
+    """Reload ``model`` from the store graph at ``depth``."""
+    validate_depth(depth)
+    model.ensure_id()
+    model_cls = type(model)
+    assert model.id is not None
+    if not _subject_exists_in_store(store.graph, model_cls, model.id):
+        _maybe_pull_subject_into_mirror_sync(store, model.id)
+    loaded = hydrate_one(model_cls, model.id, store, depth=depth)
+    if loaded is None:
+        raise ConfigurationError(
+            f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
+        )
+    return _apply_refresh_loaded(state, model, loaded, depth=depth)
+
+
+async def refresh_impl_async(
+    state: SessionState,
+    store: AsyncStoreProtocol,
+    model: SPARQLModel,
+    *,
+    depth: int,
+) -> SPARQLModel:
+    """Reload ``model`` from the async store mirror at ``depth``."""
+    validate_depth(depth)
+    model.ensure_id()
+    model_cls = type(model)
+    assert model.id is not None
+    reader = _AsyncStoreReader(store)
+    if not _subject_exists_in_store(store.graph, model_cls, model.id):
+        await _maybe_pull_subject_into_mirror(store, model.id)
+    loaded = hydrate_one(model_cls, model.id, reader, depth=depth)
+    if loaded is None:
+        raise ConfigurationError(
+            f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
+        )
+    return _apply_refresh_loaded(state, model, loaded, depth=depth)
+
+
 def merge_impl(state: SessionState, model: SPARQLModel) -> SPARQLModel:
     """Attach or reconcile ``model`` with the session identity map (no store write)."""
     model.ensure_id()
     id_key = identity_key(model)
+    model_cls = type(model)
     identity = state.get_identity(id_key)
     if identity is not None:
-        return _copy_validated_state(identity, model)
+        _copy_validated_state(identity, model, exclude_unset=True)
+        state.invalidate_hydration_for(model_cls, id_key[1])
+        return identity
     state.set_identity(model)
     return model
 

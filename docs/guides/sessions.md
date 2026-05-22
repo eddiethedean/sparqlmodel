@@ -72,7 +72,7 @@ persistent → expunge → detached (may merge again)
 persistent → refresh → persistent (reloaded from store)
 ```
 
-`refresh` and `merge` do not write to the store — use `put` to persist changes. `refresh(..., depth=0)` clears relationship attributes on the cached instance; a later `get(..., depth≥1)` reloads nested data from the store (0.9.1+). Use `expunge` then `get` at the needed depth if you want a clean reload boundary.
+`refresh` and `merge` do not write to the store — use `put` to persist changes. `merge` copies only fields you set on the detached instance (unset relationships are left unchanged on the cached object). `refresh(..., depth=0)` clears relationship attributes on the cached instance; a later `get(..., depth≥1)` reloads nested data from the store (0.9.1+). On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `refresh` auto-pulls the subject into the mirror when missing, same as `get` (0.9.2+). Use `expunge` then `get` at the needed depth if you want a clean reload boundary.
 
 ## Choosing a store
 

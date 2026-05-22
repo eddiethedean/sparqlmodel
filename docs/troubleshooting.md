@@ -11,6 +11,8 @@ Common issues when running SparqlModel in development or production.
 **Mitigations:**
 
 - `put` data through the same `HttpStore` session before `get`
+- Since **0.9.1**, `get` and (since **0.9.2**) `refresh` attempt CONSTRUCT pull into the mirror automatically
+- Call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs
 - Use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps
 - Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**1.0**)
 

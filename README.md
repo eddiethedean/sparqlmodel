@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#091---2026-05-21) (0.9.1)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#092---2026-05-21) (0.9.2)
 
 ---
 
@@ -36,8 +36,10 @@ pip install sparqlmodel
 ```bash
 pip install "sparqlmodel[http]"      # HttpStore + AsyncHttpStore (httpx)
 pip install "sparqlmodel[fastapi]"   # FastAPI session + RDF responses
-pip install -e ".[dev,http,fastapi]" # development
+pip install -e ".[dev,http,fastapi]" # development (includes pytest-asyncio for async tests)
 ```
+
+For local development with [uv](https://docs.astral.sh/uv/), sync dev extras so async tests run: `uv sync --extra dev`.
 
 ---
 
@@ -230,7 +232,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 ## Known limitations (0.9.1)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore` (0.9.1+): `get` pulls missing subjects from the remote endpoint into the mirror (CONSTRUCT); full mirror reconciliation and multi-writer sync remain planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore)
+- `HttpStore` / `AsyncHttpStore` (0.9.1+): `get` and `refresh` (0.9.2+) pull missing subjects from the remote endpoint into the mirror (CONSTRUCT); full mirror reconciliation and multi-writer sync remain planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore)
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching

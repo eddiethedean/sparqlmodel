@@ -12,7 +12,7 @@ from sparqlmodel.graph import (
     triples_to_graph,
 )
 from sparqlmodel.rdf_bridge import model_to_graph
-from tests.models import Person
+from tests.models import Organization, Person
 
 
 def test_identity_map_same_instance_on_get(session: SPARQLSession) -> None:
@@ -269,6 +269,59 @@ def test_merge_updates_cached_instance(session: SPARQLSession) -> None:
     result = session.merge(detached)
     assert result is cached
     assert cached.name == "MergedName"
+
+
+def test_merge_preserves_unset_relationships(session: SPARQLSession, odos: Person) -> None:
+    session.put(odos)
+    cached = session.get(Person, odos.id, depth=1)
+    assert cached is not None
+    assert cached.works_for is not None
+    session.merge(Person(id=odos.id, name="MergedName"))
+    assert cached.name == "MergedName"
+    assert cached.works_for is not None
+    assert cached.works_for.name == "Acme Corp"
+
+
+def test_merge_does_not_modify_store(session: SPARQLSession, odos: Person) -> None:
+    from pyoxigraph import Literal
+
+    session.put(odos)
+    cached = session.get(Person, odos.id)
+    assert cached is not None
+    subj = str(odos.id.expand(odos.get_prefixes()))
+    pred = "https://schema.org/name"
+
+    def name_in_graph() -> str | None:
+        for _s, _p, o in session.graph.triples((subj, pred, None)):
+            if isinstance(o, Literal):
+                return o.value
+        return None
+
+    assert name_in_graph() == "Odos"
+    session.merge(Person(id=odos.id, name="MergedName"))
+    assert cached.name == "MergedName"
+    assert name_in_graph() == "Odos"
+
+
+def test_merge_invalidates_hydration_cache(
+    session: SPARQLSession, odos: Person, acme: Organization
+) -> None:
+    session.put(odos)
+    deep = session.get(Person, odos.id, depth=2)
+    assert deep is not None
+    assert deep.works_for is not None
+    assert deep.works_for.name == "Acme Corp"
+    session.merge(Person(id=odos.id, name="Merged"))
+    renamed = Organization(id=acme.id, name="Renamed Corp")
+    updated = Person(id=odos.id, name="Merged", works_for=renamed)
+    subjects = cascade_subjects_for_removal(updated, session.graph, for_put=True)
+    remove_g = triples_to_graph(owned_triples_for_subjects(subjects, session.graph))
+    add_g = model_to_graph(updated)
+    session.store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
+    again = session.get(Person, odos.id, depth=2)
+    assert again is deep
+    assert again.works_for is not None
+    assert again.works_for.name == "Renamed Corp"
 
 
 def test_refresh_updates_identity_in_place(session: SPARQLSession) -> None:

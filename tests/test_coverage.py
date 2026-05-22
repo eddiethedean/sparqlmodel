@@ -300,7 +300,8 @@ def test_load_from_graph_related_missing_type(session) -> None:
     session.graph.add((subj, works, "urn:org:ghost"))
     loaded = session.get(Person, person.id, depth=1)
     assert loaded is not None
-    assert loaded.works_for is None
+    assert isinstance(loaded.works_for, IRI)
+    assert str(loaded.works_for) == "urn:org:ghost"
 
 
 def test_subject_has_rdf_type_false(session) -> None:

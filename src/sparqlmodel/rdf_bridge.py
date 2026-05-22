@@ -221,6 +221,8 @@ def load_from_graph(
                         depth=depth - 1,
                         path=branch_path.copy(),
                     )
+                elif allows_iri:
+                    data[name] = IRI(value)
                 else:
                     data[name] = None
             else:

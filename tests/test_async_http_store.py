@@ -121,6 +121,54 @@ async def test_async_http_store_closed_raises() -> None:
         await store.query("SELECT * WHERE { ?s ?p ?o }")
 
 
+async def test_async_http_get_pulls_remote_subject_into_mirror() -> None:
+    """Async get() CONSTRUCT-syncs remote subjects before hydration."""
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f"<{remote_iri}> a schema:Person ;\n"
+        '  schema:name "Remote" .\n'
+    )
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(
+            200,
+            json={
+                "head": {"vars": ["person"]},
+                "results": {
+                    "bindings": [
+                        {"person": {"type": "uri", "value": remote_iri}},
+                    ]
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+        )
+        async with AsyncSPARQLSession(store=store) as session:
+            bindings = await session.execute("SELECT ?person WHERE { ?person ?p ?o }")
+            assert bindings[0]["person"] == remote_iri
+            loaded = await session.get(Person, IRI(remote_iri))
+            assert loaded is not None
+            assert loaded.name == "Remote"
+            assert len(store.graph) >= 2
+        await store.aclose()
+
+
 async def test_async_http_store_query_all_hydrates_remote_rows() -> None:
     """Async query().all() pulls remote subjects into the mirror before hydration."""
     remote_iri = "http://example.org/person/remote"

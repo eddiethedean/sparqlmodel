@@ -50,3 +50,23 @@ jobs:
 
       - name: Build Sphinx HTML
         run: make docs
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run real-world examples
+        run: |
+          python examples/realworld/nobel_laureates.py
+          python examples/realworld/dcat_data_catalog.py
+          python examples/realworld/schema_org_ngos.py
+          python examples/realworld/wikidata_capitals.py

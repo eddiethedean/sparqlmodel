@@ -160,7 +160,7 @@ class AsyncSPARQLSession:
         """Reload ``model`` from the store at ``depth`` (updates cached instance when present)."""
         self._check_open()
         await self._maybe_autoflush()
-        return session_core.refresh_impl(self._state, self._store, model, depth=depth)
+        return await session_core.refresh_impl_async(self._state, self._store, model, depth=depth)
 
     async def merge(self, model: SPARQLModel) -> SPARQLModel:
         """Return the session instance for ``model``'s identity key (no store write)."""
