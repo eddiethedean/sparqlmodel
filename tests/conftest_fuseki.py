@@ -71,11 +71,13 @@ def _dataset_sparql_url(base: str, name: str) -> str:
 def _dataset_is_ready(base: str, name: str) -> bool:
     """Return True when the dataset SPARQL endpoint accepts queries (no admin API)."""
     sparql = _dataset_sparql_url(base, name)
+    auth = _fuseki_admin_auth()
     try:
         response = httpx.post(
             sparql,
             content=b"SELECT * WHERE { ?s ?p ?o } LIMIT 1",
             headers=SPARQL_QUERY_HEADERS,
+            auth=auth,
             timeout=10.0,
         )
         return response.status_code == 200
@@ -122,24 +124,30 @@ def _ensure_dataset(base: str, name: str) -> None:
 
 
 def clear_fuseki_dataset(endpoints: FusekiEndpoints) -> None:
-    """Remove all triples from the dataset default graph (Graph Store HTTP DELETE)."""
+    """Remove all triples from the dataset default graph."""
+    auth = _fuseki_admin_auth()
+    update = "CLEAR ALL"
+    response = httpx.post(
+        endpoints.write_endpoint,
+        content=update.encode("utf-8"),
+        headers={
+            "Content-Type": "application/sparql-update",
+            "Accept": "*/*",
+        },
+        auth=auth,
+        timeout=30.0,
+    )
+    if response.status_code == 200:
+        return
     try:
-        response = httpx.delete(endpoints.graph_store_url, timeout=30.0)
+        response = httpx.delete(endpoints.graph_store_url, auth=auth, timeout=30.0)
         if response.status_code in (200, 204, 404):
             return
         response.raise_for_status()
-    except httpx.HTTPError:
-        update = "CLEAR ALL"
-        response = httpx.post(
-            endpoints.write_endpoint,
-            content=update.encode("utf-8"),
-            headers={
-                "Content-Type": "application/sparql-update",
-                "Accept": "*/*",
-            },
-            timeout=30.0,
-        )
-        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise RuntimeError(
+            f"Failed to clear Fuseki dataset at {endpoints.write_endpoint}: {exc}"
+        ) from exc
 
 
 @pytest.fixture(scope="session")

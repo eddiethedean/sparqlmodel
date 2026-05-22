@@ -16,11 +16,13 @@ jobs:
           - 3030:3030
         env:
           FUSEKI_DATASET_1: sparqlmodel_test
+          ADMIN_PASSWORD: testadmin
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
       FUSEKI_BASE_URL: http://127.0.0.1:3030
+      FUSEKI_ADMIN_PASSWORD: testadmin
     steps:
       - uses: actions/checkout@v4
 

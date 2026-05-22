@@ -4,6 +4,7 @@
 fuseki-up:
 	docker run -d --rm --name sparqlmodel-fuseki -p 3030:3030 \
 		-e FUSEKI_DATASET_1=sparqlmodel_test \
+		-e ADMIN_PASSWORD=testadmin \
 		stain/jena-fuseki:5.1.0
 
 fuseki-down:

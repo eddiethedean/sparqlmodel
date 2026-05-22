@@ -11,7 +11,7 @@ from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.stores.async_http import AsyncHttpStore
 from sparqlmodel.stores.http import HttpStore
 from sparqlmodel.stores.http_common import SPARQL_UPDATE_HEADERS
-from tests.conftest_fuseki import FusekiEndpoints, clear_fuseki_dataset
+from tests.conftest_fuseki import FusekiEndpoints, _fuseki_admin_auth, clear_fuseki_dataset
 from tests.models import Person
 
 pytestmark = pytest.mark.integration
@@ -33,6 +33,7 @@ INSERT DATA {{
         endpoints.write_endpoint,
         content=update.encode("utf-8"),
         headers=SPARQL_UPDATE_HEADERS,
+        auth=_fuseki_admin_auth(),
         timeout=30.0,
     )
     response.raise_for_status()
@@ -52,6 +53,7 @@ SELECT ?name WHERE {{
             "Content-Type": "application/sparql-query",
             "Accept": "application/sparql-results+json",
         },
+        auth=_fuseki_admin_auth(),
         timeout=30.0,
     )
     response.raise_for_status()

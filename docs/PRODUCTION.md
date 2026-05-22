@@ -72,7 +72,7 @@ with SPARQLSession(store=store) as session:
 
 `http_common.default_graph_store_url(sparql_endpoint)` guesses `.../sparql` → `.../data`; production apps should pass an explicit `graph_store_url`.
 
-**CI / local integration tests:** run Fuseki (`make fuseki-up`), set `FUSEKI_BASE_URL=http://127.0.0.1:3030`, then `pytest` (includes `tests/test_http_store_integration.py`).
+**CI / local integration tests:** `make fuseki-up` (sets `ADMIN_PASSWORD=testadmin` and `FUSEKI_DATASET_1=sparqlmodel_test`), export `FUSEKI_BASE_URL=http://127.0.0.1:3030` and `FUSEKI_ADMIN_PASSWORD=testadmin`, then run `pytest`.
 
 ---
 
