@@ -12,6 +12,13 @@ import pytest
 
 FUSEKI_DATASET = "sparqlmodel_test"
 FUSEKI_BASE_ENV = "FUSEKI_BASE_URL"
+FUSEKI_ADMIN_PASSWORD_ENV = "FUSEKI_ADMIN_PASSWORD"
+FUSEKI_ADMIN_USER_ENV = "FUSEKI_ADMIN_USER"
+
+SPARQL_QUERY_HEADERS = {
+    "Content-Type": "application/sparql-query",
+    "Accept": "application/sparql-results+json",
+}
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,14 @@ class FusekiEndpoints:
 def _fuseki_base_url() -> str:
     base = os.environ.get(FUSEKI_BASE_ENV, "http://127.0.0.1:3030").rstrip("/")
     return base
+
+
+def _fuseki_admin_auth() -> httpx.BasicAuth | None:
+    password = os.environ.get(FUSEKI_ADMIN_PASSWORD_ENV)
+    if not password:
+        return None
+    user = os.environ.get(FUSEKI_ADMIN_USER_ENV, "admin")
+    return httpx.BasicAuth(user, password)
 
 
 def _wait_for_fuseki(base: str, timeout: float = 60.0) -> None:
@@ -49,22 +64,61 @@ def _wait_for_fuseki(base: str, timeout: float = 60.0) -> None:
     raise RuntimeError(msg)
 
 
-def _ensure_dataset(base: str, name: str) -> None:
-    """Create an in-memory dataset if the server does not already have it."""
+def _dataset_sparql_url(base: str, name: str) -> str:
+    return f"{base}/{name}/sparql"
+
+
+def _dataset_is_ready(base: str, name: str) -> bool:
+    """Return True when the dataset SPARQL endpoint accepts queries (no admin API)."""
+    sparql = _dataset_sparql_url(base, name)
+    try:
+        response = httpx.post(
+            sparql,
+            content=b"SELECT * WHERE { ?s ?p ?o } LIMIT 1",
+            headers=SPARQL_QUERY_HEADERS,
+            timeout=10.0,
+        )
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+def _create_dataset_via_admin(base: str, name: str) -> None:
+    """Create dataset through Fuseki admin API (optional Basic auth)."""
+    auth = _fuseki_admin_auth()
     list_url = f"{base}/$/datasets"
     try:
-        response = httpx.get(list_url, timeout=5.0)
+        response = httpx.get(list_url, auth=auth, timeout=5.0)
         if response.status_code == 200 and name in response.text:
+            return
+        if response.status_code == 401 and _dataset_is_ready(base, name):
             return
     except httpx.HTTPError:
         pass
     create = httpx.post(
         f"{base}/$/datasets",
         data={"dbType": "mem", "dbName": name},
+        auth=auth,
         timeout=10.0,
     )
-    if create.status_code not in (200, 201, 409):
-        create.raise_for_status()
+    if create.status_code in (200, 201, 409):
+        return
+    if create.status_code == 401 and _dataset_is_ready(base, name):
+        return
+    create.raise_for_status()
+
+
+def _ensure_dataset(base: str, name: str) -> None:
+    """Ensure dataset exists — probe SPARQL first; admin API only when needed."""
+    if _dataset_is_ready(base, name):
+        return
+    _create_dataset_via_admin(base, name)
+    if not _dataset_is_ready(base, name):
+        raise RuntimeError(
+            f"Fuseki dataset {name!r} is not available at {_dataset_sparql_url(base, name)}. "
+            f"Start Fuseki with FUSEKI_DATASET_1={name} or set {FUSEKI_ADMIN_PASSWORD_ENV} "
+            "for admin dataset creation."
+        )
 
 
 def clear_fuseki_dataset(endpoints: FusekiEndpoints) -> None:
@@ -94,7 +148,7 @@ def fuseki_endpoints() -> FusekiEndpoints:
     base = _fuseki_base_url()
     _wait_for_fuseki(base)
     _ensure_dataset(base, FUSEKI_DATASET)
-    sparql = f"{base}/{FUSEKI_DATASET}/sparql"
+    sparql = _dataset_sparql_url(base, FUSEKI_DATASET)
     data = f"{base}/{FUSEKI_DATASET}/data"
     return FusekiEndpoints(
         base=base,
