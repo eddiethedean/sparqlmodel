@@ -124,6 +124,7 @@ nitpick_ignore = [
     ("py:class", "sparqlmodel.serializers.T"),
     ("py:class", "sparqlmodel.stores.base.Store"),
     ("py:class", "Response"),
+    ("py:class", "httpx.Response"),
     ("py:meth", "sparqlmodel.stores.http.HttpStore.close"),
     ("py:class", "typing_extensions.Self"),
     ("py:class", "Self"),

@@ -33,7 +33,30 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Shipped (0.10.0):** Replace-on-pull (no stale predicates per IRI after pull); `mirror_mode` on HTTP stores.
 
-**Planned (0.11–0.12):** Retries, batched UPDATE, GSP `sync_mirror()`. **Planned (1.0):** Full mirror reconciliation.
+**Shipped (0.11.0):** Retries, batched UPDATE, optional SELECT GET — see [HTTP resilience (0.11+)](#http-resilience-011).
+
+**Planned (0.12):** GSP `sync_mirror()`. **Planned (1.0):** Full mirror reconciliation.
+
+---
+
+## HTTP resilience (0.11+)
+
+Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan` / `async_http_store_lifespan` — kwargs forward to the store constructor):
+
+| Parameter | Default | Notes |
+|-----------|---------|--------|
+| `max_retries` | `2` | Up to **3** attempts total (`0..max_retries`) |
+| `retry_backoff` | `0.5` | Seconds; exponential backoff per attempt (capped at 30s) |
+| `max_triples_per_update` | `500` | Chunk size for `INSERT DATA` / `DELETE DATA` per HTTP request |
+| `query_method` | `"post"` | `"get"` sends SELECT via query string ([SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/#query-operation)) |
+
+**Retries apply to:** remote SELECT (`query`), CONSTRUCT pull (`pull_subjects_into_mirror`), and each UPDATE chunk. Retried status codes: **502**, **503**, **504**, plus `httpx` connection/timeouts. **4xx** and other errors fail immediately (no retry).
+
+**Batched UPDATE:** `update_graph` sends all DELETE chunks first, then all INSERT chunks. The local mirror is updated **only after every remote chunk succeeds**. If chunk *k* fails after earlier chunks succeeded, the remote dataset may be partially updated; the mirror is **not** changed — treat as an operator incident and reconcile manually.
+
+**GET SELECT:** Useful behind caches or strict read-only proxies. Very long queries can exceed URL length limits on some servers; prefer POST for large SELECT text. CONSTRUCT pull always uses POST.
+
+Set `max_retries=0` in tests or when you need immediate failure without transport retries.
 
 ---
 

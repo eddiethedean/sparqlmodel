@@ -32,6 +32,30 @@ See {doc}`PRODUCTION` — HttpStore mirror model and mirror modes.
 
 See {doc}`PRODUCTION` — mirror modes.
 
+## Transient HTTP errors (503 / timeouts)
+
+**Symptom:** `QueryError: SPARQL query failed` or UPDATE failures during brief endpoint outages.
+
+**Cause:** Remote SPARQL endpoint returned 502/503/504 or the TCP connection failed.
+
+**Mitigations (0.11.0+):** `HttpStore` / `AsyncHttpStore` retry transient failures by default (`max_retries=2`, `retry_backoff=0.5`). Tune for your SLA or set `max_retries=0` to fail fast. See {doc}`PRODUCTION` — [HTTP resilience](PRODUCTION.md#http-resilience-011).
+
+## Large `put` / cascade UPDATE fails or times out
+
+**Symptom:** UPDATE fails with gateway timeout or payload errors when flushing a large graph delta.
+
+**Cause:** A single SPARQL Update body exceeded endpoint or proxy limits (pre-0.11 sent one unbounded UPDATE per `update_graph`).
+
+**Mitigations (0.11.0+):** Lower or raise `max_triples_per_update` (default 500) on the store. If a mid-batch chunk fails, the mirror is unchanged but the remote dataset may be partial — reconcile before retrying. See {doc}`PRODUCTION` — batched UPDATE.
+
+## SELECT over GET and URL length
+
+**Symptom:** `query_method="get"` fails with 414 or empty responses for long SELECT strings.
+
+**Cause:** GET encodes the query in the URL; proxies and servers impose length limits.
+
+**Fix:** Use default `query_method="post"` for large SELECT text. GET remains useful for short, cache-friendly reads.
+
 ## `query().all()` returns fewer rows than the remote SELECT
 
 **Symptom:** `session.query(Person).where(...).all()` is empty or shorter than the same filter run in a SPARQL client against the endpoint.

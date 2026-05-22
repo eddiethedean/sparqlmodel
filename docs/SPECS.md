@@ -51,6 +51,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **0.
 - [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
 - [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**; on `refresh` — **0.9.2**
 - [x] HttpStore replace-on-pull + `mirror_mode` (`writer` / `remote_authoritative`) — **0.10.0**
+- [x] HttpStore retries, batched UPDATE, SELECT `query_method` GET/POST — **0.11.0**
 - [ ] HttpStore full mirror sync (GSP `sync_mirror`) — **0.12** ([Production HttpStore](ROADMAP.md#production-httpstore))
 - [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
@@ -71,7 +72,7 @@ See [ROADMAP — SPARQLMojo parity backlog](ROADMAP.md#sparqlmojo-parity-backlog
 - [ ] VALUES clause in query DSL — **0.13**
 - [ ] Query negation (`not_` / general boolean NOT) — **0.13**
 - [ ] Filters on collection fields — **0.13**
-- [ ] HttpStore `query_method` GET vs POST — **0.11**
+- [x] HttpStore `query_method` GET vs POST — **0.11.0**
 - [ ] Optional SHACL validation on `put` — **0.14**
 
 ## P2 — Advanced
@@ -347,6 +348,19 @@ External writers or SELECT-only visibility without a matching mirror update can 
 
 `put` may send `DELETE DATA` followed by `INSERT DATA` in one SPARQL Update request; whether that is atomic depends on the endpoint (not guaranteed in 0.2). After `HttpStore.close()`, `query`, `update_graph`, and `pull_subjects_into_mirror` raise `RuntimeError` (same for `AsyncHttpStore.aclose()`).
 
+## HTTP resilience (0.11+)
+
+Constructor kwargs on `HttpStore` / `AsyncHttpStore` (sync + async parity):
+
+| Parameter | Default | Behavior |
+|-----------|---------|----------|
+| `max_retries` | `2` | Retry 502/503/504 and connection/timeouts on SELECT, CONSTRUCT pull, and each UPDATE chunk |
+| `retry_backoff` | `0.5` | Exponential backoff between attempts (cap 30s) |
+| `max_triples_per_update` | `500` | Split `update_graph` into multiple `INSERT DATA` / `DELETE DATA` requests |
+| `query_method` | `"post"` | `"get"` for remote SELECT only (CONSTRUCT stays POST) |
+
+Mirror updates run only after **all** remote UPDATE chunks succeed. Mid-batch remote failure leaves the mirror unchanged; remote state may be partial.
+
 ## Store protocol (target API)
 
 **Current (0.2):** [`Store`](../src/sparqlmodel/stores/base.py) — `graph`, `query(sparql)`, `update_graph(add=, remove=)`.
@@ -356,13 +370,13 @@ External writers or SELECT-only visibility without a matching mirror update can 
 | Capability | Notes |
 |------------|--------|
 | `query` | SPARQL 1.1 SELECT (required) |
-| `update` | Atomic SPARQL Update sequences where endpoint supports — **0.11** |
-| `query_method` | GET vs POST for remote SELECT — **0.11** |
+| `update` | Chunked `INSERT DATA` / `DELETE DATA` — shipped **0.11.0** (atomic multi-op sequences still endpoint-dependent) |
+| `query_method` | GET vs POST for remote SELECT — shipped **0.11.0** |
 | `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **0.14** (P2) |
 | HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **0.9.1** (shipped) |
 | Replace-on-pull, `mirror_mode` | Shipped **0.10.0** |
 | Mirror sync (GSP `sync_mirror`) | **0.12** |
-| Retries, timeouts, batch size limits | **0.11** |
+| Retries, batch size limits | Shipped **0.11.0** (`max_retries`, `max_triples_per_update`) |
 | `OxigraphStore` / embedded backends | Optional — **0.14+** |
 
 Protocols: [SPARQL 1.1 Query](https://www.w3.org/TR/sparql11-query/), [SPARQL 1.1 Update](https://www.w3.org/TR/sparql11-update/), [Graph Store HTTP](https://www.w3.org/TR/sparql11-http-rdf-update/).

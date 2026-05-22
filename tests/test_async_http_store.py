@@ -46,7 +46,11 @@ async def test_async_http_construct_failure_raises() -> None:
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as client:
-        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_retries=0,
+        )
         with pytest.raises(QueryError, match="CONSTRUCT failed"):
             await store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
         await store.aclose()

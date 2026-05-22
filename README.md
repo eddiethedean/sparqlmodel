@@ -229,10 +229,10 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.10.0)
+## Known limitations (0.11.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+) or `pull_subjects_into_mirror` when reads must match remote updates. Replace-on-pull (0.10+) clears stale predicates per IRI on pull. GSP full-graph sync and HTTP retries remain under [Production HttpStore](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#production-httpstore) (**0.11–0.12**)
+- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+) or `pull_subjects_into_mirror` when reads must match remote updates. Replace-on-pull (0.10+) clears stale predicates per IRI on pull. Retries and batched UPDATE shipped in **0.11** ([PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#http-resilience-011)); GSP full-graph `sync_mirror` remains **0.12** ([Production HttpStore](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#production-httpstore))
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching

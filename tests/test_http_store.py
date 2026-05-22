@@ -9,6 +9,7 @@ from triplemodel import Store
 
 from sparqlmodel import IRI, Field, SPARQLModel, SPARQLSession
 from sparqlmodel.exceptions import QueryError
+from sparqlmodel.stores import http_common
 from sparqlmodel.stores.http import HttpStore, _graph_to_delete_data, _graph_to_insert_data
 from sparqlmodel.stores.http_common import is_select_query
 
@@ -56,7 +57,11 @@ def test_http_store_construct_failure_raises() -> None:
         return httpx.Response(503, text="down")
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    store = HttpStore("http://example.org/sparql", client=client)
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        max_retries=0,
+    )
     with pytest.raises(QueryError, match="CONSTRUCT failed"):
         store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
     store.close()
@@ -147,7 +152,7 @@ def test_http_store_query_failure() -> None:
 
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
-    store = HttpStore("http://example.org/sparql", client=client)
+    store = HttpStore("http://example.org/sparql", client=client, max_retries=0)
     with pytest.raises(QueryError, match="SPARQL query failed"):
         store.query("SELECT * WHERE { ?s ?p ?o }")
     store.close()
@@ -159,7 +164,7 @@ def test_http_store_update_failure() -> None:
 
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
-    store = HttpStore("http://example.org/sparql", client=client)
+    store = HttpStore("http://example.org/sparql", client=client, max_retries=0)
     g = Store()
     g.add(("urn:s", "urn:p", "urn:o"))
     with pytest.raises(QueryError, match="SPARQL UPDATE failed"):
@@ -721,4 +726,177 @@ def test_http_store_remote_authoritative_refresh_pulls_stale_mirror() -> None:
     session.merge(detached)
     refreshed = session.refresh(detached)
     assert refreshed.name == "Remote"
+    store.close()
+
+
+def test_http_store_query_retries_on_503() -> None:
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            return httpx.Response(503, text="unavailable")
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        max_retries=2,
+        retry_backoff=0,
+    )
+    store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+    assert attempts["n"] == 3
+    store.close()
+
+
+def test_http_store_query_get_method() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, str(request.url)))
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        query_method="get",
+        max_retries=0,
+    )
+    store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+    assert seen[0][0] == "GET"
+    assert "query=SELECT" in seen[0][1]
+    store.close()
+
+
+def test_http_store_update_chunks_multiple_posts() -> None:
+    updates: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        updates.append(request.content.decode())
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        max_triples_per_update=1,
+        max_retries=0,
+    )
+    g = Store()
+    g.add(("urn:s1", "urn:p1", "urn:o1"))
+    g.add(("urn:s2", "urn:p2", "urn:o2"))
+    store.update_graph(add=g)
+    assert len(updates) == 2
+    assert all("INSERT DATA" in u for u in updates)
+    assert len(store.graph) == 2
+    store.close()
+
+
+def test_http_store_update_mirror_unchanged_on_mid_batch_failure() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200)
+        return httpx.Response(400, text="bad")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        max_triples_per_update=1,
+        max_retries=0,
+    )
+    g = Store()
+    g.add(("urn:s1", "urn:p1", "urn:o1"))
+    g.add(("urn:s2", "urn:p2", "urn:o2"))
+    with pytest.raises(QueryError, match="SPARQL UPDATE failed"):
+        store.update_graph(add=g)
+    assert len(store.graph) == 0
+    store.close()
+
+
+def test_http_store_construct_retries_on_503() -> None:
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            return httpx.Response(503)
+        return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        max_retries=2,
+        retry_backoff=0,
+    )
+    store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
+    assert attempts["n"] == 2
+    store.close()
+
+
+def test_http_store_invalid_resilience_params() -> None:
+    with pytest.raises(ValueError, match="max_triples_per_update"):
+        HttpStore("http://example.org/sparql", max_triples_per_update=0)
+    with pytest.raises(ValueError, match="query_method"):
+        HttpStore("http://example.org/sparql", query_method="put")  # type: ignore[arg-type]
+
+
+def test_http_store_query_method_property() -> None:
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    store = HttpStore("http://example.org/sparql", client=client, query_method="get")
+    assert store.query_method == "get"
+    store.close()
+
+
+def test_http_store_post_update_skips_blank() -> None:
+    posts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posts.append(request.content.decode())
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    store._post_update("   \n")
+    assert posts == []
+    store.close()
+
+
+def test_http_store_query_wraps_non_query_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(http_common, "execute_select", boom)
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    store = HttpStore("http://example.org/sparql", client=client)
+    with pytest.raises(QueryError, match="SPARQL query failed: boom"):
+        store.query("SELECT * WHERE { ?s ?p ?o }")
+    store.close()
+
+
+def test_http_store_construct_wraps_non_query_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(http_common, "request_with_retry", boom)
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    store = HttpStore("http://example.org/sparql", client=client)
+    with pytest.raises(QueryError, match="SPARQL CONSTRUCT failed: boom"):
+        store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
     store.close()

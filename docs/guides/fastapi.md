@@ -25,7 +25,12 @@ class Person(SPARQLModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with http_store_lifespan(app, "http://localhost:3030/ds/sparql"):
+    async with http_store_lifespan(
+        app,
+        "http://localhost:3030/ds/sparql",
+        max_retries=2,
+        query_method="get",
+    ):
         yield
 
 app = FastAPI(lifespan=lifespan)

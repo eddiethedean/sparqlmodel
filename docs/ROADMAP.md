@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus:** **[Production HttpStore](#production-httpstore)** — phase **[0.11 — HTTP resilience](#011--http-resilience)**. **0.10.0** shipped **2026-05-22** (mirror semantics). Forward plan: [0.11 → 0.15](#forward-roadmap-07--015).
+**Current focus:** **[Production HttpStore](#production-httpstore)** — phase **[0.12 — Mirror contract](#012--mirror-contract)**. **0.11.0** shipped **2026-05-22** (HTTP resilience). **0.10.0** shipped **2026-05-22** (mirror semantics). Forward plan: [0.12 → 0.15](#forward-roadmap-07--015).
 
 ---
 
@@ -226,7 +226,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | No CONSTRUCT / DESCRIBE on session | `QueryTriples`, `.serialize(RdfFormat.*)` | SparqlModel | **0.14** |
 | ~~Hand-rolled SPARQL Results JSON parser~~ | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results) — **shipped 0.9.1** | SparqlModel `stores/` | — |
 | HttpStore mirror replace-on-pull / `mirror_mode` | CONSTRUCT per subject | SparqlModel `stores/` | **0.10** (shipped) |
-| HttpStore retries + batched UPDATE | `httpx` retry, chunked INSERT/DELETE | SparqlModel `stores/` | **0.11** |
+| HttpStore retries + batched UPDATE | `httpx` retry, chunked INSERT/DELETE | SparqlModel `stores/` | **0.11** (shipped) |
 | HttpStore GSP full mirror sync | Graph Store HTTP GET | SparqlModel `stores/` | **0.12** (Production HttpStore) |
 | HttpStore UPDATE as string templates only | Remote endpoints need HTTP; local mirror could use `Store.update()` for dev tooling | SparqlModel | **0.12** (optional) or **0.14** |
 | No disk-backed store | `Store(path)`, `backup`, `optimize`, `flush`, `read_only` | SparqlModel `stores/` | **0.14** (`OxigraphStore` backend) |
@@ -301,7 +301,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 0.15)
 
-**Shipped:** **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next:** [Production HttpStore](#production-httpstore) — phase **0.11**.
+**Shipped:** **0.11.0** (2026-05-22) — HTTP retries, batched UPDATE, SELECT GET/POST; **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next:** [Production HttpStore](#production-httpstore) — phase **0.12**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → [Production HttpStore](#production-httpstore) (0.10–0.12) → modeling (0.13) → operations (0.14) → GA (0.15)**. Each **0.x** line is one theme; Production HttpStore is one milestone with ordered **phases** (0.10, 0.11, 0.12).
 
@@ -466,17 +466,19 @@ Per-subject mirror sync is **correct** and **configurable** before retries or fu
 
 #### Phase 0.11 — HTTP resilience
 
+**Status:** shipped in **0.11.0** (2026-05-22).
+
 **Depends on:** phase 0.10
 
 Safe large writes and transient failure handling — still single-writer per endpoint.
 
 | Deliverable | Notes |
 |-------------|--------|
-| Shared HTTP transport | Retry policy in `http_common` (sync + async stores) |
-| Retries | `max_retries`, `retry_backoff`; 502/503/504 and connection errors |
-| Batched UPDATE | `max_triples_per_update`; chunk INSERT/DELETE; mirror only after all remote chunks succeed (SPARQLMojo-style batch writes) |
-| `query_method` | Optional `GET` vs `POST` for remote SELECT on `HttpStore` / `AsyncHttpStore` |
-| Docs | [PRODUCTION.md](PRODUCTION.md) — batch sizes, retry defaults, GET vs POST tradeoffs |
+| [x] Shared HTTP transport | Retry policy in `http_common` (sync + async stores) |
+| [x] Retries | `max_retries`, `retry_backoff`; 502/503/504 and connection errors |
+| [x] Batched UPDATE | `max_triples_per_update`; chunk INSERT/DELETE; mirror only after all remote chunks succeed |
+| [x] `query_method` | Optional `GET` vs `POST` for remote SELECT on `HttpStore` / `AsyncHttpStore` |
+| [x] Docs | [PRODUCTION.md](PRODUCTION.md) — batch sizes, retry defaults, GET vs POST tradeoffs |
 
 **Phase exit:** Large cascades do not send unbounded UPDATE strings; transient errors recover without app retry loops.
 
@@ -632,8 +634,8 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | IRI `str()` / `lower()` / `upper()` filters | Yes | Not exposed | **0.13** |
 | VALUES clause in query DSL | Yes | Internal CONSTRUCT only | **0.13** |
 | Query negation (`not_` / `~`) | Yes | `!=` + `is_(None)`; no general `NOT` | **0.13** |
-| SELECT `GET` vs `POST` | Yes | POST only on HttpStore | **0.11** |
-| Batched remote UPDATE | Yes | Unbounded UPDATE strings | **0.11** |
+| SELECT `GET` vs `POST` | Yes | Shipped (0.11); default POST | — |
+| Batched remote UPDATE | Yes | Shipped (0.11); chunked UPDATE | — |
 | UPDATE dirty tracking | Yes | `put` replaces subject graph | **0.14** (optional) |
 | SHACL / graph-shape validation | No | Planned | **0.14** |
 | ASK / CONSTRUCT on session | Partial | SELECT-only `execute` | **0.14** |
@@ -653,10 +655,10 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 | 4 | Prefix management | Yes | Shipped | — |
 | 5 | Pagination / sort / count | Partial | Shipped (0.8) | — |
 | 6 | Read/write SPARQL URLs | Yes | Shipped (0.9.1) | — |
-| 7 | HttpStore mirror + production contract | Partial | Partial (0.10.0) | **0.11–0.12** |
+| 7 | HttpStore mirror + production contract | Partial | Partial (0.11.0) | **0.12** |
 | 8 | Replace-on-pull + `mirror_mode` | N/A | Shipped (0.10.0) | — |
-| 9 | Retries + batched UPDATE | Batch writes | Missing | **0.11** |
-| 10 | SELECT `GET` vs `POST` | Yes | POST only | **0.11** |
+| 9 | Retries + batched UPDATE | Batch writes | Shipped (0.11.0) | — |
+| 10 | SELECT `GET` vs `POST` | Yes | Shipped (0.11.0) | — |
 | 11 | GSP / `sync_mirror` + integration tests | N/A | Missing | **0.12** |
 | 12 | Multi-valued / list fields | Yes | First value only | **0.13** |
 | 13 | Lang + multi-lang literals | Yes | No public API | **0.13** |
@@ -678,7 +680,7 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 
 ## Priorities (forward work)
 
-1. **[Production HttpStore](#production-httpstore)** — phase **0.11** (HTTP resilience), then **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
+1. **[Production HttpStore](#production-httpstore)** — phase **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
 2. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
 3. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
 4. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.

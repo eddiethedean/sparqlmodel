@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-22
+
+### Added
+
+- **HTTP resilience on `HttpStore` / `AsyncHttpStore`** — shared retry transport in `http_common` (`max_retries`, `retry_backoff`; retries 502/503/504 and connection/timeouts)
+- **Batched remote UPDATE** — `max_triples_per_update` (default 500) chunks `INSERT DATA` / `DELETE DATA`; local mirror updates only after all remote chunks succeed
+- **`query_method`** — optional `GET` vs `POST` for remote SELECT (`QueryMethod` exported from `sparqlmodel.stores`)
+
+### Changed
+
+- **Remote SELECT** — default remains POST; GET uses SPARQL Protocol query string (`?query=`)
+- **CONSTRUCT pull** — uses the same retry policy as SELECT and UPDATE
+
+### Documentation
+
+- PRODUCTION, troubleshooting, SPECS, FastAPI guide — HTTP resilience defaults, batching, partial-failure semantics, GET URL limits
+- ROADMAP — phase **0.11** shipped; current focus **0.12**
+
 ## [0.10.0] - 2026-05-22
 
 ### Added

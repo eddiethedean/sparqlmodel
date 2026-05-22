@@ -10,6 +10,7 @@ from triplemodel import Store
 from sparqlmodel import IRI, Field, SPARQLModel
 from sparqlmodel.async_session import AsyncSPARQLSession
 from sparqlmodel.exceptions import QueryError
+from sparqlmodel.stores import http_common
 from sparqlmodel.stores.async_http import AsyncHttpStore
 
 
@@ -27,7 +28,11 @@ async def test_async_http_query_failure() -> None:
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as client:
-        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_retries=0,
+        )
         with pytest.raises(QueryError, match="SPARQL query failed"):
             await store.query("SELECT * WHERE { ?s ?p ?o }")
 
@@ -38,7 +43,11 @@ async def test_async_http_update_failure() -> None:
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as client:
-        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_retries=0,
+        )
         g = Store()
         g.add(("urn:s", "urn:p", "urn:o"))
         with pytest.raises(QueryError, match="SPARQL UPDATE failed"):
@@ -339,4 +348,157 @@ async def test_async_http_remote_authoritative_get_pulls_stale_mirror() -> None:
         assert loaded is not None
         assert loaded.name == "Remote"
         assert len(construct_calls) == 1
+        await store.aclose()
+
+
+async def test_async_http_query_retries_on_503() -> None:
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            return httpx.Response(503, text="unavailable")
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_retries=2,
+            retry_backoff=0,
+        )
+        await store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+        assert attempts["n"] == 3
+        await store.aclose()
+
+
+async def test_async_http_query_get_method() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.method)
+        return httpx.Response(
+            200,
+            json={"head": {"vars": []}, "results": {"bindings": []}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            query_method="get",
+            max_retries=0,
+        )
+        await store.query("SELECT * WHERE { ?s ?p ?o } LIMIT 0")
+        assert seen == ["GET"]
+        await store.aclose()
+
+
+async def test_async_http_update_chunks_multiple_posts() -> None:
+    updates: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        updates.append(request.content.decode())
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_triples_per_update=1,
+            max_retries=0,
+        )
+        g = Store()
+        g.add(("urn:s1", "urn:p1", "urn:o1"))
+        g.add(("urn:s2", "urn:p2", "urn:o2"))
+        await store.update_graph(add=g)
+        assert len(updates) == 2
+        assert len(store.graph) == 2
+        await store.aclose()
+
+
+async def test_async_http_update_mirror_unchanged_on_mid_batch_failure() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200)
+        return httpx.Response(400, text="bad")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            max_triples_per_update=1,
+            max_retries=0,
+        )
+        g = Store()
+        g.add(("urn:s1", "urn:p1", "urn:o1"))
+        g.add(("urn:s2", "urn:p2", "urn:o2"))
+        with pytest.raises(QueryError, match="SPARQL UPDATE failed"):
+            await store.update_graph(add=g)
+        assert len(store.graph) == 0
+        await store.aclose()
+
+
+async def test_async_http_store_query_method_property() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    ) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            query_method="get",
+        )
+        assert store.query_method == "get"
+        await store.aclose()
+
+
+async def test_async_http_post_update_skips_blank() -> None:
+    posts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posts.append(request.content.decode())
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        await store._post_update("   \n")
+        assert posts == []
+        await store.aclose()
+
+
+async def test_async_http_query_wraps_non_query_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(http_common, "async_execute_select", boom)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    ) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        with pytest.raises(QueryError, match="SPARQL query failed: boom"):
+            await store.query("SELECT * WHERE { ?s ?p ?o }")
+        await store.aclose()
+
+
+async def test_async_http_construct_wraps_non_query_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(http_common, "async_request_with_retry", boom)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    ) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        with pytest.raises(QueryError, match="SPARQL CONSTRUCT failed: boom"):
+            await store.pull_subjects_into_mirror([IRI("http://example.org/person/1")])
         await store.aclose()

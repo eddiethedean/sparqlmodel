@@ -20,14 +20,11 @@ _CLOSED_STORE_MSG = "Cannot use a closed AsyncHttpStore"
 class AsyncHttpStore:
     """Async SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
 
-    ``update_graph`` pushes ``INSERT DATA`` / ``DELETE DATA`` to the remote endpoint
-    and applies the same delta to the mirror on success. ``graph`` reads the mirror
-    (for cascade / orphan logic and ``session.get``). ``query`` executes SELECT against
-    the remote read endpoint.
-
-    Optional ``read_endpoint`` / ``write_endpoint`` support Fuseki-style split URLs
-    (defaults to ``endpoint`` for both). ``mirror_mode`` is ``writer`` (default) or
-    ``remote_authoritative`` (see :class:`~sparqlmodel.stores.http.HttpStore`).
+    Same semantics as :class:`~sparqlmodel.stores.http.HttpStore`, using
+    ``httpx.AsyncClient`` for non-blocking remote I/O. Supports optional
+    ``read_endpoint`` / ``write_endpoint``, ``mirror_mode``, chunked UPDATE
+    (``max_triples_per_update``), retries (``max_retries`` / ``retry_backoff``),
+    and ``query_method`` ``post`` vs ``get`` for SELECT.
 
     **Mirror limitations:** Data written outside this store instance is visible to
     ``query`` / ``execute`` but not to ``graph``, ``get``, or cascade until the mirror
@@ -53,8 +50,21 @@ class AsyncHttpStore:
         timeout: float = 30.0,
         client: httpx.AsyncClient | None = None,
         mirror_mode: http_common.MirrorMode = "writer",
+        max_retries: int = 2,
+        retry_backoff: float = 0.5,
+        max_triples_per_update: int = 500,
+        query_method: http_common.QueryMethod = "post",
     ) -> None:
+        http_common.validate_http_resilience(
+            max_retries=max_retries,
+            retry_backoff=retry_backoff,
+            max_triples_per_update=max_triples_per_update,
+        )
         self._mirror_mode = http_common.validate_mirror_mode(mirror_mode)
+        self._query_method = http_common.validate_query_method(query_method)
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff
+        self._max_triples_per_update = max_triples_per_update
         self._endpoint = endpoint.rstrip("/")
         self._read_endpoint = (read_endpoint or endpoint).rstrip("/")
         self._write_endpoint = (write_endpoint or endpoint).rstrip("/")
@@ -120,6 +130,11 @@ class AsyncHttpStore:
         """Mirror mode — ``writer`` (default) or ``remote_authoritative``."""
         return self._mirror_mode
 
+    @property
+    def query_method(self) -> http_common.QueryMethod:
+        """How remote SELECT queries are sent — ``post`` (default) or ``get``."""
+        return self._query_method
+
     async def aclose(self) -> None:
         if self._closed:
             return
@@ -137,15 +152,16 @@ class AsyncHttpStore:
         self._check_open()
         if not update.strip():
             return
-        try:
-            response = await self._client.post(
-                self._write_url(),
-                content=update.encode("utf-8"),
-                headers=http_common.SPARQL_UPDATE_HEADERS,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise QueryError(f"SPARQL UPDATE failed: {exc}") from exc
+        await http_common.async_request_with_retry(
+            self._client,
+            "POST",
+            self._write_url(),
+            operation="SPARQL UPDATE",
+            max_retries=self._max_retries,
+            retry_backoff=self._retry_backoff,
+            content=update.encode("utf-8"),
+            headers=http_common.SPARQL_UPDATE_HEADERS,
+        )
 
     async def query(self, sparql: str) -> list[dict[str, Any]]:
         """Execute SPARQL SELECT against the remote read endpoint."""
@@ -153,13 +169,17 @@ class AsyncHttpStore:
         if not http_common.is_select_query(sparql):
             raise QueryError("Expected SELECT query for AsyncHttpStore.query()")
         try:
-            response = await self._client.post(
+            response = await http_common.async_execute_select(
+                self._client,
                 self._read_url(),
-                content=sparql.encode("utf-8"),
-                headers=http_common.SPARQL_QUERY_HEADERS,
+                sparql,
+                query_method=self._query_method,
+                max_retries=self._max_retries,
+                retry_backoff=self._retry_backoff,
             )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except QueryError:
+            raise
+        except Exception as exc:
             raise QueryError(f"SPARQL query failed: {exc}") from exc
 
         try:
@@ -182,13 +202,19 @@ class AsyncHttpStore:
             "Accept": "text/turtle",
         }
         try:
-            response = await self._client.post(
+            response = await http_common.async_request_with_retry(
+                self._client,
+                "POST",
                 self._read_url(),
+                operation="SPARQL CONSTRUCT",
+                max_retries=self._max_retries,
+                retry_backoff=self._retry_backoff,
                 content=sparql.encode("utf-8"),
                 headers=headers,
             )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except QueryError:
+            raise
+        except Exception as exc:
             raise QueryError(f"SPARQL CONSTRUCT failed: {exc}") from exc
         remote: Store | None = None
         if response.content.strip():
@@ -207,13 +233,8 @@ class AsyncHttpStore:
     async def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""
         self._check_open()
-        parts: list[str] = []
-        if remove is not None and len(remove):
-            parts.append(http_common.graph_to_delete_data(remove))
-        if add is not None and len(add):
-            parts.append(http_common.graph_to_insert_data(add))
-        update = "\n".join(parts)
-        await self._post_update(update)
+        for chunk in http_common.build_update_chunks(remove, add, self._max_triples_per_update):
+            await self._post_update(chunk)
 
         if remove is not None:
             for triple in remove:
