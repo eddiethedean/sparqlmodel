@@ -49,7 +49,7 @@ from sparqlmodel import HttpStore, SPARQLSession
 store = HttpStore(
     "http://localhost:3030/myds/sparql",
     read_endpoint="http://localhost:3030/myds/sparql",
-    write_endpoint="http://localhost:3030/myds/sparql",
+    write_endpoint="http://localhost:3030/myds/update",
     graph_store_url="http://localhost:3030/myds/data",
 )
 with SPARQLSession(store=store) as session:
