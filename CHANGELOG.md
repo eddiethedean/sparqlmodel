@@ -19,10 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`get` / `refresh` with `mirror_mode="remote_authoritative"`** — always CONSTRUCT-pull before hydrate; evicts identity/hydration cache for that read
 - **`get` / `refresh` with default `writer`** — pull only when the subject is missing from the mirror (unchanged 0.9.x gating)
 
+### Fixed
+
+- **Identity map** — deep `get` / `refresh` reload expires cascade subjects before merging loaded state; composed models registered on `put`/`get`/`refresh` so nested `get(Model, iri)` matches relationship instances
+- **`merge` / `expunge`** — drop pending `put(..., flush=False)` for the same subject as `expire` (single-subject `expunge` only; `expunge_all` unchanged)
+- **`remove_pending_for`** — no longer calls `ensure_id()` on queued models while filtering the pending queue
+- **`is_select_query`** — accepts inline `PREFIX`/`BASE`, `#` line comments, and `SELECT DISTINCT`
+- **`pull_subjects_into_mirror`** — malformed CONSTRUCT Turtle responses raise `QueryError` (sync and async HttpStore)
+
 ### Documentation
 
 - PRODUCTION, troubleshooting, SPECS, sessions guide — mirror modes and query vs `get` authority
 - ROADMAP — phase **0.10** shipped; next focus **0.11** (HTTP resilience)
+- `AsyncHttpStore` class docstring aligned with `HttpStore` (mirror modes, auth, single-writer)
+- `docs/PLAN.md` — TripleModel dependency `>=0.10`
+- `docs/SPECS.md` — closed-store behavior includes `pull_subjects_into_mirror`
 
 ## [0.9.2] - 2026-05-21
 

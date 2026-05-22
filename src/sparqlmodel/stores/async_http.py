@@ -20,9 +20,23 @@ _CLOSED_STORE_MSG = "Cannot use a closed AsyncHttpStore"
 class AsyncHttpStore:
     """Async SPARQL 1.1 endpoint store with a local ``triplemodel.Store`` mirror.
 
-    Same mirror semantics as :class:`~sparqlmodel.stores.http.HttpStore`, using
-    ``httpx.AsyncClient`` for non-blocking remote I/O. Supports optional
-    ``read_endpoint`` / ``write_endpoint`` for Fuseki-style split URLs.
+    ``update_graph`` pushes ``INSERT DATA`` / ``DELETE DATA`` to the remote endpoint
+    and applies the same delta to the mirror on success. ``graph`` reads the mirror
+    (for cascade / orphan logic and ``session.get``). ``query`` executes SELECT against
+    the remote read endpoint.
+
+    Optional ``read_endpoint`` / ``write_endpoint`` support Fuseki-style split URLs
+    (defaults to ``endpoint`` for both). ``mirror_mode`` is ``writer`` (default) or
+    ``remote_authoritative`` (see :class:`~sparqlmodel.stores.http.HttpStore`).
+
+    **Mirror limitations:** Data written outside this store instance is visible to
+    ``query`` / ``execute`` but not to ``graph``, ``get``, or cascade until the mirror
+    is updated. Use :meth:`pull_subjects_into_mirror` or ``get`` (auto-pull) to hydrate
+    from remote. Prefer :class:`~sparqlmodel.stores.async_memory.AsyncMemoryStore` for
+    single-process asyncio tests. Assume a single writer per endpoint.
+
+    If both ``auth`` and ``bearer_token`` are set, Basic ``auth`` wins for
+    ``Authorization``.
     """
 
     def __init__(
@@ -178,7 +192,10 @@ class AsyncHttpStore:
             raise QueryError(f"SPARQL CONSTRUCT failed: {exc}") from exc
         remote: Store | None = None
         if response.content.strip():
-            remote = load_graph(data=response.content, format="turtle")
+            try:
+                remote = load_graph(data=response.content, format="turtle")
+            except Exception as exc:
+                raise QueryError(f"Failed to parse CONSTRUCT response: {exc}") from exc
         prefixes = dict(self._registry.prefixes)
         http_common.apply_construct_to_mirror(
             self._graph,

@@ -198,7 +198,10 @@ class HttpStore:
             raise QueryError(f"SPARQL CONSTRUCT failed: {exc}") from exc
         remote: Store | None = None
         if response.content.strip():
-            remote = load_graph(data=response.content, format="turtle")
+            try:
+                remote = load_graph(data=response.content, format="turtle")
+            except Exception as exc:
+                raise QueryError(f"Failed to parse CONSTRUCT response: {exc}") from exc
         prefixes = dict(self._registry.prefixes)
         http_common.apply_construct_to_mirror(
             self._graph,

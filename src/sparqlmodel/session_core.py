@@ -181,6 +181,7 @@ def put_impl(
     store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
     invalidate_subjects(state, subjects)
     state.set_identity(model)
+    _register_embedded_identities(state, model)
     return model
 
 
@@ -251,10 +252,11 @@ def get_impl(
     if loaded is not None:
         identity = state.get_identity(id_key)
         if identity is not None:
-            _copy_validated_state(identity, loaded)
+            identity = _reconcile_identity_from_loaded(state, store.graph, identity, loaded)
             state.set_hydration(hkey, identity)
             return identity
         state.set_identity(loaded)
+        _register_embedded_identities(state, loaded)
         state.set_hydration(hkey, loaded)
         return loaded
     state.evict_identity_prefix(id_key[0], id_key[1])
@@ -355,8 +357,37 @@ def _copy_validated_state(
     return target
 
 
+def _register_embedded_identities(state: SessionState, model: SPARQLModel) -> None:
+    """Register composed ``SPARQLModel`` instances from relationship fields."""
+    for name, _field_info, _related in model.get_relationship_fields():
+        value = getattr(model, name, None)
+        if isinstance(value, SPARQLModel):
+            state.set_identity(value)
+            _register_embedded_identities(state, value)
+
+
+def _reconcile_identity_from_loaded(
+    state: SessionState,
+    store_graph: Store,
+    identity: SPARQLModel,
+    loaded: SPARQLModel,
+    *,
+    exclude_unset: bool = False,
+) -> SPARQLModel:
+    """Expire cascade identity entries, copy ``loaded`` onto ``identity``, re-register root."""
+    subjects = cascade_subjects_for_removal(loaded, store_graph, for_put=True)
+    invalidate_subjects(state, subjects)
+    _copy_validated_state(identity, loaded, exclude_unset=exclude_unset)
+    state.set_identity(identity)
+    _register_embedded_identities(state, identity)
+    return identity
+
+
 def expunge_impl(state: SessionState, model: SPARQLModel) -> None:
     """Remove ``model`` from the identity map and hydration cache."""
+    if model.id is not None:
+        cls, iri_key = identity_key_for_iri(type(model), model.id)
+        state.remove_pending_for(cls, iri_key)
     state.expire_model(model)
 
 
@@ -367,6 +398,7 @@ def expunge_all_impl(state: SessionState) -> None:
 
 def _apply_refresh_loaded(
     state: SessionState,
+    store_graph: Store,
     model: SPARQLModel,
     loaded: SPARQLModel,
     *,
@@ -376,12 +408,13 @@ def _apply_refresh_loaded(
     id_key = identity_key(model)
     identity = state.get_identity(id_key)
     if identity is not None:
-        _copy_validated_state(identity, loaded)
+        identity = _reconcile_identity_from_loaded(state, store_graph, identity, loaded)
         state.invalidate_hydration_for(model_cls, id_key[1])
         hkey = (model_cls, id_key[1], depth)
         state.set_hydration(hkey, identity)
         return identity
     state.set_identity(loaded)
+    _register_embedded_identities(state, loaded)
     state.set_hydration((model_cls, id_key[1], depth), loaded)
     return loaded
 
@@ -404,7 +437,7 @@ def refresh_impl(
         raise ConfigurationError(
             f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
         )
-    return _apply_refresh_loaded(state, model, loaded, depth=depth)
+    return _apply_refresh_loaded(state, store.graph, model, loaded, depth=depth)
 
 
 async def refresh_impl_async(
@@ -426,7 +459,7 @@ async def refresh_impl_async(
         raise ConfigurationError(
             f"Cannot refresh {model_cls.__name__} {model.id!s}: subject not in store"
         )
-    return _apply_refresh_loaded(state, model, loaded, depth=depth)
+    return _apply_refresh_loaded(state, store.graph, model, loaded, depth=depth)
 
 
 def merge_impl(state: SessionState, model: SPARQLModel) -> SPARQLModel:
@@ -434,6 +467,7 @@ def merge_impl(state: SessionState, model: SPARQLModel) -> SPARQLModel:
     model.ensure_id()
     id_key = identity_key(model)
     model_cls = type(model)
+    state.remove_pending_for(model_cls, id_key[1])
     identity = state.get_identity(id_key)
     if identity is not None:
         _copy_validated_state(identity, model, exclude_unset=True)
@@ -456,6 +490,7 @@ async def put_impl_async(
     await store.update_graph(add=add_g, remove=remove_g if len(remove_g) else None)
     invalidate_subjects(state, subjects)
     state.set_identity(model)
+    _register_embedded_identities(state, model)
     return model
 
 
@@ -508,10 +543,11 @@ async def get_impl_async(
     if loaded is not None:
         identity = state.get_identity(id_key)
         if identity is not None:
-            _copy_validated_state(identity, loaded)
+            identity = _reconcile_identity_from_loaded(state, store.graph, identity, loaded)
             state.set_hydration(hkey, identity)
             return identity
         state.set_identity(loaded)
+        _register_embedded_identities(state, loaded)
         state.set_hydration(hkey, loaded)
         return loaded
     state.evict_identity_prefix(id_key[0], id_key[1])

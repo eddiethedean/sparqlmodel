@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Iterable, Mapping
 from typing import Literal, cast
 from urllib.parse import urljoin
@@ -73,6 +74,12 @@ def sparql_url(endpoint: str) -> str:
     return urljoin(endpoint + "/", "sparql")
 
 
+_SPARQL_QUERY_KIND = re.compile(
+    r"\b(SELECT|ASK|CONSTRUCT|DESCRIBE|INSERT|DELETE)\b",
+    re.IGNORECASE,
+)
+
+
 def is_select_query(sparql: str) -> bool:
     """Return True when ``sparql`` appears to be a SPARQL SELECT (not ASK/CONSTRUCT/DESCRIBE)."""
     text = sparql
@@ -80,15 +87,21 @@ def is_select_query(sparql: str) -> bool:
         stripped = text.lstrip()
         if not stripped:
             return False
-        upper = stripped.upper()
-        if upper.startswith("PREFIX "):
+        if stripped.startswith("#"):
             newline = stripped.find("\n")
             if newline == -1:
                 return False
             text = stripped[newline + 1 :]
             continue
-        head = stripped.split(None, 1)[0].upper()
-        return head == "SELECT"
+        upper = stripped.upper()
+        if (upper.startswith("PREFIX ") or upper.startswith("BASE ")) and "\n" in stripped:
+            newline = stripped.find("\n")
+            text = stripped[newline + 1 :]
+            continue
+        match = _SPARQL_QUERY_KIND.search(stripped)
+        if match is None:
+            return False
+        return match.group(1).upper() == "SELECT"
 
 
 def build_request_headers(

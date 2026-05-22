@@ -28,6 +28,15 @@ def test_is_select_query_prefix_and_empty() -> None:
     assert not is_select_query("ASK { ?s ?p ?o }")
 
 
+def test_is_select_query_inline_prefix_and_comments() -> None:
+    assert is_select_query("PREFIX ex: <http://ex/> SELECT ?s WHERE {}")
+    assert is_select_query("# comment\nSELECT ?s WHERE { ?s ?p ?o }")
+    assert is_select_query("BASE <http://ex/>\nSELECT ?s WHERE {}")
+    assert not is_select_query("BASE <http://ex/>")
+    assert not is_select_query("   ")
+    assert not is_select_query("# only a comment")
+
+
 def test_http_store_pull_empty_iris_no_request() -> None:
     posts: list[str] = []
 
@@ -594,6 +603,26 @@ def test_http_store_pull_empty_construct_clears_subject() -> None:
     _seed_person_in_mirror(store, remote_iri, "Gone")
     store.pull_subjects_into_mirror([IRI(remote_iri)])
     assert not list(store.graph.triples((remote_iri, None, None)))
+    store.close()
+
+
+def test_http_store_pull_invalid_turtle_raises_query_error() -> None:
+    remote_iri = "http://example.org/person/1"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=b"not turtle",
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    with pytest.raises(QueryError, match="Failed to parse CONSTRUCT"):
+        store.pull_subjects_into_mirror([IRI(remote_iri)])
     store.close()
 
 

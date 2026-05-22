@@ -224,6 +224,87 @@ async def test_async_http_pull_replaces_stale_predicate() -> None:
         await store.aclose()
 
 
+async def test_async_http_pull_invalid_turtle_raises_query_error() -> None:
+    remote_iri = "http://example.org/person/1"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=b"not turtle",
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore("http://example.org/sparql", client=client)
+        with pytest.raises(QueryError, match="Failed to parse CONSTRUCT"):
+            await store.pull_subjects_into_mirror([IRI(remote_iri)])
+        await store.aclose()
+
+
+async def test_async_http_writer_get_skips_pull_when_subject_in_mirror() -> None:
+    remote_iri = "http://example.org/person/local"
+    construct_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            construct_calls.append(body)
+            return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+        )
+        _seed_person_in_mirror(store, remote_iri, "Local")
+        async with AsyncSPARQLSession(store=store) as session:
+            loaded = await session.get(Person, IRI(remote_iri))
+        assert loaded is not None
+        assert loaded.name == "Local"
+        assert construct_calls == []
+        await store.aclose()
+
+
+async def test_async_http_remote_authoritative_refresh_pulls_stale_mirror() -> None:
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+            mirror_mode="remote_authoritative",
+        )
+        _seed_person_in_mirror(store, remote_iri, "Stale")
+        async with AsyncSPARQLSession(store=store) as session:
+            detached = Person(id=IRI(remote_iri), name="Stale")
+            await session.merge(detached)
+            refreshed = await session.refresh(detached)
+        assert refreshed.name == "Remote"
+        await store.aclose()
+
+
 async def test_async_http_remote_authoritative_get_pulls_stale_mirror() -> None:
     remote_iri = "http://example.org/person/remote"
     remote_ttl = (

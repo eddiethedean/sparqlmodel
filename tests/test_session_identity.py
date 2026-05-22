@@ -282,6 +282,75 @@ def test_merge_preserves_unset_relationships(session: SPARQLSession, odos: Perso
     assert cached.works_for.name == "Acme Corp"
 
 
+def test_merge_drops_pending_put_for_same_subject(session: SPARQLSession) -> None:
+    plain = Person(id=IRI("urn:person:plain"), name="Plain")
+    session.put(plain)
+    pending = Person(id=plain.id, name="PendingName")
+    session.autoflush = False
+    session.put(pending, flush=False)
+    session.merge(Person(id=plain.id, name="MergedName"))
+    session.flush()
+    loaded = session.get(Person, plain.id)
+    assert loaded is not None
+    assert loaded.name == "MergedName"
+
+
+def test_remove_pending_for_does_not_assign_id() -> None:
+    from sparqlmodel.session_state import SessionState
+
+    state = SessionState()
+    pending = Person(name="NoIdYet")
+    assert pending.id is None
+    state._pending.append(pending)
+    state.remove_pending_for(Person, "urn:person:missing")
+    assert pending.id is None
+    assert state.pending == [pending]
+
+
+def test_remove_pending_for_drops_matching_entry() -> None:
+    from sparqlmodel.session_state import SessionState, identity_key_for_iri
+
+    state = SessionState()
+    pending = Person(id=IRI("urn:person:pending"), name="Pending")
+    state._pending.append(pending)
+    _, iri_key = identity_key_for_iri(Person, pending.id)
+    state.remove_pending_for(Person, iri_key)
+    assert state.pending == []
+
+
+def test_get_same_depth_reloads_when_cached_hydration_too_shallow(
+    session: SPARQLSession, odos: Person
+) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    session.put(odos)
+    shallow = session.get(Person, odos.id, depth=0)
+    assert shallow is not None
+    assert shallow.works_for is None
+    _, iri_key = identity_key_for_iri(Person, odos.id)
+    session._state.set_hydration((Person, iri_key, 1), shallow)
+    deep = session.get(Person, odos.id, depth=1)
+    assert deep is not None
+    assert deep.works_for is not None
+
+
+def test_get_deeper_depth_invalidates_shallow_hydration(
+    session: SPARQLSession, odos: Person, acme: Organization
+) -> None:
+    from tests.models import Location
+
+    loc = Location(id=IRI("urn:loc:hq"), name="HQ")
+    org = Organization(id=acme.id, name="Acme Corp", located_in=loc)
+    person = Person(id=odos.id, name="Odos", works_for=org)
+    session.put(person)
+    shallow = session.get(Person, odos.id, depth=1)
+    assert shallow is not None
+    deep = session.get(Person, odos.id, depth=2)
+    assert deep is not None
+    assert deep.works_for is not None
+    assert deep.works_for.located_in is not None
+
+
 def test_merge_does_not_modify_store(session: SPARQLSession, odos: Person) -> None:
     from pyoxigraph import Literal
 
@@ -413,6 +482,21 @@ def test_get_deep_load_reuses_identity(session: SPARQLSession, odos: Person) -> 
     deep2 = session.get(Person, odos.id, depth=1)
     assert deep1 is deep2
     assert deep1.works_for is not None
+
+
+def test_get_deep_reload_reconciles_nested_identity(
+    session: SPARQLSession, odos: Person, acme: Organization
+) -> None:
+    session.put(odos)
+    stale_org = session.get(Organization, acme.id)
+    assert stale_org is not None
+    renamed = Organization(id=acme.id, name="Renamed Corp")
+    session.put(Person(id=odos.id, name="Odos", works_for=renamed))
+    person = session.get(Person, odos.id, depth=1)
+    assert person is not None
+    assert person.works_for is not None
+    assert person.works_for.name == "Renamed Corp"
+    assert session.get(Organization, acme.id) is person.works_for
 
 
 def test_get_shallow_after_deep_updates_identity_map(session: SPARQLSession, odos: Person) -> None:

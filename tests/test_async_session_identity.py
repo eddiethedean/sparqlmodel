@@ -14,7 +14,7 @@ from sparqlmodel.graph import (
 from sparqlmodel.rdf_bridge import model_to_graph
 from sparqlmodel.session_state import identity_key_for_iri
 from sparqlmodel.stores.async_memory import AsyncMemoryStore
-from tests.models import Person
+from tests.models import Organization, Person
 
 
 @pytest.fixture
@@ -262,6 +262,58 @@ async def test_async_exit_suppresses_close_error_when_not_rollback() -> None:
         ) as session:
             await session.put(Person(id=IRI("urn:p:x"), name="X"), flush=False)
             raise ValueError("boom")
+
+
+async def test_async_get_deep_reload_reconciles_nested_identity(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+    acme: Organization,
+) -> None:
+    stale_org = await async_session.get(Organization, acme.id)
+    assert stale_org is not None
+    renamed = Organization(id=acme.id, name="Renamed Corp")
+    await async_session.put(Person(id=odos.id, name="Odos", works_for=renamed))
+    person = await async_session.get(Person, odos.id, depth=1)
+    assert person is not None
+    assert person.works_for is not None
+    assert person.works_for.name == "Renamed Corp"
+    assert await async_session.get(Organization, acme.id) is person.works_for
+
+
+async def test_async_get_same_depth_reloads_when_cached_hydration_too_shallow(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+) -> None:
+    from sparqlmodel.session_state import identity_key_for_iri
+
+    await async_session.put(odos)
+    shallow = await async_session.get(Person, odos.id, depth=0)
+    assert shallow is not None
+    assert shallow.works_for is None
+    _, iri_key = identity_key_for_iri(Person, odos.id)
+    async_session._state.set_hydration((Person, iri_key, 1), shallow)
+    deep = await async_session.get(Person, odos.id, depth=1)
+    assert deep is not None
+    assert deep.works_for is not None
+
+
+async def test_async_get_deeper_depth_invalidates_shallow_hydration(
+    async_session: AsyncSPARQLSession,
+    odos: Person,
+    acme: Organization,
+) -> None:
+    from tests.models import Location
+
+    loc = Location(id=IRI("urn:loc:hq"), name="HQ")
+    org = Organization(id=acme.id, name="Acme Corp", located_in=loc)
+    person = Person(id=odos.id, name="Odos", works_for=org)
+    await async_session.put(person)
+    shallow = await async_session.get(Person, odos.id, depth=1)
+    assert shallow is not None
+    deep = await async_session.get(Person, odos.id, depth=2)
+    assert deep is not None
+    assert deep.works_for is not None
+    assert deep.works_for.located_in is not None
 
 
 async def test_async_get_shallow_after_deep_updates_identity_map(

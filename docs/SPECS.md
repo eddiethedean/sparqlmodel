@@ -345,7 +345,7 @@ SPARQL 1.1 over HTTP (`httpx`) with a **local mirror** ([`stores/http.py`](../sr
 
 External writers or SELECT-only visibility without a matching mirror update can make `get` return `None` while `execute` returns bindings. Single-writer per endpoint is assumed. If both `auth` and `bearer_token` are set, Basic auth wins.
 
-`put` may send `DELETE DATA` followed by `INSERT DATA` in one SPARQL Update request; whether that is atomic depends on the endpoint (not guaranteed in 0.2). After `HttpStore.close()`, `query` and `update_graph` raise `RuntimeError`.
+`put` may send `DELETE DATA` followed by `INSERT DATA` in one SPARQL Update request; whether that is atomic depends on the endpoint (not guaranteed in 0.2). After `HttpStore.close()`, `query`, `update_graph`, and `pull_subjects_into_mirror` raise `RuntimeError` (same for `AsyncHttpStore.aclose()`).
 
 ## Store protocol (target API)
 

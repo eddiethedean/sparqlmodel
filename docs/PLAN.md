@@ -4,7 +4,7 @@
 
 **SparqlModel — the SQLModel of SPARQL.**
 
-SparqlModel is a **SPARQL ORM** for application developers. It requires **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.9` and focuses exclusively on what TripleModel does not provide: **sessions**, a **query compiler**, **store backends**, **cascade persistence policy**, and **hydration depth**.
+SparqlModel is a **SPARQL ORM** for application developers. It requires **[TripleModel](https://github.com/eddiethedean/triplemodel)** `>=0.10` and focuses exclusively on what TripleModel does not provide: **sessions**, a **query compiler**, **store backends**, **cascade persistence policy**, and **hydration depth**.
 
 TripleModel is the **mapping substrate** — literals, terms, `sync_to_graph`, `from_graph`, and file parse/serialize. SparqlModel does not compete with it; **`SPARQLModel` subclasses `TripleModel`** (Option A) so there is one class and one mapping path.
 
