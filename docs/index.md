@@ -42,8 +42,8 @@ Production checklist and 0.3–1.0 milestones: {doc}`SPECS` and {doc}`ROADMAP`.
 ## External links
 
 - [PyPI package](https://pypi.org/project/sparqlmodel/)
-- [GitHub repository](https://github.com/eddiethedean/sqarqlmodel)
-- [Issue tracker](https://github.com/eddiethedean/sqarqlmodel/issues)
+- [GitHub repository](https://github.com/eddiethedean/sparqlmodel)
+- [Issue tracker](https://github.com/eddiethedean/sparqlmodel/issues)
 - [TripleModel docs](https://triplemodel.readthedocs.io/)
 
 ```{toctree}

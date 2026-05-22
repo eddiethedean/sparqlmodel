@@ -36,11 +36,11 @@ python -c "import sparqlmodel; print(sparqlmodel.__version__)"
 
 ## Development install
 
-From a clone of [sqarqlmodel](https://github.com/eddiethedean/sqarqlmodel):
+From a clone of [sparqlmodel](https://github.com/eddiethedean/sparqlmodel):
 
 ```bash
-git clone https://github.com/eddiethedean/sqarqlmodel.git
-cd sqarqlmodel
+git clone https://github.com/eddiethedean/sparqlmodel.git
+cd sparqlmodel
 pip install -e ".[dev,http,fastapi,docs]"
 pytest
 ```

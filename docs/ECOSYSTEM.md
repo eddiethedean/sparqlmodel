@@ -4,7 +4,7 @@ SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** 
 
 **Architecture (Option A, shipped 0.4.0):** `SPARQLModel` **subclasses** `TripleModel` — one class, one mapping path. Session I/O uses `rdf_bridge` (`model_to_graph`, `load_from_graph`) on the same instances. The 0.3 `_triple.py` adapter was **removed in 0.4**.
 
-**Users:** start with [ORM.md](ORM.md) and the [README](https://github.com/eddiethedean/sqarqlmodel/blob/main/README.md).
+**Users:** start with [ORM.md](ORM.md) and the [README](https://github.com/eddiethedean/sparqlmodel/blob/main/README.md).
 
 TripleModel’s mirror of this contract:  
 [github.com/eddiethedean/triplemodel/docs/ECOSYSTEM.md](https://github.com/eddiethedean/triplemodel/blob/main/docs/ECOSYSTEM.md)

@@ -62,7 +62,7 @@ myst_enable_extensions = [
 myst_substitutions = {
     "version": release,
     "pypi": "https://pypi.org/project/sparqlmodel/",
-    "github": "https://github.com/eddiethedean/sqarqlmodel",
+    "github": "https://github.com/eddiethedean/sparqlmodel",
     "rtd": "https://sparqlmodel.readthedocs.io/en/latest/",
 }
 
@@ -145,7 +145,7 @@ html_theme_options = {
 html_context = {
     "display_github": True,
     "github_user": "eddiethedean",
-    "github_repo": "sqarqlmodel",
+    "github_repo": "sparqlmodel",
     "github_version": "main",
     "conf_py_path": "/docs/",
 }

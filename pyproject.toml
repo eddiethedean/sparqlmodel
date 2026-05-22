@@ -56,10 +56,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/eddiethedean/sqarqlmodel"
-Repository = "https://github.com/eddiethedean/sqarqlmodel"
+Homepage = "https://github.com/eddiethedean/sparqlmodel"
+Repository = "https://github.com/eddiethedean/sparqlmodel"
 Documentation = "https://sparqlmodel.readthedocs.io/en/latest/"
-Changelog = "https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sparqlmodel"]

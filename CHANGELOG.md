@@ -347,7 +347,7 @@ No public API changes for `SPARQLModel`, `Field`, `Relationship`, or `SPARQLSess
 ### Changed
 
 - `SPARQLSession` accepts any `Store` implementation (not only `MemoryStore`)
-- Pluggable `Store` protocol documented in [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md)
+- Pluggable `Store` protocol documented in [SPECS](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md)
 
 ### Fixed
 
@@ -360,9 +360,9 @@ No public API changes for `SPARQLModel`, `Field`, `Relationship`, or `SPARQLSess
 
 ### Documentation
 
-- [ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) — **Shipped (0.2.0)**; milestones 0.3–1.0 and SQLModel / SPARQLMojo parity tables
-- [ORM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md), [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md), [README](https://github.com/eddiethedean/sqarqlmodel/blob/main/README.md) — HttpStore mirror, session flush/identity map, compiler ops, FastAPI extra, known limitations
-- [PLAN](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md), [PRODUCTION](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) — production ORM vision, checklist (P0/P1/P2), operator guide
+- [ROADMAP](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md) — **Shipped (0.2.0)**; milestones 0.3–1.0 and SQLModel / SPARQLMojo parity tables
+- [ORM](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ORM.md), [SPECS](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md), [README](https://github.com/eddiethedean/sparqlmodel/blob/main/README.md) — HttpStore mirror, session flush/identity map, compiler ops, FastAPI extra, known limitations
+- [PLAN](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PLAN.md), [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md) — production ORM vision, checklist (P0/P1/P2), operator guide
 - `expire(Model, iri)` signature; repository URLs in `pyproject.toml`
 
 ## [0.1.4] - 2026-05-16
@@ -378,8 +378,8 @@ No public API changes for `SPARQLModel`, `Field`, `Relationship`, or `SPARQLSess
 ### Documentation
 
 - Reposition SparqlModel as a **session-first SPARQL ORM** (the SQLModel of SPARQL) across README and docs
-- Add [ORM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) — ORM guide (lifecycle, cascade, query DSL, hydration, package choice)
-- Reframe [PLAN](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md), [SPECS](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md), [ECOSYSTEM](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ECOSYSTEM.md), and [ROADMAP](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
+- Add [ORM](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ORM.md) — ORM guide (lifecycle, cascade, query DSL, hydration, package choice)
+- Reframe [PLAN](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PLAN.md), [SPECS](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md), [ECOSYSTEM](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ECOSYSTEM.md), and [ROADMAP](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md) with ORM-first structure; TripleModel as mapping substrate
 - Rewrite all docs for **`triplemodel>=0.9` as required mapping engine**; integration roadmap focuses on wiring, not adding the dependency
 - Update package metadata and module docstrings for ORM framing
 
@@ -451,9 +451,9 @@ No public API changes for `SPARQLModel`, `Field`, `Relationship`, or `SPARQLSess
 - RDF serializers (Turtle, N-Triples, RDF/XML, JSON-LD) and `model_dump_jsonld()`
 - Test suite with pytest and CI (ruff, ty, coverage ≥85%)
 
-[0.2.0]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.2.0
-[0.1.4]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.4
-[0.1.3]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.3
-[0.1.2]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.2
-[0.1.1]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.1
-[0.1.0]: https://github.com/eddiethedean/sqarqlmodel/releases/tag/v0.1.0
+[0.2.0]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.2.0
+[0.1.4]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.1.4
+[0.1.3]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.1.3
+[0.1.2]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.1.2
+[0.1.1]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.1.1
+[0.1.0]: https://github.com/eddiethedean/sparqlmodel/releases/tag/v0.1.0

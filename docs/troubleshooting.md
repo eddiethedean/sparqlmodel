@@ -145,6 +145,6 @@ Do not keep a session reference past request teardown when using FastAPI `Sessio
 
 ## Getting help
 
-- [GitHub issues](https://github.com/eddiethedean/sqarqlmodel/issues)
+- [GitHub issues](https://github.com/eddiethedean/sparqlmodel/issues)
 - {doc}`SPECS` — normative behavior
 - {doc}`changelog` — release notes

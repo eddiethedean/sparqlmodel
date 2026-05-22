@@ -3,13 +3,13 @@
 [![PyPI version](https://img.shields.io/pypi/v/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
 [![Python](https://img.shields.io/pypi/pyversions/sparqlmodel.svg)](https://pypi.org/project/sparqlmodel/)
 [![Documentation](https://readthedocs.org/projects/sparqlmodel/badge/?version=latest)](https://sparqlmodel.readthedocs.io/en/latest/?badge=latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/eddiethedean/sparqlmodel/blob/main/LICENSE)
 
 **The SQLModel of SPARQL** — **Pydantic v2** entity models mapped to RDF, a persistent session, and Python filters that compile to SPARQL.
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sqarqlmodel/blob/main/CHANGELOG.md#0100---2026-05-22) (0.10.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0100---2026-05-22) (0.10.0)
 
 ---
 
@@ -101,7 +101,7 @@ class Person(SPARQLModel):
 - **FastAPI** — reuse the same `SPARQLModel` classes for request/response bodies (see [FastAPI](#fastapi) below).
 - **JSON-LD** — `model_dump_jsonld()` / `model_validate_jsonld()` for API dicts (cascade-aware); files and HTTP bodies use `model.serialize(format="json-ld")` or `Person.parse(...)`.
 
-Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md#pydantic-integration)
+Details: [Models guide](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) · [ORM guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ORM.md#pydantic-integration)
 
 ---
 
@@ -166,7 +166,7 @@ with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as sessio
     session.put(odos)
 ```
 
-`query` / `execute` use the remote endpoint; `get` and cascade read the mirror updated by this store’s writes. See the [production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) for mirror semantics and deployment notes.
+`query` / `execute` use the remote endpoint; `get` and cascade read the mirror updated by this store’s writes. See the [production guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md) for mirror semantics and deployment notes.
 
 ---
 
@@ -208,7 +208,7 @@ from sparqlmodel.serializers import export_model
 print(export_model(odos, format="turtle"))
 ```
 
-File parse/serialize is implemented by [TripleModel](https://github.com/eddiethedean/triplemodel) (`parse`, `serialize`, `load_graph`). See the [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--015).
+File parse/serialize is implemented by [TripleModel](https://github.com/eddiethedean/triplemodel) (`parse`, `serialize`, `load_graph`). See the [roadmap](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#forward-roadmap-07--015).
 
 ---
 
@@ -220,20 +220,20 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 | [Getting started](https://sparqlmodel.readthedocs.io/en/latest/getting-started.html) | Quickstart and first session |
 | [Guides](https://sparqlmodel.readthedocs.io/en/latest/guides/index.html) | Models (Pydantic), sessions, queries, FastAPI |
 | [Real-world examples](https://sparqlmodel.readthedocs.io/en/latest/guides/realworld.html) | Nobel, DCAT, Wikidata, Schema.org (`examples/realworld/`) |
-| [ORM guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
-| [Technical specification](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-13-ga-gate) |
-| [Production guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
-| [Roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md) | 0.5–1.3 milestones; [SQLModel parity](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
-| [Project plan](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
-| [Ecosystem](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ECOSYSTEM.md) | SparqlModel vs TripleModel boundaries |
+| [ORM guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
+| [Technical specification](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-13-ga-gate) |
+| [Production guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
+| [Roadmap](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md) | 0.5–1.3 milestones; [SQLModel parity](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
+| [Project plan](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
+| [Ecosystem](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ECOSYSTEM.md) | SparqlModel vs TripleModel boundaries |
 
 ---
 
 ## Known limitations (0.10.0)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
-- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+) or `pull_subjects_into_mirror` when reads must match remote updates. Replace-on-pull (0.10+) clears stale predicates per IRI on pull. GSP full-graph sync and HTTP retries remain under [Production HttpStore](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#production-httpstore) (**0.11–0.12**)
-- Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
+- `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+) or `pull_subjects_into_mirror` when reads must match remote updates. Replace-on-pull (0.10+) clears stale predicates per IRI on pull. GSP full-graph sync and HTTP retries remain under [Production HttpStore](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#production-httpstore) (**0.11–0.12**)
+- Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip
 - Default `!=` uses NOT EXISTS (includes resources with no value); `.use_inequality_for_ne()` on nullable hops also treats missing links as matching
 - `==`, `<`, `>`, and `in_` on optional paths still exclude unbound values (SPARQL-native)
@@ -247,4 +247,4 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ## License
 
-MIT — see [LICENSE](https://github.com/eddiethedean/sqarqlmodel/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/eddiethedean/sparqlmodel/blob/main/LICENSE).

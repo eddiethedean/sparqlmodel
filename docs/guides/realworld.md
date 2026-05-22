@@ -2,7 +2,7 @@
 
 These examples use **real vocabularies, public datasets, and typical integration problems**—not synthetic `http://example.org/` toys. They are adapted from the [TripleModel real-world suite](https://github.com/eddiethedean/triplemodel/tree/main/examples/realworld) to show **SparqlModel** patterns: load bundled Turtle into a `MemoryStore`, then use `SPARQLSession` for **queries**, **`get`**, and **`execute`**.
 
-Source tree: [`examples/realworld/`](https://github.com/eddiethedean/sqarqlmodel/tree/main/examples/realworld) (scripts below are included from that directory at doc build time).
+Source tree: [`examples/realworld/`](https://github.com/eddiethedean/sparqlmodel/tree/main/examples/realworld) (scripts below are included from that directory at doc build time).
 
 ## Overview
 
@@ -13,7 +13,7 @@ Source tree: [`examples/realworld/`](https://github.com/eddiethedean/sqarqlmodel
 | [Wikidata capitals](#wikidata-capital-cities) | `wikidata_capitals.py` | `data/wikidata_capitals.ttl` |
 | [Schema.org NGOs](#schemaorg-ngo-registry) | `schema_org_ngos.py` | `data/schema_org_ngos.ttl` |
 
-Provenance and licenses: [DATA_SOURCES.md](https://github.com/eddiethedean/sqarqlmodel/blob/main/examples/realworld/DATA_SOURCES.md).
+Provenance and licenses: [DATA_SOURCES.md](https://github.com/eddiethedean/sparqlmodel/blob/main/examples/realworld/DATA_SOURCES.md).
 
 ## Run locally
 

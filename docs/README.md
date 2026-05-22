@@ -29,7 +29,7 @@ Builds run with **warnings as errors** (`SPHINXOPTS=-W` in `docs/Makefile`). A c
 ## Read the Docs
 
 - Config: [`.readthedocs.yaml`](../.readthedocs.yaml)
-- Import repo: `https://github.com/eddiethedean/sqarqlmodel` (note spelling: **sqarqlmodel**)
+- Import repo: `https://github.com/eddiethedean/sparqlmodel`
 - Default version: **latest** (tracks `main`)
 - `fail_on_warning: true` — must match local `make html`
 
