@@ -313,7 +313,7 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 | **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters — **shipped** |
 | **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns — **shipped** |
 | **0.10–0.12** | Stores | **[Production HttpStore](#production-httpstore)** — mirror semantics → HTTP resilience → GSP sync & integration contract |
-| **0.13** | Modeling | **Richer RDF fields** — multi-valued, `@lang`, polymorphic query, inverse nav |
+| **0.13** | Modeling | **SPARQLMojo modeling parity** — lang/collections, polymorphic query, property paths, inverse/VALUES/IRI filters |
 | **0.14** | Operations | **SHACL, bulk I/O, ASK/CONSTRUCT, disk store**, performance and logging |
 | **0.15** | GA | [SPECS P0 + P1](SPECS.md#production-orm-checklist-13-ga-gate) complete; stable public API |
 
@@ -460,8 +460,9 @@ Safe large writes and transient failure handling — still single-writer per end
 |-------------|--------|
 | Shared HTTP transport | Retry policy in `http_common` (sync + async stores) |
 | Retries | `max_retries`, `retry_backoff`; 502/503/504 and connection errors |
-| Batched UPDATE | `max_triples_per_update`; chunk INSERT/DELETE; mirror only after all remote chunks succeed |
-| Docs | [PRODUCTION.md](PRODUCTION.md) — batch sizes, retry defaults |
+| Batched UPDATE | `max_triples_per_update`; chunk INSERT/DELETE; mirror only after all remote chunks succeed (SPARQLMojo-style batch writes) |
+| `query_method` | Optional `GET` vs `POST` for remote SELECT on `HttpStore` / `AsyncHttpStore` |
+| Docs | [PRODUCTION.md](PRODUCTION.md) — batch sizes, retry defaults, GET vs POST tradeoffs |
 
 **Phase exit:** Large cascades do not send unbounded UPDATE strings; transient errors recover without app retry loops.
 
@@ -481,22 +482,30 @@ Full mirror option, integration coverage, stores-track sign-off.
 
 ---
 
-### 0.13 — Richer RDF models
+### 0.13 — Richer RDF models (SPARQLMojo parity)
 
 **Track:** Modeling · **Depends on:** TripleModel releases for collections/lang · **Parallel with:** [Production HttpStore](#production-httpstore) phases if mapping lands upstream first
 
-**Goal:** SPARQLMojo-class **field expressiveness** without duplicating TripleModel mapping.
+**Goal:** Close **[SPARQLMojo parity backlog](#sparqlmojo-parity-backlog)** modeling and query-surface gaps without duplicating TripleModel mapping.
 
-| Deliverable | Owner |
-|-------------|--------|
-| Multi-valued scalar and relationship fields (`list[...]`) | TripleModel map + SparqlModel hydrate/compiler/cascade |
-| Language-tagged literals (`LangString`, etc.) | TripleModel |
-| Polymorphic `session.query(Base)` with `rdf:type` branches | SparqlModel compiler |
-| `Relationship(..., back_populates=...)` (optional inverse) | SparqlModel + TripleModel metadata |
+| Deliverable | SPARQLMojo reference | Owner |
+|-------------|---------------------|--------|
+| Multi-valued scalars and relationships (`list[...]`; `LiteralList` / `IRIList` class) | [Collection fields](https://pypi.org/project/sparqlmojo/) | TripleModel map + SparqlModel hydrate/compiler/cascade |
+| Filters and limits on collection fields | Collection field docs | SparqlModel compiler |
+| `LangString` and multi-language maps (`MultiLangString`) | [Language-tagged literals](https://pypi.org/project/sparqlmojo/) | TripleModel + public field types |
+| Typed literal lists (`TypedLiteralList` equivalent) | Collection fields | TripleModel |
+| Polymorphic `session.query(Base)` — all `rdf:type` subclasses (`rdfs:subClassOf`) | [Class hierarchy](https://pypi.org/project/sparqlmojo/) | SparqlModel compiler |
+| Property paths — inverse (`^`), transitive / `+` / `*`, `PropertyPath` escape hatch | [Property paths](https://pypi.org/project/sparqlmojo/) | SparqlModel compiler (+ docs vs multi-hop `FieldRef`) |
+| `Relationship(..., back_populates=...)` and inverse navigation | `InverseField` | SparqlModel + TripleModel metadata |
+| `SchemaRegistry` — `owl:inverseOf` discovery, domain/range hints (lite) | [SchemaRegistry](https://pypi.org/project/sparqlmojo/) | SparqlModel metadata layer (full OWL editor **out of scope**) |
+| IRI field string filters — `str()` / `lower()` / `upper()` or documented equivalent | [Field-level filtering](https://pypi.org/project/sparqlmojo/) | SparqlModel compiler / `FieldRef` |
+| `Query.values(...)` / VALUES bindings for explicit IRI or literal sets | [VALUES clause](https://pypi.org/project/sparqlmojo/) | SparqlModel compiler |
+| Negation in query DSL (`~` / `not_` parity with `&` `\|`) | Field-level filtering | SparqlModel `expressions` + compiler |
+| Numeric compare datatype casting (verify parity with Mojo) | Field-level filtering | Compiler + tests |
 
-**Exit criteria:** Contract tests for multi-valued and lang fields; SPECS **P1** modeling items for **0.13** checked.
+**Exit criteria:** All **0.13** rows in [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) checked; contract tests for multi-valued, lang, and polymorphic query; SPECS **P1** modeling items for **0.13** checked.
 
-**Out of scope:** SHACL on `put` (**0.14**); named graphs (**post-0.15**).
+**Out of scope:** SHACL graph validation on `put` (**0.14**); named graphs (**post-0.15**); full OWL reasoner.
 
 ---
 
@@ -509,7 +518,8 @@ Full mirror option, integration coverage, stores-track sign-off.
 | Deliverable | Notes |
 |-------------|--------|
 | Optional SHACL validation hook on `put` | `triplemodel[shacl]` after Pydantic passes |
-| Bulk `put` / `delete` helpers | pyoxigraph `bulk_load` / `bulk_extend` where applicable |
+| Bulk `put` / `delete` helpers | pyoxigraph `bulk_load` / `bulk_extend`; SPARQLMojo batch insert/update/delete parity |
+| UPDATE dirty tracking (optional) | Track changed fields before `put` / flush — SPARQLMojo UPDATE docs |
 | `session.execute` / stores: ASK and CONSTRUCT result types | Not SELECT-only |
 | `OxigraphStore` backend | Disk `pyoxigraph.Store(path)`, backup/optimize |
 | `graph.py` hot paths | `quads_for_pattern` where measurable |
@@ -576,33 +586,84 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 
 ---
 
+(sparqlmojo-parity-backlog)=
+
 ## SPARQLMojo comparison
 
-[SPARQLMojo](https://pypi.org/project/sparqlmojo/) is the closest Python SPARQL ORM (beta, Python 3.12+). SparqlModel targets parity on app ergonomics while **requiring TripleModel** for mapping.
+[SPARQLMojo](https://pypi.org/project/sparqlmojo/) (beta, Python 3.12+, [docs](https://codeberg.org/Gitterdan/SPARQLMojo)) is the closest Python SPARQL ORM. SparqlModel targets **feature parity** on app ergonomics while **requiring TripleModel** for mapping. Use the backlog below as the canonical catch-up list; shipped rows stay checked as releases land.
 
-| Feature | SPARQLMojo | SparqlModel |
-|---------|------------|-------------|
-| Query compiler + session | Yes | Yes (0.2) |
-| Identity map | Yes | Yes (0.2) |
-| Lang / multi-lang literals | Yes | **0.13** (TripleModel) |
-| Collection fields (`LiteralList`, …) | Yes | **0.13** (TripleModel) |
-| Polymorphic queries | Yes | **0.13** |
-| Property-path-style filters | Yes | Multi-hop `FieldRef` (0.2); OPTIONAL nullable hops (**0.8**) |
-| Read/write endpoint split | Yes | Shipped (**0.9.1**); production contract **0.12** ([Production HttpStore](#production-httpstore)) |
-| Async ORM + HTTP store | No | Shipped (**0.6**) |
-| FastAPI integration | No | Yes (0.2) |
-| TripleModel mapping substrate | No | Yes (required) |
-| Unified model (SQLModel pattern) | N/A | **0.4** (Option A) |
-| Python 3.10+ | 3.12+ | 3.10+ |
+### At a glance (vs SPARQLMojo)
 
-**Differentiators:** cascade/orphan policy, `add` vs `put` semantics, FastAPI extras, TripleModel file I/O path, documented HttpStore mirror model.
+| Area | SPARQLMojo | SparqlModel today | Target |
+|------|------------|-------------------|--------|
+| Query compiler + session | Yes | Shipped (0.2) | — |
+| Identity map + `expunge` | Yes | Shipped (0.2, 0.9) | — |
+| `merge` / `refresh` | Partial | Shipped (0.9) | — |
+| Prefixes / compact IRIs | Yes | Shipped (`__prefixes__`) | — |
+| `limit` / `offset` / `order_by` / `count` | Partial | Shipped (0.8) | — |
+| Nullable `OPTIONAL` filters | Yes | Shipped (0.8) | — |
+| Read/write endpoint split | Yes | Shipped (0.9.1); contract **0.12** | [Production HttpStore](#production-httpstore) |
+| Async ORM + HTTP store | No | Shipped (0.6) | **Ahead** |
+| FastAPI `SessionDep` | No | Shipped (0.2) | **Ahead** |
+| TripleModel / pyoxigraph I/O | No | Shipped (0.5–0.7) | **Ahead** |
+| Cascade `put` / orphan policy | Partial | Shipped | **Ahead** |
+| Lang / `MultiLangString` | Yes | First value only | **0.13** |
+| Collection fields | Yes | First value only | **0.13** |
+| Polymorphic class queries | Yes | Single `rdf_type` per model | **0.13** |
+| Property paths (`^`, `+`, `*`, …) | Yes | Multi-hop `FieldRef` only | **0.13** |
+| `InverseField` / `owl:inverseOf` | Yes | `Relationship` only | **0.13** |
+| `SchemaRegistry` | Yes | Pydantic only | **0.13** (lite); SHACL **0.14** |
+| IRI `str()` / `lower()` / `upper()` filters | Yes | Not exposed | **0.13** |
+| VALUES clause in query DSL | Yes | Internal CONSTRUCT only | **0.13** |
+| Query negation (`not_` / `~`) | Yes | `!=` + `is_(None)`; no general `NOT` | **0.13** |
+| SELECT `GET` vs `POST` | Yes | POST only on HttpStore | **0.11** |
+| Batched remote UPDATE | Yes | Unbounded UPDATE strings | **0.11** |
+| UPDATE dirty tracking | Yes | `put` replaces subject graph | **0.14** (optional) |
+| SHACL / graph-shape validation | No | Planned | **0.14** |
+| ASK / CONSTRUCT on session | Partial | SELECT-only `execute` | **0.14** |
+| Python 3.10+ | 3.12+ | 3.10+ | **Ahead** |
+
+**SparqlModel differentiators (keep):** `add` vs `put`, composition cascade, FastAPI extras, documented HttpStore mirror, async stack, unified `SPARQLModel(TripleModel)`.
+
+### SPARQLMojo parity backlog
+
+Normative checklist for catch-up. **Owner** = primary package; version = planned SparqlModel release.
+
+| # | Feature | SPARQLMojo | SparqlModel | Target |
+|---|---------|------------|-------------|--------|
+| 1 | Session + query compiler | Yes | Shipped | — |
+| 2 | Identity map | Yes | Shipped (0.2) | — |
+| 3 | `merge` / `refresh` / `expunge` | Partial | Shipped (0.9) | — |
+| 4 | Prefix management | Yes | Shipped | — |
+| 5 | Pagination / sort / count | Partial | Shipped (0.8) | — |
+| 6 | Read/write SPARQL URLs | Yes | Shipped (0.9.1) | — |
+| 7 | HttpStore mirror + production contract | Partial | Partial (0.9.x) | **0.10–0.12** |
+| 8 | Replace-on-pull + `mirror_mode` | N/A | Missing | **0.10** |
+| 9 | Retries + batched UPDATE | Batch writes | Missing | **0.11** |
+| 10 | SELECT `GET` vs `POST` | Yes | POST only | **0.11** |
+| 11 | GSP / `sync_mirror` + integration tests | N/A | Missing | **0.12** |
+| 12 | Multi-valued / list fields | Yes | First value only | **0.13** |
+| 13 | Lang + multi-lang literals | Yes | No public API | **0.13** |
+| 14 | Polymorphic `query(Base)` | Yes | No | **0.13** |
+| 15 | Property paths + inverse hops | Yes | Multi-hop only | **0.13** |
+| 16 | `back_populates` / inverse nav | `InverseField` | Planned | **0.13** |
+| 17 | `SchemaRegistry` / `owl:inverseOf` | Yes | No | **0.13** (lite) |
+| 18 | IRI string filters | Yes | No | **0.13** |
+| 19 | VALUES in query DSL | Yes | No | **0.13** |
+| 20 | Query negation (`not_`) | Yes | Partial | **0.13** |
+| 21 | Collection field filters | Yes | No | **0.13** |
+| 22 | SHACL on `put` | No | No | **0.14** |
+| 23 | Bulk + dirty UPDATE tracking | Yes | Repeated `put` | **0.14** |
+| 24 | ASK / CONSTRUCT helpers | Partial | SELECT-only | **0.14** |
+| 25 | Async ORM + FastAPI | No | Shipped (0.6) | **Ahead** (document) |
+| 26 | Production GA (SPECS P0+P1) | N/A | Open | **0.15** |
 
 ---
 
 ## Priorities (forward work)
 
 1. **[Production HttpStore](#production-httpstore)** — phase **0.10** (mirror semantics), then **0.11** (HTTP resilience), then **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
-2. **0.13** — RDF modeling via TripleModel (multi-valued, lang, polymorphic query) — no parallel mapping in SparqlModel.
+2. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
 3. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
 4. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
 5. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.

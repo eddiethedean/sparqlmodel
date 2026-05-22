@@ -34,7 +34,7 @@ GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-1
 | Tier | Meaning | Examples |
 |------|---------|----------|
 | **P0** | Required for production HTTP/API apps | Unified `SPARQLModel(TripleModel)`, `offset` / `order_by` / `count`, OPTIONAL filters, HttpStore mirror strategy |
-| **P1** | SQLModel / SPARQLMojo parity | `merge` / `refresh` / `expunge`, multi-valued + lang fields, polymorphic query, read/write endpoints |
+| **P1** | SQLModel / SPARQLMojo parity | Full [ROADMAP parity backlog](ROADMAP.md#sparqlmojo-parity-backlog): modeling **0.13**, ops **0.14** |
 | **P2** | Advanced / ecosystem | Named graphs, federation, CONSTRUCT/ASK helpers, Oxigraph store |
 
 ---
@@ -49,7 +49,7 @@ GA gate: [SPECS.md — Production checklist](SPECS.md#production-orm-checklist-1
 | Cascade `put` / orphans | Yes | Partial | Manual |
 | Python 3.10+ | Yes | 3.12+ | Yes |
 
-SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **composition semantics**, and **documented store contracts**. SPARQLMojo leads on **lang/collection fields** until **1.0** (planned via TripleModel).
+SparqlModel wins on **integrated mapping (TripleModel)**, **FastAPI**, **async HTTP**, **composition semantics**, and **documented store contracts**. SPARQLMojo leads on **lang/collections, property paths, ontology-aware queries** until **0.13** (see [parity backlog](ROADMAP.md#sparqlmojo-parity-backlog)).
 
 ---
 
@@ -138,10 +138,10 @@ SparqlModel **depends** on `triplemodel>=0.10` and **pyoxigraph** (0.5+). Remain
 | **0.7** | Delegated file I/O | Thin `serializers.py`; TripleModel `parse` / `serialize` only |
 | **0.8** | Query lists | `offset`, `order_by`, `count`, OPTIONAL nullable hops |
 | **0.9** | Session cache | `merge`, `refresh`, `expunge`, scoped session docs |
-| **1.0** | Production HttpStore | Read/write URLs, mirror sync, `parse_query_results` |
-| **1.1** | Richer RDF models | Multi-valued, lang tags, polymorphic query (TripleModel + ORM) |
-| **1.2** | Production operations | SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging |
-| **1.3** | Production GA | SPECS P0+P1 complete; stable public API |
+| **0.10–0.12** | [Production HttpStore](ROADMAP.md#production-httpstore) | Mirror semantics, HTTP resilience, GSP sync |
+| **0.13** | SPARQLMojo modeling parity | Multi-valued, lang, polymorphic query, property paths, inverse/VALUES |
+| **0.14** | Production operations | SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging |
+| **0.15** | Production GA | SPECS P0+P1 complete; stable public API |
 
 ---
 
@@ -205,10 +205,10 @@ SparqlModel **depends** on `triplemodel>=0.10` and **pyoxigraph** (0.5+). Remain
 | **0.7** | Delegated file I/O |
 | **0.8** | Query lists |
 | **0.9** | Session cache |
-| **1.0** | Production HttpStore |
-| **1.1** | Richer RDF models |
-| **1.2** | Production operations |
-| **1.3** | Production GA |
+| **0.10–0.12** | Production HttpStore |
+| **0.13** | SPARQLMojo modeling parity |
+| **0.14** | Production operations |
+| **0.15** | Production GA |
 
 Detail: [ROADMAP.md](ROADMAP.md)
 
