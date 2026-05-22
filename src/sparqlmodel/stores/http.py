@@ -57,7 +57,9 @@ class HttpStore:
         headers: Mapping[str, str] | None = None,
         timeout: float = 30.0,
         client: httpx.Client | None = None,
+        mirror_mode: http_common.MirrorMode = "writer",
     ) -> None:
+        self._mirror_mode = http_common.validate_mirror_mode(mirror_mode)
         self._endpoint = endpoint.rstrip("/")
         self._read_endpoint = (read_endpoint or endpoint).rstrip("/")
         self._write_endpoint = (write_endpoint or endpoint).rstrip("/")
@@ -118,6 +120,11 @@ class HttpStore:
     @property
     def write_endpoint(self) -> str:
         return self._write_endpoint
+
+    @property
+    def mirror_mode(self) -> http_common.MirrorMode:
+        """Mirror sync policy: ``writer`` (default) or ``remote_authoritative``."""
+        return self._mirror_mode
 
     def close(self) -> None:
         if self._closed:
@@ -189,11 +196,16 @@ class HttpStore:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise QueryError(f"SPARQL CONSTRUCT failed: {exc}") from exc
-        if not response.content.strip():
-            return
-        remote = load_graph(data=response.content, format="turtle")
-        for triple in remote:
-            self._graph.add(triple)
+        remote: Store | None = None
+        if response.content.strip():
+            remote = load_graph(data=response.content, format="turtle")
+        prefixes = dict(self._registry.prefixes)
+        http_common.apply_construct_to_mirror(
+            self._graph,
+            remote,
+            subjects=unique,
+            prefixes=prefixes,
+        )
 
     def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""

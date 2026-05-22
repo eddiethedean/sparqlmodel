@@ -72,7 +72,7 @@ persistent → expunge → detached (may merge again)
 persistent → refresh → persistent (reloaded from store)
 ```
 
-`refresh` and `merge` do not write to the store — use `put` to persist changes. `merge` copies only fields you set on the detached instance (unset relationships are left unchanged on the cached object). `refresh(..., depth=0)` clears relationship attributes on the cached instance; a later `get(..., depth≥1)` reloads nested data from the store (0.9.1+). On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `refresh` auto-pulls the subject into the mirror when missing, same as `get` (0.9.2+). Use `expunge` then `get` at the needed depth if you want a clean reload boundary.
+`refresh` and `merge` do not write to the store — use `put` to persist changes. `merge` copies only fields you set on the detached instance (unset relationships are left unchanged on the cached object). `refresh(..., depth=0)` clears relationship attributes on the cached instance; a later `get(..., depth≥1)` reloads nested data from the store (0.9.1+). On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `get` and `refresh` CONSTRUCT-pull when the subject is missing from the mirror (default **`mirror_mode="writer"`**, 0.9.x+). Since **0.10.0**, `mirror_mode="remote_authoritative"` pulls on every `get`/`refresh`, and all pulls use replace-on-pull (no stale predicates per IRI). Use `expunge` then `get` at the needed depth if you want a clean reload boundary.
 
 ## Choosing a store
 
@@ -88,10 +88,16 @@ from sparqlmodel import HttpStore, SPARQLSession
 
 with SPARQLSession(store=HttpStore("http://localhost:3030/ds/sparql")) as session:
     session.put(model)
+
+# Multi-reader: re-sync each get from remote (0.10+)
+with SPARQLSession(
+    store=HttpStore("http://localhost:3030/ds/sparql", mirror_mode="remote_authoritative")
+) as session:
+    person = session.get(Person, IRI("urn:person:1"))
 ```
 
 ```{seealso}
-{doc}`../PRODUCTION` — HttpStore mirror semantics (query vs `get`).
+{doc}`../PRODUCTION` — HttpStore mirror semantics and mirror modes (query vs `get`).
 {doc}`../troubleshooting` — “execute finds IRI but get fails”.
 ```
 

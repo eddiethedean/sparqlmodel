@@ -50,7 +50,8 @@ Normative checklist for declaring SparqlModel **production-ready** (version **0.
 - [x] `Query.count()` — **0.8.0**
 - [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
 - [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**; on `refresh` — **0.9.2**
-- [ ] HttpStore full mirror sync or remote-authoritative `get` contract — **0.10–0.12** ([Production HttpStore](ROADMAP.md#production-httpstore))
+- [x] HttpStore replace-on-pull + `mirror_mode` (`writer` / `remote_authoritative`) — **0.10.0**
+- [ ] HttpStore full mirror sync (GSP `sync_mirror`) — **0.12** ([Production HttpStore](ROADMAP.md#production-httpstore))
 - [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)
 
@@ -359,7 +360,8 @@ External writers or SELECT-only visibility without a matching mirror update can 
 | `query_method` | GET vs POST for remote SELECT — **0.11** |
 | `ask` / `construct` | Optional protocol methods for existence and graph-shaped reads — **0.14** (P2) |
 | HttpStore `read_endpoint` / `write_endpoint` | Fuseki-style split URLs — **0.9.1** (shipped) |
-| Mirror sync | GSP GET, replace-on-pull, `mirror_mode` — **0.10–0.12** |
+| Replace-on-pull, `mirror_mode` | Shipped **0.10.0** |
+| Mirror sync (GSP `sync_mirror`) | **0.12** |
 | Retries, timeouts, batch size limits | **0.11** |
 | `OxigraphStore` / embedded backends | Optional — **0.14+** |
 

@@ -14,9 +14,23 @@ Common issues when running SparqlModel in development or production.
 - Since **0.9.1**, `get` and (since **0.9.2**) `refresh` attempt CONSTRUCT pull into the mirror automatically
 - Call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs
 - Use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps
-- Treat each `HttpStore` as the primary writer for its endpoint until mirror sync ships (**1.0**)
+- Treat each `HttpStore` as the primary writer for its endpoint, or use `mirror_mode="remote_authoritative"` (since **0.10.0**) when reads must track remote updates
 
-See {doc}`PRODUCTION` — HttpStore mirror model.
+See {doc}`PRODUCTION` — HttpStore mirror model and mirror modes.
+
+## Stale mirror after an external writer updated the remote
+
+**Symptom:** `execute` or a SPARQL client shows new data, but `get` still returns old field values even though the subject exists in the mirror.
+
+**Cause (0.9.x):** CONSTRUCT pull merged remote triples without removing old mirror triples for the same subject. **0.10.0+** uses replace-on-pull when a pull runs, but default **`writer`** mode only pulls when the subject is **missing** from the mirror.
+
+**Mitigations:**
+
+- Call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for affected IRIs (replace-on-pull since **0.10.0**)
+- Use `HttpStore(..., mirror_mode="remote_authoritative")` so every `get` / `refresh` re-pulls from remote (**0.10.0+**)
+- `put` through the same session/store if this instance should own the data
+
+See {doc}`PRODUCTION` — mirror modes.
 
 ## `query().all()` returns fewer rows than the remote SELECT
 
@@ -24,7 +38,7 @@ See {doc}`PRODUCTION` — HttpStore mirror model.
 
 **Cause (0.9.1+):** On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, the compiler runs a remote SELECT, then hydrates each binding with `get()`. `get()` reads the **local mirror** and, since **0.9.1**, issues a CONSTRUCT to pull the subject into the mirror when it is missing. Rows still fail to appear if the remote CONSTRUCT returns no triples, the endpoint rejects CONSTRUCT, or the subject has no `rdf:type` matching your model.
 
-**Mitigations:** `put` through the session first, call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs, use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps, or use raw `execute()` and handle bindings without `query().all()`.
+**Mitigations:** `put` through the session first, call {meth}`~sparqlmodel.stores.http.HttpStore.pull_subjects_into_mirror` for known IRIs, set `mirror_mode="remote_authoritative"` when each row must be hydrated from remote (**0.10.0+**), use {class}`~sparqlmodel.stores.memory.MemoryStore` for single-process apps, or use raw `execute()` and handle bindings without `query().all()`.
 
 ## Stale data after `put`
 

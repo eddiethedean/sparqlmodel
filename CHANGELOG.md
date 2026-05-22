@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-22
+
+### Added
+
+- **`HttpStore` / `AsyncHttpStore` `mirror_mode`** — `writer` (default) or `remote_authoritative` for per-store mirror sync policy
+- **Replace-on-pull** — `pull_subjects_into_mirror` removes existing mirror triples per IRI before merging CONSTRUCT results (empty remote response clears the subject in the mirror)
+
+### Changed
+
+- **`get` / `refresh` with `mirror_mode="remote_authoritative"`** — always CONSTRUCT-pull before hydrate; evicts identity/hydration cache for that read
+- **`get` / `refresh` with default `writer`** — pull only when the subject is missing from the mirror (unchanged 0.9.x gating)
+
+### Documentation
+
+- PRODUCTION, troubleshooting, SPECS, sessions guide — mirror modes and query vs `get` authority
+- ROADMAP — phase **0.10** shipped; next focus **0.11** (HTTP resilience)
+
 ## [0.9.2] - 2026-05-21
 
 ### Fixed

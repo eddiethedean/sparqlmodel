@@ -4,10 +4,21 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from pyoxigraph import Literal
 from triplemodel import Store
 
+from sparqlmodel import IRI, Field, SPARQLModel
+from sparqlmodel.async_session import AsyncSPARQLSession
 from sparqlmodel.exceptions import QueryError
 from sparqlmodel.stores.async_http import AsyncHttpStore
+
+
+class Person(SPARQLModel):
+    rdf_type = "schema:Person"
+    __prefixes__ = {"schema": "https://schema.org/"}
+
+    id: IRI
+    name: str = Field("schema:name")
 
 
 async def test_async_http_query_failure() -> None:
@@ -167,3 +178,84 @@ async def test_async_http_empty_update_and_remove_only() -> None:
         store.graph.add(("urn:s", "urn:p", "urn:o"))
         await store.update_graph(remove=g)
         assert "DELETE DATA" in posts[0]
+
+
+def _seed_person_in_mirror(store: AsyncHttpStore, iri: str, name: str) -> None:
+    store.graph.add(
+        (
+            iri,
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
+        )
+    )
+    store.graph.add((iri, "https://schema.org/name", Literal(name)))
+
+
+async def test_async_http_pull_replaces_stale_predicate() -> None:
+    remote_iri = "http://example.org/person/1"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+        )
+        _seed_person_in_mirror(store, remote_iri, "Stale")
+        await store.pull_subjects_into_mirror([IRI(remote_iri)])
+        names = [
+            str(o)
+            for _s, _p, o in store.graph.triples((remote_iri, "https://schema.org/name", None))
+        ]
+        assert names == ['"Remote"']
+        await store.aclose()
+
+
+async def test_async_http_remote_authoritative_get_pulls_stale_mirror() -> None:
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+    construct_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            construct_calls.append(body)
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        store = AsyncHttpStore(
+            "http://example.org/sparql",
+            client=client,
+            prefixes={"schema": "https://schema.org/"},
+            mirror_mode="remote_authoritative",
+        )
+        _seed_person_in_mirror(store, remote_iri, "Stale")
+        async with AsyncSPARQLSession(store=store) as session:
+            loaded = await session.get(Person, IRI(remote_iri))
+        assert loaded is not None
+        assert loaded.name == "Remote"
+        assert len(construct_calls) == 1
+        await store.aclose()

@@ -47,26 +47,61 @@ def relationships_materialized(model: SPARQLModel) -> bool:
     return False
 
 
-async def _maybe_pull_subject_into_mirror(
+def _should_pull_subject_for_read(
     store: StoreProtocol | AsyncStoreProtocol,
+    store_graph: Store,
+    model_cls: type[SPARQLModel],
     iri: str | IRI,
+) -> bool:
+    """Return whether to CONSTRUCT-pull ``iri`` before hydrating from the mirror."""
+    if getattr(store, "pull_subjects_into_mirror", None) is None:
+        return False
+    if getattr(store, "mirror_mode", "writer") == "remote_authoritative":
+        return True
+    return not _subject_exists_in_store(store_graph, model_cls, iri)
+
+
+def _evict_read_cache_for_pull(
+    state: SessionState,
+    model_cls: type[SPARQLModel],
+    iri: str | IRI,
+    store: StoreProtocol | AsyncStoreProtocol,
 ) -> None:
-    """When the store supports remote mirror sync, fetch ``iri`` before hydration."""
-    pull = getattr(store, "pull_subjects_into_mirror", None)
-    if pull is None:
+    if getattr(store, "mirror_mode", "writer") != "remote_authoritative":
         return
-    result = pull([iri])
-    if hasattr(result, "__await__"):
-        await result
+    id_key = identity_key_for_iri(model_cls, iri)
+    state.evict_identity_prefix(model_cls, id_key[1])
+    state.invalidate_hydration_for(model_cls, id_key[1])
 
 
-def _maybe_pull_subject_into_mirror_sync(
+def _pull_subject_for_read_sync(
+    state: SessionState,
     store: StoreProtocol,
+    model_cls: type[SPARQLModel],
     iri: str | IRI,
 ) -> None:
+    if not _should_pull_subject_for_read(store, store.graph, model_cls, iri):
+        return
+    _evict_read_cache_for_pull(state, model_cls, iri, store)
     pull = getattr(store, "pull_subjects_into_mirror", None)
     if pull is not None:
         pull([iri])
+
+
+async def _pull_subject_for_read_async(
+    state: SessionState,
+    store: AsyncStoreProtocol,
+    model_cls: type[SPARQLModel],
+    iri: str | IRI,
+) -> None:
+    if not _should_pull_subject_for_read(store, store.graph, model_cls, iri):
+        return
+    _evict_read_cache_for_pull(state, model_cls, iri, store)
+    pull = getattr(store, "pull_subjects_into_mirror", None)
+    if pull is not None:
+        result = pull([iri])
+        if hasattr(result, "__await__"):
+            await result
 
 
 def _subject_exists_in_store(
@@ -186,6 +221,7 @@ def get_impl(
     validate_depth(depth)
     id_key = identity_key_for_iri(model_cls, iri)
     hkey = (model_cls, id_key[1], depth)
+    _pull_subject_for_read_sync(state, store, model_cls, iri)
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
         if hydrated is None:
@@ -210,9 +246,6 @@ def get_impl(
         else:
             state.evict_identity_prefix(id_key[0], id_key[1])
             state.invalidate_hydration_for(id_key[0], id_key[1])
-
-    if not _subject_exists_in_store(store.graph, model_cls, iri):
-        _maybe_pull_subject_into_mirror_sync(store, iri)
 
     loaded = hydrate_one(model_cls, iri, store, depth=depth)
     if loaded is not None:
@@ -365,8 +398,7 @@ def refresh_impl(
     model.ensure_id()
     model_cls = type(model)
     assert model.id is not None
-    if not _subject_exists_in_store(store.graph, model_cls, model.id):
-        _maybe_pull_subject_into_mirror_sync(store, model.id)
+    _pull_subject_for_read_sync(state, store, model_cls, model.id)
     loaded = hydrate_one(model_cls, model.id, store, depth=depth)
     if loaded is None:
         raise ConfigurationError(
@@ -388,8 +420,7 @@ async def refresh_impl_async(
     model_cls = type(model)
     assert model.id is not None
     reader = _AsyncStoreReader(store)
-    if not _subject_exists_in_store(store.graph, model_cls, model.id):
-        await _maybe_pull_subject_into_mirror(store, model.id)
+    await _pull_subject_for_read_async(state, store, model_cls, model.id)
     loaded = hydrate_one(model_cls, model.id, reader, depth=depth)
     if loaded is None:
         raise ConfigurationError(
@@ -447,6 +478,7 @@ async def get_impl_async(
     validate_depth(depth)
     id_key = identity_key_for_iri(model_cls, iri)
     hkey = (model_cls, id_key[1], depth)
+    await _pull_subject_for_read_async(state, store, model_cls, iri)
     hydrated = state.get_hydration(hkey)
     if hydrated is not _HYDRATION_MISS:
         if hydrated is None:
@@ -471,9 +503,6 @@ async def get_impl_async(
         else:
             state.evict_identity_prefix(id_key[0], id_key[1])
             state.invalidate_hydration_for(id_key[0], id_key[1])
-
-    if not _subject_exists_in_store(store.graph, model_cls, iri):
-        await _maybe_pull_subject_into_mirror(store, iri)
 
     loaded = hydrate_one(model_cls, iri, reader, depth=depth)
     if loaded is not None:

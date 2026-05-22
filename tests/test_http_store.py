@@ -530,3 +530,166 @@ def test_session_with_http_store_put_and_query() -> None:
     bindings = session.execute("SELECT ?person WHERE { ?person a <https://schema.org/Person> }")
     assert bindings[0]["person"] == "urn:person:odos"
     store.close()
+
+
+def _seed_person_in_mirror(store: HttpStore, iri: str, name: str) -> None:
+    store.graph.add(
+        (
+            iri,
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
+        )
+    )
+    store.graph.add((iri, "https://schema.org/name", Literal(name)))
+
+
+def test_http_store_invalid_mirror_mode() -> None:
+    with pytest.raises(ValueError, match="mirror_mode"):
+        HttpStore("http://example.org/sparql", mirror_mode="invalid")  # type: ignore[arg-type]
+
+
+def test_http_store_pull_replaces_stale_predicate() -> None:
+    remote_iri = "http://example.org/person/1"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
+    _seed_person_in_mirror(store, remote_iri, "Stale")
+    store.pull_subjects_into_mirror([IRI(remote_iri)])
+    names = [
+        str(o) for _s, _p, o in store.graph.triples((remote_iri, "https://schema.org/name", None))
+    ]
+    assert names == ['"Remote"']
+    store.close()
+
+
+def test_http_store_pull_empty_construct_clears_subject() -> None:
+    remote_iri = "http://example.org/person/1"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore("http://example.org/sparql", client=client)
+    _seed_person_in_mirror(store, remote_iri, "Gone")
+    store.pull_subjects_into_mirror([IRI(remote_iri)])
+    assert not list(store.graph.triples((remote_iri, None, None)))
+    store.close()
+
+
+def test_http_store_writer_get_skips_pull_when_subject_in_mirror() -> None:
+    remote_iri = "http://example.org/person/local"
+    construct_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            construct_calls.append(body)
+            return httpx.Response(200, content=b"", headers={"Content-Type": "text/turtle"})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+    )
+    _seed_person_in_mirror(store, remote_iri, "Local")
+    session = SPARQLSession(store=store)
+    loaded = session.get(Person, IRI(remote_iri))
+    assert loaded is not None
+    assert loaded.name == "Local"
+    assert construct_calls == []
+    store.close()
+
+
+def test_http_store_remote_authoritative_get_pulls_stale_mirror() -> None:
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+    construct_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            construct_calls.append(body)
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+        mirror_mode="remote_authoritative",
+    )
+    _seed_person_in_mirror(store, remote_iri, "Stale")
+    session = SPARQLSession(store=store)
+    loaded = session.get(Person, IRI(remote_iri))
+    assert loaded is not None
+    assert loaded.name == "Remote"
+    assert len(construct_calls) == 1
+    store.close()
+
+
+def test_http_store_remote_authoritative_refresh_pulls_stale_mirror() -> None:
+    remote_iri = "http://example.org/person/remote"
+    remote_ttl = (
+        "@prefix schema: <https://schema.org/> .\n"
+        f'<{remote_iri}> a schema:Person ; schema:name "Remote" .\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("content-type") != "application/sparql-query":
+            return httpx.Response(404)
+        body = request.content.decode()
+        if body.strip().upper().startswith("CONSTRUCT"):
+            return httpx.Response(
+                200,
+                content=remote_ttl.encode(),
+                headers={"Content-Type": "text/turtle"},
+            )
+        return httpx.Response(200, json={"head": {"vars": []}, "results": {"bindings": []}})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/sparql",
+        client=client,
+        prefixes={"schema": "https://schema.org/"},
+        mirror_mode="remote_authoritative",
+    )
+    _seed_person_in_mirror(store, remote_iri, "Stale")
+    session = SPARQLSession(store=store)
+    detached = Person(id=IRI(remote_iri), name="Stale")
+    session.merge(detached)
+    refreshed = session.refresh(detached)
+    assert refreshed.name == "Remote"
+    store.close()

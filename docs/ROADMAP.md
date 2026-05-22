@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus:** **[Production HttpStore](#production-httpstore)** — phase **[0.10 — Mirror semantics](#010--mirror-semantics)**. **0.9.2** shipped **2026-05-21**. Forward plan: [0.10 → 0.15](#forward-roadmap-07--015).
+**Current focus:** **[Production HttpStore](#production-httpstore)** — phase **[0.11 — HTTP resilience](#011--http-resilience)**. **0.10.0** shipped **2026-05-22** (mirror semantics). Forward plan: [0.11 → 0.15](#forward-roadmap-07--015).
 
 ---
 
@@ -225,7 +225,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 | SELECT-only `execute` / `MemoryStore.query` (ASK raises `QueryError`) | `QueryBoolean`, `bool(store.query("ASK …"))` | SparqlModel | **0.14** (see SPECS P2) |
 | No CONSTRUCT / DESCRIBE on session | `QueryTriples`, `.serialize(RdfFormat.*)` | SparqlModel | **0.14** |
 | ~~Hand-rolled SPARQL Results JSON parser~~ | [`parse_query_results`](https://pyoxigraph.readthedocs.io/en/stable/sparql.html#pyoxigraph.parse_query_results) — **shipped 0.9.1** | SparqlModel `stores/` | — |
-| HttpStore mirror replace-on-pull / `mirror_mode` | CONSTRUCT per subject | SparqlModel `stores/` | **0.10** |
+| HttpStore mirror replace-on-pull / `mirror_mode` | CONSTRUCT per subject | SparqlModel `stores/` | **0.10** (shipped) |
 | HttpStore retries + batched UPDATE | `httpx` retry, chunked INSERT/DELETE | SparqlModel `stores/` | **0.11** |
 | HttpStore GSP full mirror sync | Graph Store HTTP GET | SparqlModel `stores/` | **0.12** (Production HttpStore) |
 | HttpStore UPDATE as string templates only | Remote endpoints need HTTP; local mirror could use `Store.update()` for dev tooling | SparqlModel | **0.12** (optional) or **0.14** |
@@ -301,7 +301,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 0.15)
 
-**Shipped:** **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next:** [Production HttpStore](#production-httpstore) — phase **0.10**.
+**Shipped:** **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next:** [Production HttpStore](#production-httpstore) — phase **0.11**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → [Production HttpStore](#production-httpstore) (0.10–0.12) → modeling (0.13) → operations (0.14) → GA (0.15)**. Each **0.x** line is one theme; Production HttpStore is one milestone with ordered **phases** (0.10, 0.11, 0.12).
 
@@ -435,20 +435,30 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 
 **Out of scope for this milestone:** Multi-valued / lang fields (**0.13**); disk-backed `OxigraphStore` (**0.14**).
 
+### 0.10.0 — Mirror semantics
+
+**Status:** shipped (2026-05-22).
+
+- [x] Replace-on-pull in `pull_subjects_into_mirror` (sync + async HTTP stores)
+- [x] `mirror_mode`: `writer` (default) vs `remote_authoritative`
+- [x] Session `get` / `refresh` honor `remote_authoritative` (always pull + cache eviction)
+- [x] Docs: [PRODUCTION.md](PRODUCTION.md), [troubleshooting.md](troubleshooting.md), SPECS, sessions guide
+- [x] Tests: stale predicate, empty CONSTRUCT, writer skip pull, remote_authoritative get/refresh
+
 (010--mirror-semantics)=
 
 #### Phase 0.10 — Mirror semantics
 
-**Depends on:** 0.9.2
+**Status:** shipped in **0.10.0** (2026-05-22).
 
 Per-subject mirror sync is **correct** and **configurable** before retries or full-graph sync.
 
 | Deliverable | Notes |
 |-------------|--------|
-| Replace-on-pull | `pull_subjects_into_mirror` removes existing mirror triples per IRI before CONSTRUCT merge |
-| `mirror_mode` | `writer` (default, 0.9.x) vs `remote_authoritative` on `HttpStore` / `AsyncHttpStore` |
-| Docs | [PRODUCTION.md](PRODUCTION.md), [troubleshooting.md](troubleshooting.md) — query vs `get` authority |
-| Tests | Stale predicate removed after remote CONSTRUCT; sync/async parity |
+| [x] Replace-on-pull | `pull_subjects_into_mirror` removes existing mirror triples per IRI before CONSTRUCT merge |
+| [x] `mirror_mode` | `writer` (default, 0.9.x) vs `remote_authoritative` on `HttpStore` / `AsyncHttpStore` |
+| [x] Docs | [PRODUCTION.md](PRODUCTION.md), [troubleshooting.md](troubleshooting.md) — query vs `get` authority |
+| [x] Tests | Stale predicate removed after remote CONSTRUCT; sync/async parity |
 
 **Phase exit:** No stale predicates left for a subject after pull; operators can pick mirror mode per store.
 
@@ -643,8 +653,8 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 | 4 | Prefix management | Yes | Shipped | — |
 | 5 | Pagination / sort / count | Partial | Shipped (0.8) | — |
 | 6 | Read/write SPARQL URLs | Yes | Shipped (0.9.1) | — |
-| 7 | HttpStore mirror + production contract | Partial | Partial (0.9.x) | **0.10–0.12** |
-| 8 | Replace-on-pull + `mirror_mode` | N/A | Missing | **0.10** |
+| 7 | HttpStore mirror + production contract | Partial | Partial (0.10.0) | **0.11–0.12** |
+| 8 | Replace-on-pull + `mirror_mode` | N/A | Shipped (0.10.0) | — |
 | 9 | Retries + batched UPDATE | Batch writes | Missing | **0.11** |
 | 10 | SELECT `GET` vs `POST` | Yes | POST only | **0.11** |
 | 11 | GSP / `sync_mirror` + integration tests | N/A | Missing | **0.12** |
@@ -668,7 +678,7 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 
 ## Priorities (forward work)
 
-1. **[Production HttpStore](#production-httpstore)** — phase **0.10** (mirror semantics), then **0.11** (HTTP resilience), then **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
+1. **[Production HttpStore](#production-httpstore)** — phase **0.11** (HTTP resilience), then **0.12** (GSP `sync_mirror`, integration contract, SPECS P0 HttpStore).
 2. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
 3. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
 4. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.

@@ -31,7 +31,33 @@ Do not use `HttpStore` as a shared cache across many writers without a [mirror s
 
 **Shipped (0.9.2):** Auto-pull on `refresh`; `merge` partial-field semantics and hydration invalidation.
 
-**Planned (1.0):** Full mirror reconciliation, batched updates, retries.
+**Shipped (0.10.0):** Replace-on-pull (no stale predicates per IRI after pull); `mirror_mode` on HTTP stores.
+
+**Planned (0.11–0.12):** Retries, batched UPDATE, GSP `sync_mirror()`. **Planned (1.0):** Full mirror reconciliation.
+
+---
+
+## Mirror modes (0.10+)
+
+Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan(..., mirror_mode=...)`):
+
+| `mirror_mode` | When `get` / `refresh` pull from remote | Typical use |
+|---------------|------------------------------------------|-------------|
+| **`writer`** (default) | Only when the subject has **no** triples in the mirror | This app is the primary writer for the endpoint |
+| **`remote_authoritative`** | **Every** `get` / `refresh` (CONSTRUCT + replace-on-pull) | Read replicas, admin UIs, or multi-reader apps that must see remote truth |
+
+Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: mirror triples for each requested IRI are removed before remote triples are merged.
+
+**Authority:**
+
+| API | Source of truth |
+|-----|-----------------|
+| `query`, `execute`, `Query.count()` | **Remote** endpoint |
+| `get`, `refresh`, cascade, `session.graph` | **Mirror** (after any pull for that read) |
+
+With **`writer`**, a subject already in the mirror may be stale until you call `pull_subjects_into_mirror` or the subject was never written locally (then `get` pulls once). With **`remote_authoritative`**, each `get`/`refresh` re-syncs that IRI from remote.
+
+**Caution:** `remote_authoritative` does not flush pending `put(..., flush=False)`; avoid reading the same IRI with unflushed local writes.
 
 ---
 

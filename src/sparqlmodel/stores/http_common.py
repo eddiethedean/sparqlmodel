@@ -3,12 +3,54 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from typing import Literal, cast
 from urllib.parse import urljoin
 
 from triplemodel import Store
 
+from sparqlmodel.graph import _subject_pattern
 from sparqlmodel.rdf_n3 import triple_to_n3
+from sparqlmodel.types import IRI
+
+MirrorMode = Literal["writer", "remote_authoritative"]
+
+_VALID_MIRROR_MODES = frozenset({"writer", "remote_authoritative"})
+
+
+def validate_mirror_mode(mirror_mode: str) -> MirrorMode:
+    if mirror_mode not in _VALID_MIRROR_MODES:
+        raise ValueError(
+            f"mirror_mode must be 'writer' or 'remote_authoritative', got {mirror_mode!r}"
+        )
+    return cast(MirrorMode, mirror_mode)
+
+
+def remove_mirror_subjects(
+    graph: Store,
+    iris: Iterable[str | IRI],
+    prefixes: dict[str, str],
+) -> None:
+    """Remove all mirror triples whose subject is one of ``iris``."""
+    unique = list(dict.fromkeys(str(i) for i in iris))
+    for iri in unique:
+        subject = _subject_pattern(iri, prefixes)
+        for triple in list(graph.triples((subject, None, None))):
+            graph.remove(triple)
+
+
+def apply_construct_to_mirror(
+    graph: Store,
+    remote: Store | None,
+    *,
+    subjects: Iterable[str | IRI],
+    prefixes: dict[str, str],
+) -> None:
+    """Replace mirror triples for ``subjects`` with triples from ``remote`` (may be empty)."""
+    remove_mirror_subjects(graph, subjects, prefixes)
+    if remote is not None:
+        for triple in remote:
+            graph.add(triple)
 
 
 def graph_to_insert_data(graph: Store) -> str:
