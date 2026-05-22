@@ -296,7 +296,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 1.3)
 
-**Shipped:** **0.9.1** (2026-05-21) — hydration fixes and partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next release:** **1.0**.
+**Shipped:** **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration; **0.9.1** — partial HttpStore hardening; **0.9.0** — [session cache](#09--session-cache-control). **Next release:** **1.0**.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → remote stores → richer RDF types → operations → GA**. Each version has a single primary theme; cross-cutting work (docs, tests) ships in the same version as the feature.
 
@@ -400,6 +400,15 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 - Partial HttpStore hardening: `read_endpoint` / `write_endpoint`, `pull_subjects_into_mirror`, auto-pull on `get`, `parse_query_results`
 - Compiler `!BOUND` guards for ordered comparisons on optional paths
 
+### 0.9.2 patch
+
+**Status:** shipped (2026-05-21).
+
+- `refresh` auto-pulls remote subjects into the HttpStore mirror (sync and async), parity with `get`
+- `merge` preserves unset relationship fields; invalidates hydration cache after reconcile
+- `load_from_graph` keeps `IRI` refs when `Relationship | IRI` and target has no `rdf:type`
+- CI smoke-run for `examples/realworld/`
+
 ---
 
 ### 1.0 — Production HttpStore
@@ -411,7 +420,7 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 | Deliverable | Notes |
 |-------------|--------|
 | [x] `read_endpoint` / `write_endpoint` (Fuseki-style split) | Optional constructor kwargs — **0.9.1** |
-| [x] Partial mirror sync | `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1** |
+| [x] Partial mirror sync | `pull_subjects_into_mirror`, auto-pull on `get` / `refresh` — **0.9.1** / **0.9.2** |
 | Mirror sync strategy (full) | GSP GET, selective hydrate, or remote-authoritative `get` mode |
 | Batched UPDATE limits, retries, timeouts | [PRODUCTION.md](PRODUCTION.md) patterns |
 | [x] `pyoxigraph.parse_query_results` for remote SELECT | **0.9.1** |

@@ -49,7 +49,7 @@ Normative checklist for declaring SparqlModel **production-ready** (version **1.
 - [x] `Query.order_by(...)` — **0.8.0**
 - [x] `Query.count()` — **0.8.0**
 - [x] OPTIONAL / absence filters for nullable `Relationship | None` — **0.8.0**
-- [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**
+- [x] HttpStore partial mirror sync — `pull_subjects_into_mirror`, auto-pull on `get` — **0.9.1**; on `refresh` — **0.9.2**
 - [ ] HttpStore full mirror sync or remote-authoritative `get` contract — **1.0**
 - [x] Scoped session pattern documented (FastAPI + scripts) — **0.9.0**
 - [x] Threading / asyncio concurrency model documented — **0.6** (async) + **0.9** (threads)

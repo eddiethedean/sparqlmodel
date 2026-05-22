@@ -229,7 +229,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.9.1)
+## Known limitations (0.9.2)
 
 - Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
 - `HttpStore` / `AsyncHttpStore` (0.9.1+): `get` and `refresh` (0.9.2+) pull missing subjects from the remote endpoint into the mirror (CONSTRUCT); full mirror reconciliation and multi-writer sync remain planned **1.0** — see [roadmap](https://github.com/eddiethedean/sqarqlmodel/blob/main/docs/ROADMAP.md#10--production-httpstore)

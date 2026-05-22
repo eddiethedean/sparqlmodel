@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **CI** — smoke-run `examples/realworld/` scripts on Python 3.12
+- **CI** — smoke-run `examples/realworld/` scripts on Python 3.12 (`pip install -e ".[http]"` so `httpx` is available at import time)
 
 ### Documentation
 
