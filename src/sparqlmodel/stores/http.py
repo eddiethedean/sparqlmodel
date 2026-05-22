@@ -123,7 +123,7 @@ class HttpStore:
 
     @property
     def mirror_mode(self) -> http_common.MirrorMode:
-        """Mirror sync policy: ``writer`` (default) or ``remote_authoritative``."""
+        """Mirror mode — ``writer`` (default) or ``remote_authoritative``."""
         return self._mirror_mode
 
     def close(self) -> None:
