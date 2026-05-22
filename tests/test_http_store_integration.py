@@ -105,17 +105,18 @@ def test_fuseki_external_writer_sync_mirror(fuseki_clean: FusekiEndpoints) -> No
     person = Person(id=IRI(PERSON_IRI), name="BeforeExternal")
     store = _http_store(fuseki_clean)
     try:
-        with SPARQLSession(store=store) as session:
+        with SPARQLSession(store=store, close_on_exit=False) as session:
             session.put(person)
         _external_update(fuseki_clean, "AfterExternal")
         assert _select_name(fuseki_clean) == "AfterExternal"
 
-        with SPARQLSession(store=store) as session:
+        with SPARQLSession(store=store, close_on_exit=False) as session:
             stale = session.get(Person, IRI(PERSON_IRI))
             assert stale is not None
             assert stale.name == "BeforeExternal"
 
             store.sync_mirror()
+            session.expunge_all()
             fresh = session.get(Person, IRI(PERSON_IRI))
             assert fresh is not None
             assert fresh.name == "AfterExternal"
@@ -137,7 +138,7 @@ def test_fuseki_sync_mirror_empty_remote_clears_mirror(fuseki_clean: FusekiEndpo
     person = Person(id=IRI(PERSON_IRI), name="Ghost")
     store = _http_store(fuseki_clean)
     try:
-        with SPARQLSession(store=store) as session:
+        with SPARQLSession(store=store, close_on_exit=False) as session:
             session.put(person)
         assert len(store.graph) > 0
         clear_fuseki_dataset(fuseki_clean)
@@ -152,14 +153,15 @@ async def test_fuseki_async_external_writer_sync_mirror(fuseki_clean: FusekiEndp
     person = Person(id=IRI(PERSON_IRI), name="AsyncBefore")
     store = _async_http_store(fuseki_clean)
     try:
-        async with AsyncSPARQLSession(store=store) as session:
+        async with AsyncSPARQLSession(store=store, close_on_exit=False) as session:
             await session.put(person)
         _external_update(fuseki_clean, "AsyncAfter")
-        async with AsyncSPARQLSession(store=store) as session:
+        async with AsyncSPARQLSession(store=store, close_on_exit=False) as session:
             stale = await session.get(Person, IRI(PERSON_IRI))
             assert stale is not None
             assert stale.name == "AsyncBefore"
             await store.sync_mirror()
+            await session.expunge_all()
             fresh = await session.get(Person, IRI(PERSON_IRI))
             assert fresh is not None
             assert fresh.name == "AsyncAfter"
@@ -180,7 +182,7 @@ def test_fuseki_read_write_endpoints_same_dataset(fuseki_clean: FusekiEndpoints)
         )
         assert bindings[0]["n"] == "ViaWriteUrl"
         store.sync_mirror()
-        with SPARQLSession(store=store) as session:
+        with SPARQLSession(store=store, close_on_exit=False) as session:
             loaded = session.get(Person, IRI(PERSON_IRI))
             assert loaded is not None
             assert loaded.name == "ViaWriteUrl"
