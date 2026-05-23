@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.13.0] - 2026-05-22
 
+### Fixed
+
+- **Multi-ref cascade** — `put` on `set[ResourceRef]` no longer deletes all linked targets when one ref is removed; remaining `ResourceRef` values are protected during orphan cleanup (same as `set[IRI]`)
+
 ### Added
 
 - **`triplemodel>=0.12.0,<2`** — multi-valued mapping, `MultiLangString`, `TypedLiteral`, `ResourceRef`, `OntologyRegistry`, `BackPopulates` (re-exported from `sparqlmodel`)

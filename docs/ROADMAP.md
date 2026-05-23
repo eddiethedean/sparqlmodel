@@ -140,7 +140,7 @@ Application guide: [guides/models.md](guides/models.md). Normative stack: [SPECS
 - [x] `get` / query hydration → `sparql_from_graph` / `TripleModel.from_graph` via adapter
 - [x] Field adapter: `Field` / `Relationship` → dynamic `rdf_field` TripleModel classes (internal) — **remove in 0.4**
 - [x] Remove interim term conversion from `graph.py`
-- [ ] Multi-valued `list[...]` fields via TripleModel — **deferred to 0.13**
+- [x] Multi-valued `list[...]` fields via TripleModel — **shipped 0.13.0**
 
 ### SparqlModel-only
 
@@ -627,15 +627,15 @@ Quick reference for application developers. Detail: [SPECS.md](SPECS.md).
 | FastAPI `SessionDep` | No | Shipped (0.2) | **Ahead** |
 | TripleModel / pyoxigraph I/O | No | Shipped (0.5–0.7) | **Ahead** |
 | Cascade `put` / orphan policy | Partial | Shipped | **Ahead** |
-| Lang / `MultiLangString` | Yes | First value only | **0.13** |
-| Collection fields | Yes | First value only | **0.13** |
-| Polymorphic class queries | Yes | Single `rdf_type` per model | **0.13** |
-| Property paths (`^`, `+`, `*`, …) | Yes | Multi-hop `FieldRef` only | **0.13** |
-| `InverseField` / `owl:inverseOf` | Yes | `Relationship` only | **0.13** |
-| `SchemaRegistry` | Yes | Pydantic only | **0.13** (lite); SHACL **0.14** |
-| IRI `str()` / `lower()` / `upper()` filters | Yes | Not exposed | **0.13** |
-| VALUES clause in query DSL | Yes | Internal CONSTRUCT only | **0.13** |
-| Query negation (`not_` / `~`) | Yes | `!=` + `is_(None)`; no general `NOT` | **0.13** |
+| Lang / `MultiLangString` | Yes | Shipped (0.13.0) | — |
+| Collection fields | Yes | Shipped (0.13.0) | — |
+| Polymorphic class queries | Yes | Shipped (0.13.0) | — |
+| Property paths (`^`, `+`, `*`, …) | Yes | Shipped (0.13.0) | — |
+| `InverseField` / `owl:inverseOf` | Yes | Shipped (0.13.0) | — |
+| `SchemaRegistry` | Yes | Shipped (0.13.0, lite); SHACL **0.14** | — |
+| IRI `str()` / `lower()` / `upper()` filters | Yes | Shipped (0.13.0) | — |
+| VALUES clause in query DSL | Yes | Shipped (0.13.0) | — |
+| Query negation (`not_` / `~`) | Yes | Shipped (0.13.0) | — |
 | SELECT `GET` vs `POST` | Yes | Shipped (0.11); default POST | — |
 | Batched remote UPDATE | Yes | Shipped (0.11); chunked UPDATE | — |
 | UPDATE dirty tracking | Yes | `put` replaces subject graph | **0.14** (optional) |
@@ -662,16 +662,16 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 | 9 | Retries + batched UPDATE | Batch writes | Shipped (0.11.0) | — |
 | 10 | SELECT `GET` vs `POST` | Yes | Shipped (0.11.0) | — |
 | 11 | GSP / `sync_mirror` + integration tests | N/A | Shipped (0.12.0) | — |
-| 12 | Multi-valued / list fields | Yes | First value only | **0.13** |
-| 13 | Lang + multi-lang literals | Yes | No public API | **0.13** |
-| 14 | Polymorphic `query(Base)` | Yes | No | **0.13** |
-| 15 | Property paths + inverse hops | Yes | Multi-hop only | **0.13** |
-| 16 | `back_populates` / inverse nav | `InverseField` | Planned | **0.13** |
-| 17 | `SchemaRegistry` / `owl:inverseOf` | Yes | No | **0.13** (lite) |
-| 18 | IRI string filters | Yes | No | **0.13** |
-| 19 | VALUES in query DSL | Yes | No | **0.13** |
-| 20 | Query negation (`not_`) | Yes | Partial | **0.13** |
-| 21 | Collection field filters | Yes | No | **0.13** |
+| 12 | Multi-valued / list fields | Yes | Shipped (0.13.0) | — |
+| 13 | Lang + multi-lang literals | Yes | Shipped (0.13.0) | — |
+| 14 | Polymorphic `query(Base)` | Yes | Shipped (0.13.0) | — |
+| 15 | Property paths + inverse hops | Yes | Shipped (0.13.0) | — |
+| 16 | `back_populates` / inverse nav | `InverseField` | Shipped (0.13.0) | — |
+| 17 | `SchemaRegistry` / `owl:inverseOf` | Yes | Shipped (0.13.0, lite) | — |
+| 18 | IRI string filters | Yes | Shipped (0.13.0) | — |
+| 19 | VALUES in query DSL | Yes | Shipped (0.13.0) | — |
+| 20 | Query negation (`not_`) | Yes | Shipped (0.13.0) | — |
+| 21 | Collection field filters | Yes | Shipped (0.13.0) | — |
 | 22 | SHACL on `put` | No | No | **0.14** |
 | 23 | Bulk + dirty UPDATE tracking | Yes | Repeated `put` | **0.14** |
 | 24 | ASK / CONSTRUCT helpers | Partial | SELECT-only | **0.14** |
@@ -682,11 +682,10 @@ Normative checklist for catch-up. **Owner** = primary package; version = planned
 
 ## Priorities (forward work)
 
-1. **0.13** — [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) modeling/query items (#12–#21) via TripleModel — no parallel mapping in SparqlModel.
-3. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
-4. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
-5. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
-6. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **0.15** GA.
+1. **0.14** — Operations (SHACL hook, bulk, ASK/CONSTRUCT, `OxigraphStore`, logging/perf).
+2. **0.15** — GA: SPECS P0+P1 checklist, security review, stable API — **no new features**.
+3. Keep sync `SPARQLSession` / `Field` / `session.put` stable; mirror features on async APIs in the same release.
+4. Contract tests on every integration PR; [SPECS](SPECS.md) checklist drives **0.15** GA.
 
 ---
 

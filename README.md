@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.10 + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0120---2026-05-22) (0.12.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.12+ + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0130---2026-05-22) (0.13.0)
 
 ---
 
@@ -228,15 +228,16 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 | [ORM guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ORM.md) | Lifecycle, cascade, hydration, when to use SparqlModel vs TripleModel |
 | [Technical specification](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md) | Normative API; [production checklist](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/SPECS.md#production-orm-checklist-13-ga-gate) |
 | [Production guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md) | HttpStore, sessions, deployment |
-| [Roadmap](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md) | 0.5–1.3 milestones; [SQLModel parity](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
+| [Roadmap](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md) | 0.5–0.15 milestones; [SQLModel parity](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ROADMAP.md#sqlmodel-parity-checklist) |
 | [Project plan](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PLAN.md) | Vision and release strategy |
 | [Ecosystem](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/ECOSYSTEM.md) | SparqlModel vs TripleModel boundaries |
 
 ---
 
-## Known limitations (0.12.0)
+## Known limitations (0.13.0)
 
 - `list[SPARQLModel]` embed collections are not supported (TripleModel); use `set[IRI]` / `set[ResourceRef]` with `Relationship(..., model=...)` for multi-ref
+- Multi-valued scalars and refs (`set`/`list`), `LangString` / `MultiLangString`, polymorphic query, property paths, and `not_()` — see [Models](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) and [Queries](https://sparqlmodel.readthedocs.io/en/latest/guides/queries.html) guides
 - Prefer `put` over `add` for upserts (stale literal cleanup)
 - `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+), `pull_subjects_into_mirror`, or **`sync_mirror()`** (0.12+, requires `graph_store_url`) when reads must match remote updates. Retries and batched UPDATE: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#http-resilience-011); GSP mirror sync: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#mirror-sync-012)
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))

@@ -100,15 +100,32 @@ Use standard Pydantic constraints on scalar fields. Relationship fields support 
 
 ---
 
+## Richer RDF modeling (0.13+)
+
+Requires `triplemodel>=0.12.0` (SparqlModel **0.13.0**).
+
+| Feature | Usage |
+|---------|--------|
+| Multi-valued scalars | `tags: set[str] = Field("schema:keyword", default_factory=set)` |
+| Multi-ref links | `related: set[ResourceRef] = Relationship("schema:about", model=Tag)` or `set[IRI]` |
+| Language tags | `title: MultiLangString = Field("schema:name")` or `Field(..., lang="en")` |
+| Typed literals | `TypedLiteral` via TripleModel field types |
+| Inverse / paired fields | `Relationship(..., inverse=...)`, `back_populates=`, `inverse_pair` |
+| Ontology hints | `SchemaRegistry` / `Rdf.ontology_registry` for polymorphic query (see {doc}`queries`) |
+
+Import `ResourceRef`, `LangString`, `MultiLangString`, and `TypedLiteral` from `sparqlmodel` (re-exported from TripleModel). Prefer `put` when shrinking a `set[ResourceRef]` so orphan cleanup removes dropped targets only.
+
+---
+
 ## What Pydantic does not cover (yet)
 
 | Concern | Today | Planned |
 |---------|-------|---------|
 | App-level types and constraints | Pydantic on `SPARQLModel` | — |
 | RDF type of subject on load | TripleModel `validate_type` | — |
-| Multi-valued predicates (`set[...]`, `list[...]` where supported) | Full round-trip via TripleModel 0.12+ | **0.13.0** |
-| Language tags (`LangString`, `MultiLangString`) | `Field(..., lang=)` and TM types | **0.13.0** |
-| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**1.1**, TripleModel) |
+| Multi-valued predicates (`set[...]`, `list[...]` where supported) | Full round-trip via TripleModel 0.12+ | — |
+| Language tags (`LangString`, `MultiLangString`) | `Field(..., lang=)` and TM types | — |
+| Graph shape rules (cardinality, domains) | Not enforced | SHACL on `put` (**0.14**, TripleModel) |
 
 Pydantic validates **Python values** against your model. It does not replace SHACL or OWL reasoning for graph-level rules.
 

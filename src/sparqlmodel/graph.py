@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from pyoxigraph import BlankNode, Literal, NamedNode
 from triplemodel import Store
 from triplemodel.config import RDF_TYPE as RDF_TYPE_URI
+from triplemodel.fields.resource_ref import ResourceRef
 from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
 from sparqlmodel.fields import get_field_metadata, iter_relationship_values
@@ -22,6 +23,22 @@ RDF_TYPE = RDF_TYPE_URI
 def _expanded_iri_key(iri: str | IRI, prefixes: dict[str, str]) -> str:
     """Canonical expanded IRI string for set lookups and cycle detection."""
     return expand_iri(str(iri), prefixes)
+
+
+def _protected_relationship_key(
+    item: object,
+    prefixes: dict[str, str],
+) -> str | None:
+    """IRI key for a relationship value kept on the model (scalar or collection)."""
+    from sparqlmodel.model import SPARQLModel as _SPARQLModel
+
+    if isinstance(item, IRI):
+        return _expanded_iri_key(item, prefixes)
+    if isinstance(item, ResourceRef):
+        return _expanded_iri_key(str(item), prefixes)
+    if isinstance(item, _SPARQLModel):
+        return _expanded_iri_key(item.ensure_id(), item.get_prefixes())
+    return None
 
 
 def _is_resource_term(term: object) -> bool:
@@ -159,10 +176,9 @@ def orphaned_embedded_targets(
         value = getattr(model, name, None)
         protected = set(nested_iris)
         for item in iter_relationship_values(value):
-            if isinstance(item, IRI):
-                protected.add(_expanded_iri_key(item, prefixes))
-            elif isinstance(item, _SPARQLModel):
-                protected.add(_expanded_iri_key(item.ensure_id(), item.get_prefixes()))
+            key = _protected_relationship_key(item, prefixes)
+            if key is not None:
+                protected.add(key)
         pred = _predicate_pattern(meta.predicate, prefixes)
         for obj in graph.objects(subject, pred):
             if _is_resource_term(obj):
