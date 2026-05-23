@@ -6,7 +6,7 @@
 |-------------|---------|
 | Python | 3.10, 3.11, 3.12, or 3.13 |
 | SparqlModel | {{ version }} (current release) |
-| TripleModel | `>=0.10.0,<2` (installed automatically) |
+| TripleModel | `>=0.12.0,<2` for SparqlModel 0.13+ (`>=0.10.0,<2` on older releases; installed automatically) |
 | Pyoxigraph | `>=0.5,<0.6` (installed automatically) |
 
 ## PyPI
@@ -62,7 +62,7 @@ For reproducible deployments:
 
 ```text
 sparqlmodel=={{ version }}
-triplemodel>=0.10.0,<2
+triplemodel>=0.12.0,<2
 pyoxigraph>=0.5,<0.6
 ```
 

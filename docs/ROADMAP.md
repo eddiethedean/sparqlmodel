@@ -301,7 +301,7 @@ SparqlModel does **not** import `pyoxigraph.Store` in application code. In-proce
 
 ## Forward roadmap (0.7 → 0.15)
 
-**Shipped:** **0.12.0** (2026-05-22) — GSP `sync_mirror`, Fuseki integration tests; **0.11.0** (2026-05-22) — HTTP retries, batched UPDATE, SELECT GET/POST; **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration. **Next:** **0.13** — modeling.
+**Shipped:** **0.13.0** (2026-05-22) — SPARQLMojo modeling/query parity (#12–#21); **0.12.0** (2026-05-22) — GSP `sync_mirror`, Fuseki integration tests; **0.11.0** (2026-05-22) — HTTP retries, batched UPDATE, SELECT GET/POST; **0.10.0** (2026-05-22) — replace-on-pull, `mirror_mode`; **0.9.2** (2026-05-21) — `refresh` mirror pull, `merge` partial-field fix, IRI ref hydration. **Next:** **0.14** — operations.
 
 Releases from **0.7** onward follow one rule: **finish integration debt before new ORM surface area**, then **list APIs → session cache → [Production HttpStore](#production-httpstore) (0.10–0.12) → modeling (0.13) → operations (0.14) → GA (0.15)**. Each **0.x** line is one theme; Production HttpStore is one milestone with ordered **phases** (0.10, 0.11, 0.12).
 
@@ -312,8 +312,8 @@ Releases from **0.7** onward follow one rule: **finish integration debt before n
 | **0.7** | Integration | All RDF **file** parse/serialize goes through TripleModel; SparqlModel has no format registry — **shipped** |
 | **0.8** | Query | **Paginate, sort, and count** in the query DSL; nullable relationship filters — **shipped** |
 | **0.9** | Session | **merge / refresh / expunge** and documented scoped-session patterns — **shipped** |
-| **0.10–0.12** | Stores | **[Production HttpStore](#production-httpstore)** — mirror semantics → HTTP resilience → GSP sync & integration contract |
-| **0.13** | Modeling | **SPARQLMojo modeling parity** — lang/collections, polymorphic query, property paths, inverse/VALUES/IRI filters |
+| **0.10–0.12** | Stores | **[Production HttpStore](#production-httpstore)** — mirror semantics → HTTP resilience → GSP sync — **shipped** |
+| **0.13** | Modeling | **SPARQLMojo modeling parity** — lang/collections, polymorphic query, property paths, inverse/VALUES/IRI filters — **shipped 0.13.0** |
 | **0.14** | Operations | **SHACL, bulk I/O, ASK/CONSTRUCT, disk store**, performance and logging |
 | **0.15** | GA | [SPECS P0 + P1](SPECS.md#production-orm-checklist-13-ga-gate) complete; stable public API |
 

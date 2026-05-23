@@ -21,6 +21,7 @@ Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with 
 | **RDF mapping** | `rdf_type`, compact predicates, TripleModel `sync_to_graph` / `from_graph` under the hood |
 | **Session** | `add`, `put`, `delete`, `get`, identity map, `flush` / pending queue (sync and **async** since 0.6) |
 | **Queries** | `session.query(Person).where(Person.name == "x")` → SPARQL (`&`, `\|`, `in_`, comparisons, multi-hop) |
+| **RDF modeling** | Multi-valued fields, `LangString` / `MultiLangString`, `ResourceRef`, `back_populates`, polymorphic query, `not_`, VALUES, property paths (**0.13**) |
 | **Stores** | `MemoryStore` / `AsyncMemoryStore`; `HttpStore` / `AsyncHttpStore` for Fuseki/Jena (`[http]`); GSP `sync_mirror()` (**0.12**) |
 | **FastAPI** | `SessionDep` or `AsyncSessionDep`, lifespan helpers, Turtle/JSON-LD responses |
 | **Cascade** | Composition on `put`/`delete`; `Relationship(..., cascade=False)` for references |
