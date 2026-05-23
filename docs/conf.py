@@ -108,6 +108,9 @@ suppress_warnings = [
 # Fail on broken cross-refs (triplemodel has no published intersphinx inventory).
 nitpicky = True
 nitpick_ignore = [
+    ("py:class", "BackPopulates"),
+    ("py:class", "pyoxigraph.Literal"),
+    ("py:func", "triplemodel.subclass_uris"),
     ("py:class", "triplemodel.*"),
     ("py:class", "triplemodel.store.graph.RdfGraph"),
     ("py:class", "triplemodel.Store"),
