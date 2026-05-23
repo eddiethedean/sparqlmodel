@@ -116,7 +116,7 @@ def test_compile_unknown_relationship_path() -> None:
 def test_compile_unknown_scalar_on_target() -> None:
     reg = NamespaceRegistry(Person.get_prefixes())
     ref = FieldRef(Person, "bogus", ("works_for",))
-    with pytest.raises(QueryError, match="Unknown or non-scalar"):
+    with pytest.raises(QueryError, match="Unknown field"):
         compile_compare(CompareExpr(ref, CompareOp.EQ, "x"), Person, "?person", reg, [0], {})
 
 

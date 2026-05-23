@@ -10,7 +10,7 @@ from triplemodel import Store
 from triplemodel.config import RDF_TYPE as RDF_TYPE_URI
 from triplemodel.store.terms import OxTerm, QuadPredicate, QuadSubject, term_str
 
-from sparqlmodel.fields import get_field_metadata
+from sparqlmodel.fields import get_field_metadata, iter_relationship_values
 from sparqlmodel.types import IRI, expand_iri
 
 if TYPE_CHECKING:
@@ -105,8 +105,9 @@ def iter_nested_models(root: SPARQLModel) -> list[SPARQLModel]:
             if meta is not None and not meta.cascade:
                 continue
             value = getattr(model, name, None)
-            if isinstance(value, SPARQLModel):
-                walk(value)
+            for item in iter_relationship_values(value):
+                if isinstance(item, SPARQLModel):
+                    walk(item)
 
     if not isinstance(root, SPARQLModel):
         raise TypeError("Expected SPARQLModel instance")
@@ -152,12 +153,16 @@ def orphaned_embedded_targets(
         meta = get_field_metadata(field_info)
         if meta is None or not meta.cascade:
             continue
+        target_cls = meta.related_model if meta.related_model is not None else related_cls
+        if not isinstance(target_cls, type) or not issubclass(target_cls, _SPARQLModel):
+            continue
         value = getattr(model, name, None)
         protected = set(nested_iris)
-        if isinstance(value, IRI):
-            protected.add(_expanded_iri_key(value, prefixes))
-        elif isinstance(value, _SPARQLModel):
-            protected.add(_expanded_iri_key(value.ensure_id(), value.get_prefixes()))
+        for item in iter_relationship_values(value):
+            if isinstance(item, IRI):
+                protected.add(_expanded_iri_key(item, prefixes))
+            elif isinstance(item, _SPARQLModel):
+                protected.add(_expanded_iri_key(item.ensure_id(), item.get_prefixes()))
         pred = _predicate_pattern(meta.predicate, prefixes)
         for obj in graph.objects(subject, pred):
             if _is_resource_term(obj):
@@ -165,7 +170,7 @@ def orphaned_embedded_targets(
                 if obj_key not in protected:
                     if _object_referenced_from_outside(obj_key, graph, cascade_keys, prefixes):
                         continue
-                    orphans.append((related_cls, obj_key))
+                    orphans.append((target_cls, obj_key))
     return orphans
 
 

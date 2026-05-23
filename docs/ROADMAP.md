@@ -28,7 +28,7 @@ SparqlModel is **the SQLModel of SPARQL** — a session-first ORM. **TripleModel
 
 **Integration debt:** `serializers.py` is thin wrappers over TripleModel I/O (**0.7** shipped). `graph.py` is cascade/orphan policy only.
 
-**Current focus:** **0.13** — richer RDF models ([SPARQLMojo parity backlog](#sparqlmojo-parity-backlog)). **0.12.0** shipped **2026-05-22** (Production HttpStore / GSP `sync_mirror`). **0.11.0** shipped **2026-05-22** (HTTP resilience). Forward plan: [0.13 → 0.15](#forward-roadmap-07--015).
+**Current focus:** **0.14** — production operations. **0.13.0** shipped **2026-05-22** (richer RDF models, [SPARQLMojo parity backlog](#sparqlmojo-parity-backlog) #12–#21). **0.12.0** shipped **2026-05-22** (Production HttpStore / GSP `sync_mirror`). **0.11.0** shipped **2026-05-22** (HTTP resilience). Forward plan: [0.13 → 0.15](#forward-roadmap-07--015).
 
 ---
 
@@ -502,11 +502,11 @@ Full mirror option, integration coverage, stores-track sign-off.
 
 ---
 
-### 0.13 — Richer RDF models (SPARQLMojo parity)
+### 0.13 — Richer RDF models (SPARQLMojo parity) — shipped 0.13.0
 
-**Track:** Modeling · **Depends on:** TripleModel releases for collections/lang · **Parallel with:** [Production HttpStore](#production-httpstore) phases if mapping lands upstream first
+**Track:** Modeling · **Shipped:** **0.13.0** (2026-05-22) · **Depends on:** `triplemodel>=0.12.0` for collections, lang, `OntologyRegistry`, `BackPopulates`
 
-**Goal:** Close **[SPARQLMojo parity backlog](#sparqlmojo-parity-backlog)** modeling and query-surface gaps without duplicating TripleModel mapping.
+**Goal:** Close **[SPARQLMojo parity backlog](#sparqlmojo-parity-backlog)** modeling and query-surface gaps without duplicating TripleModel mapping. **Done** in 0.13.0.
 
 | Deliverable | SPARQLMojo reference | Owner |
 |-------------|---------------------|--------|

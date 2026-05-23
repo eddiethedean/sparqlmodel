@@ -249,7 +249,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones.
 - [SQLModel parity checklist](ROADMAP.md#sqlmodel-parity-checklist) — quick mapping from SQL habits
 - [Production guide](PRODUCTION.md) — deployment and HttpStore operations
 
-**Not yet available (planned):** Multi-valued and language-tagged fields (**0.13**). **Production HttpStore** (mirror semantics, HTTP resilience, GSP `sync_mirror`) shipped through **0.12.0** — see [PRODUCTION](PRODUCTION.md#mirror-sync-012). See [SPARQLMojo parity backlog](ROADMAP.md#sparqlmojo-parity-backlog). **Session cache control** (`merge`, `refresh`, `expunge`, `expunge_all`) shipped in **0.9.0**. **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
+**Shipped in 0.13.0:** Multi-valued fields (`set`/`list` scalars and refs), `LangString` / `MultiLangString`, polymorphic query, property paths, `not_`, VALUES, IRI string filters, `SchemaRegistry`, `back_populates`. **Production HttpStore** (mirror semantics, HTTP resilience, GSP `sync_mirror`) shipped through **0.12.0** — see [PRODUCTION](PRODUCTION.md#mirror-sync-012). See [SPARQLMojo parity backlog](ROADMAP.md#sparqlmojo-parity-backlog). **Session cache control** (`merge`, `refresh`, `expunge`, `expunge_all`) shipped in **0.9.0**. **Query lists** (`offset`, `order_by`, `count`, nullable `OPTIONAL`) shipped in **0.8.0**. **Async session and stores** shipped in **0.6.0**.
 
 ---
 

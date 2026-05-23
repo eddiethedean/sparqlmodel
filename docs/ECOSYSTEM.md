@@ -1,6 +1,6 @@
 # SparqlModel (ORM) + TripleModel (mapping engine)
 
-SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** (`triplemodel>=0.10.0,<2`); in-process graphs use **pyoxigraph** via `triplemodel.Store`. This document defines boundaries for contributors and maintainers of both packages.
+SparqlModel is a **SPARQL ORM**. TripleModel is its **required mapping engine** (`triplemodel>=0.12.0,<2` for SparqlModel **0.13+**; `>=0.10.0` for older releases); in-process graphs use **pyoxigraph** via `triplemodel.Store`. This document defines boundaries for contributors and maintainers of both packages.
 
 **Architecture (Option A, shipped 0.4.0):** `SPARQLModel` **subclasses** `TripleModel` — one class, one mapping path. Session I/O uses `rdf_bridge` (`model_to_graph`, `load_from_graph`) on the same instances. The 0.3 `_triple.py` adapter was **removed in 0.4**.
 
@@ -39,7 +39,7 @@ Both SparqlModel and TripleModel are **Pydantic v2** stacks: validated Python ob
 │  SparqlModel                             │
 │  SPARQLModel(TripleModel) · Session · … │
 └────────────────────┬─────────────────────┘
-                     │  triplemodel>=0.10.0,<2  (required)
+                     │  triplemodel>=0.12.0,<2  (required, 0.13+)
 ┌────────────────────▼─────────────────────┐
 │  TripleModel (Pydantic)                  │
 │  sync_to_graph · from_graph · parse · …  │

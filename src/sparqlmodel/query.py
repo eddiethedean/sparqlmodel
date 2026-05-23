@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sparqlmodel.expressions import AndExpr, CompareExpr, FieldRef, OrExpr
+from sparqlmodel.expressions import FieldRef, WhereExpr
 from sparqlmodel.hydration import validate_depth
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.query_common import (
@@ -12,9 +12,11 @@ from sparqlmodel.query_common import (
     apply_limit,
     apply_offset,
     apply_order_by,
+    apply_polymorphic,
     apply_use_inequality_for_ne,
     apply_use_not_exists_for_ne,
     apply_use_optional_for_comparisons,
+    apply_values,
     apply_where,
     parse_count_bindings,
 )
@@ -34,8 +36,18 @@ class Query:
         self._session = session
         self._state = QueryState(model_cls=model_cls)
 
-    def where(self, *expressions: CompareExpr | AndExpr | OrExpr) -> Query:
+    def where(self, *expressions: WhereExpr) -> Query:
         apply_where(self._state, *expressions)
+        return self
+
+    def polymorphic(self, enabled: bool = True) -> Query:
+        """Include ``rdfs:subClassOf`` descendants of this model's ``rdf_type``."""
+        apply_polymorphic(self._state, enabled)
+        return self
+
+    def values(self, **bindings: object) -> Query:
+        """Add a VALUES binding row (IRI/literal values for SPARQL variables)."""
+        apply_values(self._state, bindings)
         return self
 
     def use_not_exists_for_ne(self, enabled: bool = True) -> Query:

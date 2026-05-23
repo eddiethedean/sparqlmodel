@@ -957,7 +957,7 @@ wheels = [
 
 [[package]]
 name = "sparqlmodel"
-version = "0.12.0"
+version = "0.13.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -1017,7 +1017,7 @@ requires-dist = [
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5,<1" },
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.6,<1" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=2.0,<4" },
-    { name = "triplemodel", specifier = ">=0.10.0,<2" },
+    { name = "triplemodel", specifier = ">=0.12.0,<2" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.37" },
     { name = "typing-extensions", specifier = ">=4.8" },
 ]
@@ -1279,16 +1279,16 @@ wheels = [
 
 [[package]]
 name = "triplemodel"
-version = "0.10.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyoxigraph" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/20/80/26169b1a64056b488b605d1752af56c5ea3347e6b5320bf06e6fb4e47720/triplemodel-0.10.0.tar.gz", hash = "sha256:782a55f80c7f1edded4bce3ee9caa3bf91192f1eb3ce422191e1ba67553dba3a", size = 185702, upload-time = "2026-05-20T01:07:36.936Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/e8/acbc46f6087ea622eff748cce4aef69ef2e47a2f5f392569dac98d69e996/triplemodel-0.12.0.tar.gz", hash = "sha256:4443fe48a45f09a7deae17f5a159ed325756516e686888413b6c456ef601610d", size = 222121, upload-time = "2026-05-22T20:34:49.349Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/a0/32e054ea306d420406314d1f18accebb2264d74cba4dc0701351d523bf61/triplemodel-0.10.0-py3-none-any.whl", hash = "sha256:9fbd7620a610c9facacc9c088dcc40b5cdf5386231b2d68c04ee65c1e6e28de1", size = 96114, upload-time = "2026-05-20T01:07:35.514Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/50/2b878cf98dfb2bac9a24d2e9d13482d8166bbbad4023bb788bc96df8d905/triplemodel-0.12.0-py3-none-any.whl", hash = "sha256:2a4a201e3bd361070c035fe33ba3257dd9bf99d8b398a1fc6865eb5c2273ae17", size = 113403, upload-time = "2026-05-22T20:34:47.798Z" },
 ]
 
 [[package]]

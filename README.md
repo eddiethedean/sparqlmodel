@@ -236,7 +236,8 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ## Known limitations (0.12.0)
 
-- Multi-valued predicates: first value per predicate on load; prefer `put` over `add` for upserts
+- `list[SPARQLModel]` embed collections are not supported (TripleModel); use `set[IRI]` / `set[ResourceRef]` with `Relationship(..., model=...)` for multi-ref
+- Prefer `put` over `add` for upserts (stale literal cleanup)
 - `HttpStore` / `AsyncHttpStore`: default `mirror_mode="writer"` pulls only when a subject is missing from the mirror; use `mirror_mode="remote_authoritative"` (0.10+), `pull_subjects_into_mirror`, or **`sync_mirror()`** (0.12+, requires `graph_store_url`) when reads must match remote updates. Retries and batched UPDATE: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#http-resilience-011); GSP mirror sync: [PRODUCTION](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/PRODUCTION.md#mirror-sync-012)
 - Use `merge` / `refresh` / `expunge` for explicit identity-map control ([sessions guide](https://github.com/eddiethedean/sparqlmodel/blob/main/docs/guides/sessions.md#cache-control-09))
 - `session.graph` is a `triplemodel.Store` (pyoxigraph), not an rdflib `Graph` — use TripleModel I/O for file round-trip

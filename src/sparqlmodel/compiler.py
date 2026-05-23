@@ -6,8 +6,19 @@ import math
 from typing import Any, get_args, get_origin
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
-from sparqlmodel.expressions import AndExpr, CompareExpr, CompareOp, FieldRef, OrExpr
+from sparqlmodel.expressions import (
+    AndExpr,
+    CompareExpr,
+    CompareOp,
+    FieldRef,
+    IriStrCompare,
+    NotExpr,
+    OrExpr,
+    PropertyPathCompare,
+    WhereExpr,
+)
 from sparqlmodel.fields import (
+    field_cardinality_for,
     get_field_metadata,
     relationship_allows_iri,
     relationship_is_nullable,
@@ -56,6 +67,24 @@ def _format_object(
     *,
     field_annotation: Any = None,
 ) -> str:
+    from triplemodel.terms.lang import LangString, MultiLangString
+    from triplemodel.terms.typed_literal import TypedLiteral
+
+    if isinstance(value, LangString):
+        lang_part = f"@{value.lang}" if value.lang else ""
+        return f'"{escape_sparql_string(str(value.value))}"{lang_part}'
+    if isinstance(value, MultiLangString):
+        first = next(iter(value.by_lang.values()), None)
+        if first is None:
+            return '""'
+        if isinstance(first, LangString):
+            return _format_object(first, registry, field_annotation=field_annotation)
+        return _format_literal(str(first))
+    if isinstance(value, TypedLiteral):
+        if value.datatype:
+            dt = validate_iri_token(expand_iri(value.datatype, registry.prefixes))
+            return f'"{escape_sparql_string(str(value.value))}"^<{dt}>'
+        return _format_literal(value.value)
     if isinstance(value, IRI):
         expanded = registry.expand(str(value))
         return _format_iri(expanded)
@@ -72,7 +101,7 @@ def _format_object(
 
 
 def _flatten_and_expressions(
-    expressions: tuple[CompareExpr | AndExpr | OrExpr, ...],
+    expressions: tuple[WhereExpr, ...],
 ) -> list[CompareExpr]:
     """Flatten ``AndExpr`` trees into a list of ``CompareExpr``."""
     flat: list[CompareExpr] = []
@@ -207,10 +236,18 @@ def _resolve_compare_target(
         subject_var = root_var
 
     scalar_map = {n: fi for n, fi in target_model.get_scalar_fields()}
-    if field_name not in scalar_map:
-        raise QueryError(f"Unknown or non-scalar field '{field_name}' on {target_model.__name__}")
-
-    field_info = scalar_map[field_name]
+    rel_map = {n: fi for n, fi, _ in target_model.get_relationship_fields()}
+    if field_name in scalar_map:
+        field_info = scalar_map[field_name]
+    elif field_name in rel_map:
+        field_info = rel_map[field_name]
+        if field_cardinality_for(field_info) not in ("list", "set"):
+            raise QueryError(
+                f"Field '{field_name}' on {target_model.__name__} is not a collection; "
+                "use relationship navigation for scalar refs"
+            )
+    else:
+        raise QueryError(f"Unknown field '{field_name}' on {target_model.__name__}")
     meta = get_field_metadata(field_info)
     if meta is None:
         raise QueryError(f"Field '{field_name}' has no SPARQL metadata")
@@ -436,6 +473,239 @@ def compile_and_branch(
     return _exists_block(patterns, filters)
 
 
+def _iri_str_function(mode: str, var: str) -> str:
+    if mode == "lower":
+        return f"LCASE(STR({var}))"
+    if mode == "upper":
+        return f"UCASE(STR({var}))"
+    return f"STR({var})"
+
+
+def compile_iri_str_compare(
+    expr: IriStrCompare,
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+    join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
+    *,
+    use_not_exists_for_ne: bool = True,
+) -> tuple[list[str], list[str]]:
+    _, subject_var, path_patterns, field_info, _field_name = _resolve_compare_target(
+        expr.left.field,
+        model_cls,
+        root_var,
+        registry,
+        join_counter,
+        join_cache,
+    )
+    if not _annotation_expects_iri(field_info.annotation):
+        raise QueryError("str()/lower()/upper() filters require an IRI-typed field")
+    patterns = list(path_patterns)
+    str_expr = _iri_str_function(expr.left.mode, subject_var)
+    if expr.op == CompareOp.IN and isinstance(expr.right, tuple):
+        formatted = [f'"{escape_sparql_string(str(v))}"' for v in expr.right]
+        return patterns, [f"{str_expr} IN ({', '.join(formatted)})"]
+    obj = _format_literal(expr.right)
+    if expr.op == CompareOp.EQ:
+        return patterns, [f"{str_expr} = {obj}"]
+    if expr.op == CompareOp.NE:
+        if use_not_exists_for_ne:
+            return patterns, [f"!({str_expr} = {obj})"]
+        return patterns, [f"{str_expr} != {obj}"]
+    raise QueryError(f"Unsupported IRI string filter operator: {expr.op}")
+
+
+def compile_property_path_compare(
+    expr: PropertyPathCompare,
+    root_var: str,
+    registry: NamespaceRegistry,
+) -> tuple[list[str], list[str]]:
+    if expr.model_cls is not None and expr.op != CompareOp.EQ:
+        raise QueryError("Property path filters support == only")
+    obj = _format_object(expr.right, registry)
+    path = expr.sparql_path.strip()
+    if not path:
+        raise QueryError("Property path must not be empty")
+    parts: list[str] = []
+    for seg in path.split("/"):
+        seg = seg.strip()
+        if not seg:
+            continue
+        if seg.startswith("^"):
+            core = seg[1:].rstrip("*+")
+            suffix = seg[len(core) + 1 :]
+            parts.append(f"^{validate_iri_token(expand_iri(core, registry.prefixes))}{suffix}")
+        elif seg.endswith("+") or seg.endswith("*"):
+            core = seg.rstrip("*+")
+            suffix = seg[len(core) :]
+            parts.append(f"<{validate_iri_token(expand_iri(core, registry.prefixes))}>{suffix}")
+        else:
+            parts.append(f"<{validate_iri_token(expand_iri(seg, registry.prefixes))}>")
+    sparql_path = "/".join(parts)
+    return [f"{root_var} {sparql_path} {obj} ."], []
+
+
+def compile_not(
+    expr: NotExpr,
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+    join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
+    *,
+    use_not_exists_for_ne: bool = True,
+) -> tuple[list[str], list[str]]:
+    inner = expr.inner
+    if isinstance(inner, CompareExpr):
+        pats, filts = compile_compare(
+            inner,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            join_cache,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+        exists = _exists_block(pats, filts)
+        return [], [f"NOT ({exists})"]
+    if isinstance(inner, AndExpr):
+        compares = _flatten_and_expressions(inner.expressions)
+        if not compares:
+            raise QueryError("not_(and) requires comparison expressions")
+        branch = compile_and_branch(
+            inner,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+        return [], [f"NOT ({branch})"]
+    if isinstance(inner, OrExpr):
+        or_filters = compile_or(
+            inner,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+        if len(or_filters) != 1:
+            raise QueryError("not_(or) expects a single FILTER disjunction")
+        inner_filter = or_filters[0]
+        if inner_filter.startswith("FILTER(") and inner_filter.endswith(")"):
+            inner_filter = inner_filter[7:-1]
+        return [], [f"FILTER(!({inner_filter}))"]
+    raise QueryError(f"not_() does not support {type(inner).__name__}")
+
+
+def compile_filter_expr(
+    expr: WhereExpr,
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+    join_counter: list[int],
+    join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]],
+    *,
+    use_not_exists_for_ne: bool = True,
+) -> tuple[list[str], list[str]]:
+    if isinstance(expr, CompareExpr):
+        return compile_compare(
+            expr,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            join_cache,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+    if isinstance(expr, IriStrCompare):
+        return compile_iri_str_compare(
+            expr,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            join_cache,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+    if isinstance(expr, PropertyPathCompare):
+        return compile_property_path_compare(expr, root_var, registry)
+    if isinstance(expr, NotExpr):
+        return compile_not(
+            expr,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            join_cache,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+    if isinstance(expr, AndExpr):
+        return [], [
+            compile_and_branch(
+                expr,
+                model_cls,
+                root_var,
+                registry,
+                join_counter,
+                use_not_exists_for_ne=use_not_exists_for_ne,
+            )
+        ]
+    raise QueryError(f"Unsupported filter expression: {type(expr).__name__}")
+
+
+def _polymorphic_type_patterns(
+    model_cls: type[SPARQLModel],
+    root_var: str,
+    registry: NamespaceRegistry,
+) -> tuple[list[str], list[str]]:
+    from sparqlmodel.schema_registry import registry_for_model
+
+    base = validate_iri_token(expand_iri(model_cls.rdf_type, registry.prefixes))
+    type_uris: set[str] = {base}
+    reg = registry_for_model(model_cls)
+    if reg is not None:
+        type_uris |= {validate_iri_token(u) for u in reg.subtypes_of(base)}
+    type_var = "?__ptype"
+    patterns = [f"{root_var} a {type_var} ."]
+    formatted = ", ".join(f"<{u}>" for u in sorted(type_uris))
+    filters = [f"{type_var} IN ({formatted})"]
+    return patterns, filters
+
+
+def _format_values_term(value: object, registry: NamespaceRegistry) -> str:
+    if isinstance(value, IRI):
+        return _format_iri(registry.expand(str(value)))
+    if isinstance(value, str) and (is_absolute_iri(value) or is_compact_iri(value)):
+        try:
+            return _format_iri(registry.expand(value))
+        except ConfigurationError:
+            return _format_literal(value)
+    return _format_literal(value)
+
+
+def _values_clause(
+    bindings_rows: tuple[dict[str, object], ...],
+    registry: NamespaceRegistry,
+) -> str:
+    if not bindings_rows:
+        return ""
+    keys = list(bindings_rows[0].keys())
+    if not keys:
+        return ""
+    for row in bindings_rows:
+        if set(row.keys()) != set(keys):
+            raise QueryError("All values() rows must use the same variables")
+    vars_part = " ".join(f"?{k}" for k in keys)
+    rows: list[str] = []
+    for row in bindings_rows:
+        terms = " ".join(_format_values_term(row[k], registry) for k in keys)
+        rows.append(f"({terms})")
+    return f"VALUES ({vars_part}) {{ {' '.join(rows)} }}"
+
+
 def compile_or(
     expr: OrExpr,
     model_cls: type[SPARQLModel],
@@ -486,7 +756,7 @@ def compile_or(
 
 def compile_where(
     model_cls: type[SPARQLModel],
-    expressions: tuple[CompareExpr | AndExpr | OrExpr, ...],
+    expressions: tuple[WhereExpr, ...],
     registry: NamespaceRegistry,
     *,
     limit: int | None = None,
@@ -494,40 +764,56 @@ def compile_where(
     order_by: tuple[tuple[FieldRef, bool], ...] = (),
     count: bool = False,
     use_not_exists_for_ne: bool = True,
+    polymorphic: bool = False,
+    values_bindings: tuple[dict[str, object], ...] = (),
 ) -> str:
     """Compile WHERE expressions into a full SELECT SPARQL query."""
     root_var = _model_var_name(model_cls)
     type_expanded = validate_iri_token(expand_iri(model_cls.rdf_type, registry.prefixes))
 
-    all_patterns: list[str] = [f"{root_var} a <{type_expanded}> ."]
-    all_filters: list[str] = []
+    if polymorphic:
+        all_patterns, all_filters = _polymorphic_type_patterns(model_cls, root_var, registry)
+    else:
+        all_patterns = [f"{root_var} a <{type_expanded}> ."]
+        all_filters = []
 
     join_counter = [0]
     join_cache: dict[tuple[str, ...], tuple[str, type[SPARQLModel]]] = {}
 
-    and_exprs: list[CompareExpr | AndExpr] = []
+    and_parts: list[WhereExpr] = []
     or_exprs: list[OrExpr] = []
     for expr in expressions:
         if isinstance(expr, OrExpr):
             or_exprs.append(expr)
-        elif isinstance(expr, (CompareExpr, AndExpr)):
-            and_exprs.append(expr)
         else:
-            raise QueryError(f"Unsupported WHERE expression type: {type(expr).__name__}")
+            and_parts.append(expr)
 
-    flat_and = _flatten_and_expressions(tuple(and_exprs))
-    for compare in flat_and:
-        pats, filts = compile_compare(
-            compare,
-            model_cls,
-            root_var,
-            registry,
-            join_counter,
-            join_cache,
-            use_not_exists_for_ne=use_not_exists_for_ne,
-        )
-        all_patterns.extend(pats)
-        all_filters.extend(filts)
+    for part in and_parts:
+        if isinstance(part, AndExpr):
+            for child in part.expressions:
+                pats, filts = compile_filter_expr(
+                    child,
+                    model_cls,
+                    root_var,
+                    registry,
+                    join_counter,
+                    join_cache,
+                    use_not_exists_for_ne=use_not_exists_for_ne,
+                )
+                all_patterns.extend(pats)
+                all_filters.extend(filts)
+        else:
+            pats, filts = compile_filter_expr(
+                part,
+                model_cls,
+                root_var,
+                registry,
+                join_counter,
+                join_cache,
+                use_not_exists_for_ne=use_not_exists_for_ne,
+            )
+            all_patterns.extend(pats)
+            all_filters.extend(filts)
 
     for or_expr in or_exprs:
         all_filters.extend(
@@ -554,6 +840,10 @@ def compile_where(
             )
             all_patterns.extend(order_patterns)
             order_vars.append((order_var, desc))
+
+    values_block = _values_clause(values_bindings, registry)
+    if values_block:
+        all_patterns.insert(0, values_block)
 
     where_body = "\n    ".join(all_patterns)
     if all_filters:

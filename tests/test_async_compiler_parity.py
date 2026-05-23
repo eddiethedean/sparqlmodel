@@ -79,6 +79,20 @@ async def test_async_in_empty_raises(async_session: AsyncSPARQLSession) -> None:
         await async_session.query(Person).where(Person.name.in_(())).all()
 
 
+async def test_async_polymorphic_and_values(async_session: AsyncSPARQLSession) -> None:
+    await async_session.put(Person(id=IRI("urn:p:pv"), name="Pat"))
+    sparql = (
+        async_session.query(Person)
+        .polymorphic()
+        .values(person=IRI("urn:p:pv"))
+        .where(Person.name == "Pat")
+        ._compile()
+    )
+    assert "VALUES" in sparql
+    assert isinstance(async_session.query(Person).polymorphic(False), AsyncQuery)
+    assert isinstance(async_session.query(Person).values(x=1), AsyncQuery)
+
+
 async def test_async_ordering(async_session: AsyncSPARQLSession) -> None:
     await async_session.put(Organization(id=IRI("urn:o:1"), name="Beta"))
     await async_session.put(Organization(id=IRI("urn:o:2"), name="Alpha"))

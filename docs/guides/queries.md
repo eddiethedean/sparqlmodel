@@ -118,6 +118,17 @@ q.limit(10).all(depth=1)
 On {class}`~sparqlmodel.stores.http.HttpStore` / {class}`~sparqlmodel.stores.async_http.AsyncHttpStore`, `.all()` and `.first()` run a remote SELECT but hydrate each row with `get()` from the **local mirror**. Rows for IRIs this store has not written are omitted. See {doc}`../troubleshooting` — `query().all()` returns fewer rows.
 ```
 
+## 0.13 query features
+
+| Feature | Usage |
+|---------|--------|
+| Polymorphic SELECT | `session.query(Base).polymorphic().where(...)` with `Rdf.ontology_registry` / `SchemaRegistry` |
+| VALUES | `session.query(Person).values(person=IRI("urn:p:1")).where(...)` |
+| Negation | `not_(Person.name == "X")` or `~(Person.name == "X")` |
+| IRI string compare | `Person.alt_id.str() == "urn:..."`, `.lower()`, `.upper()` |
+| Property paths | `property_eq(Person, "schema:worksFor/schema:name", "Acme")` |
+| Collection `.in_()` | `Article.tags.in_(("kw1", "kw2"))` or multi-ref `related.in_((IRI("urn:tag:1"),))` |
+
 ## Raw SPARQL
 
 When the DSL is insufficient:

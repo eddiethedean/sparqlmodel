@@ -62,16 +62,16 @@ See [ROADMAP — SPARQLMojo parity backlog](ROADMAP.md#sparqlmojo-parity-backlog
 
 - [x] `merge`, `refresh`, `expunge`, `expunge_all` on session — **0.9.0**
 - [x] HttpStore separate read/write endpoint URLs — **0.9.1**
-- [ ] Multi-valued scalar and relationship fields (`list[...]`, collection types) — **0.13**
-- [ ] Language-tagged literals (`LangString`, multi-lang maps) — **0.13**
-- [ ] Polymorphic queries (`rdf:type` / subclass hierarchy) — **0.13**
-- [ ] Property paths (inverse `^`, transitive/`+`/`*`, escape hatch) — **0.13**
-- [ ] Inverse / `back_populates` / `owl:inverseOf` navigation — **0.13**
-- [ ] `SchemaRegistry`-style ontology hints (lite; not full OWL editor) — **0.13**
-- [ ] IRI field string filters (`str` / case-insensitive) — **0.13**
-- [ ] VALUES clause in query DSL — **0.13**
-- [ ] Query negation (`not_` / general boolean NOT) — **0.13**
-- [ ] Filters on collection fields — **0.13**
+- [x] Multi-valued scalar and relationship fields (`set[...]` / `list[...]` where TripleModel allows) — **0.13.0**
+- [x] Language-tagged literals (`LangString`, `MultiLangString`) — **0.13.0**
+- [x] Polymorphic queries (`Query.polymorphic()`, `Rdf.ontology_registry`) — **0.13.0**
+- [x] Property paths (inverse `^`, `+`/`*`, `property_eq` escape hatch) — **0.13.0**
+- [x] Inverse / `back_populates` / `Relationship(..., inverse=)` — **0.13.0**
+- [x] `SchemaRegistry` (`OntologyRegistry` alias, lite hints) — **0.13.0**
+- [x] IRI field string filters (`FieldRef.str()` / `lower()` / `upper()`) — **0.13.0**
+- [x] VALUES clause in query DSL (`Query.values(...)`) — **0.13.0**
+- [x] Query negation (`not_()` / `~expr`) — **0.13.0**
+- [x] Filters on collection fields (`.in_()` on `set`/`list` refs and scalars) — **0.13.0**
 - [x] HttpStore `query_method` GET vs POST — **0.11.0**
 - [ ] Optional SHACL validation on `put` — **0.14**
 
@@ -428,14 +428,6 @@ Parallel to the sync stack; sync API remains supported.
 | Mirror vs remote | `get` / cascade use mirror; `query` uses remote |
 | External writers | Use `pull_subjects_into_mirror`, `mirror_mode="remote_authoritative"`, or **`sync_mirror()`** (GSP GET; requires `graph_store_url`) |
 | Multi-writer endpoints | Assume single writer per endpoint; reconcile with `sync_mirror()` after bulk external changes |
-
-## Until 0.13 (mapping)
-
-| Area | Behavior |
-|------|----------|
-| Multi-valued predicates | First object per predicate on load |
-| Language tags | Not in public field API |
-| Polymorphic queries | Single `rdf_type` per model class |
 
 ## Permanent constraints
 

@@ -7,7 +7,10 @@ from typing import Any, cast
 
 from sparqlmodel.compiler import compile_where
 from sparqlmodel.exceptions import QueryError
-from sparqlmodel.expressions import AndExpr, CompareExpr, FieldRef, OrExpr
+from sparqlmodel.expressions import (
+    FieldRef,
+    WhereExpr,
+)
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.types import NamespaceRegistry
 
@@ -27,7 +30,7 @@ def _resolve_pagination(
 @dataclass
 class QueryState:
     model_cls: type[SPARQLModel]
-    expressions: list[CompareExpr | AndExpr | OrExpr] = field(default_factory=list)
+    expressions: list[WhereExpr] = field(default_factory=list)
     limit: int | None = None
     offset: int | None = None
     order_by: list[tuple[FieldRef, bool]] = field(default_factory=list)
@@ -35,6 +38,8 @@ class QueryState:
     use_inequality_for_ne: bool = False
     # Toggles default ``!=`` / NOT EXISTS via apply helpers; real OPTIONAL blocks use nullable hops.
     use_optional_for_comparisons: bool = False
+    polymorphic: bool = False
+    values_bindings: list[dict[str, object]] = field(default_factory=list)
 
     def compile(
         self,
@@ -60,6 +65,8 @@ class QueryState:
             order_by=tuple(self.order_by),
             count=count,
             use_not_exists_for_ne=self.use_not_exists_for_ne,
+            polymorphic=self.polymorphic,
+            values_bindings=tuple(self.values_bindings),
         )
 
 
@@ -93,8 +100,18 @@ def parse_count_bindings(bindings: list[dict[str, Any]]) -> int:
     raise QueryError("COUNT query did not return ?__count binding")
 
 
-def apply_where(state: QueryState, *expressions: CompareExpr | AndExpr | OrExpr) -> None:
+def apply_where(state: QueryState, *expressions: WhereExpr) -> None:
     state.expressions.extend(expressions)
+
+
+def apply_polymorphic(state: QueryState, enabled: bool = True) -> None:
+    state.polymorphic = enabled
+
+
+def apply_values(state: QueryState, bindings: dict[str, object]) -> None:
+    if not bindings:
+        raise QueryError("values() requires at least one binding")
+    state.values_bindings.append(dict(bindings))
 
 
 def apply_limit(state: QueryState, n: int) -> None:

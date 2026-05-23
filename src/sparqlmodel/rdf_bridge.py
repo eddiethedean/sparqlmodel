@@ -16,7 +16,12 @@ from triplemodel.namespaces import resolve_predicate
 from triplemodel.terms.lang import LangString
 
 from sparqlmodel.exceptions import ConfigurationError
-from sparqlmodel.fields import get_field_metadata, relationship_allows_iri
+from sparqlmodel.fields import (
+    get_field_metadata,
+    iter_relationship_values,
+    relationship_allows_iri,
+    relationship_is_ref_link,
+)
 from sparqlmodel.graph import iter_nested_models, subject_has_rdf_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.types import IRI, expand_iri
@@ -44,8 +49,9 @@ def assert_no_embed_cycles(
         if meta is not None and not meta.cascade:
             continue
         value = getattr(instance, name, None)
-        if isinstance(value, SPARQLModel):
-            assert_no_embed_cycles(value, path.copy())
+        for item in iter_relationship_values(value):
+            if isinstance(item, SPARQLModel):
+                assert_no_embed_cycles(item, path.copy())
 
 
 def _relationship_field_names(cls: type[SPARQLModel]) -> set[str]:
@@ -74,10 +80,15 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
         raise_if_nested_collection(field_info)
         value = getattr(instance, name)
         card = field_cardinality(field_info)
-        if card in ("nested", "ref", "list", "set"):
+        if card in ("nested", "ref"):
             continue
 
-        lang = lang_for_field(field_info)
+        extra = field_info.json_schema_extra
+        lang = None
+        if isinstance(extra, dict) and extra.get("rdf_lang"):
+            lang = str(extra["rdf_lang"])
+        if lang is None:
+            lang = lang_for_field(field_info)
         dt_raw = literal_datatype_for_field(field_info)
         for item in _field_values_for_export(name, value, field_info):
             obj = item
@@ -91,6 +102,8 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
                     obj = Literal(str(item), datatype=NamedNode(dt_uri))
             triples.append((subject, predicate, obj))
 
+    from triplemodel.fields.resource_ref import ResourceRef
+
     for name, field_info, _related_cls in instance.get_relationship_fields():
         meta = get_field_metadata(field_info)
         if meta is None:
@@ -100,10 +113,15 @@ def sparql_instance_to_triples(instance: SPARQLModel) -> list[TripleRow]:
             continue
         predicate = resolve_predicate(meta.predicate, prefixes)
 
-        if isinstance(value, SPARQLModel):
-            triples.append((subject, predicate, value.subject_uri()))
-        elif isinstance(value, IRI):
-            triples.append((subject, predicate, str(value)))
+        for item in iter_relationship_values(value):
+            if isinstance(item, SPARQLModel):
+                triples.append((subject, predicate, item.subject_uri()))
+            elif isinstance(item, IRI):
+                triples.append((subject, predicate, str(item)))
+            elif isinstance(item, ResourceRef):
+                triples.append((subject, predicate, item.iri))
+            elif isinstance(item, str) and _iri_like(item):
+                triples.append((subject, predicate, item))
 
     return triples
 
@@ -154,6 +172,105 @@ def _iri_like(value: str) -> bool:
     return value.startswith(("http://", "https://", "urn:", "_:"))
 
 
+def _ref_uri(value: object) -> str | None:
+    from triplemodel.fields.resource_ref import ResourceRef
+
+    if isinstance(value, IRI):
+        return str(value)
+    if isinstance(value, ResourceRef):
+        return value.iri
+    if isinstance(value, str) and _iri_like(value):
+        return value
+    if isinstance(value, SPARQLModel):
+        return value.subject_uri()
+    return None
+
+
+def _hydrate_relationship_value(
+    value: object,
+    *,
+    model_cls: type[SPARQLModel],
+    field_name: str,
+    field_info: object,
+    related_cls: type[SPARQLModel],
+    graph: Store,
+    depth: int,
+    branch_path: set[str],
+    meta: object,
+) -> object:
+    from pydantic.fields import FieldInfo as PydanticFieldInfo
+
+    from sparqlmodel.exceptions import HydrationError
+    from sparqlmodel.fields import SPARQLFieldMetadata
+
+    assert isinstance(field_info, PydanticFieldInfo)
+    sparql_meta = meta if isinstance(meta, SPARQLFieldMetadata) else None
+    allows_iri = relationship_allows_iri(field_info.annotation)
+    target_cls = related_cls
+    if sparql_meta is not None and sparql_meta.related_model is not None:
+        target_cls = sparql_meta.related_model
+    can_deep_load = isinstance(target_cls, type) and issubclass(target_cls, SPARQLModel)
+
+    if isinstance(value, (list, set)):
+        hydrated: list[object] = []
+        for item in value:
+            one = _hydrate_relationship_value(
+                item,
+                model_cls=model_cls,
+                field_name=field_name,
+                field_info=field_info,
+                related_cls=related_cls,
+                graph=graph,
+                depth=depth,
+                branch_path=branch_path,
+                meta=meta,
+            )
+            if one is not None:
+                hydrated.append(one)
+        if not hydrated:
+            return value
+        return set(hydrated) if isinstance(value, set) else hydrated
+
+    if isinstance(value, SPARQLModel):
+        if sparql_meta is not None and sparql_meta.cascade and depth > 0 and can_deep_load:
+            return load_from_graph(
+                target_cls,
+                IRI(value.subject_uri()),
+                graph,
+                depth=depth - 1,
+                path=branch_path.copy(),
+            )
+        if allows_iri:
+            return IRI(value.subject_uri())
+        raise HydrationError(
+            f"Non-cascade relationship {field_name!r} on {model_cls.__name__} "
+            f"resolved to embedded model; use cascade=False with IRI annotation"
+        )
+
+    uri = _ref_uri(value)
+    if uri is not None:
+        if depth > 0 and can_deep_load and subject_has_rdf_type(target_cls, uri, graph):
+            if sparql_meta is not None and sparql_meta.cascade:
+                return load_from_graph(
+                    target_cls,
+                    IRI(uri),
+                    graph,
+                    depth=depth - 1,
+                    path=branch_path.copy(),
+                )
+            if allows_iri or relationship_is_ref_link(field_info):
+                return IRI(uri)
+            return None
+        if allows_iri:
+            return IRI(uri)
+        return None
+
+    if isinstance(value, str) and _iri_like(value):
+        return None
+
+    return value
+
+
 def load_from_graph(
     model_cls: type[SPARQLModel],
     subject_iri: str | IRI,
@@ -189,46 +306,54 @@ def load_from_graph(
             if value is None:
                 data[name] = None
                 continue
-
             meta = get_field_metadata(field_info)
-            allows_iri = relationship_allows_iri(field_info.annotation)
+            data[name] = _hydrate_relationship_value(
+                value,
+                model_cls=model_cls,
+                field_name=name,
+                field_info=field_info,
+                related_cls=related_cls,
+                graph=graph,
+                depth=depth,
+                branch_path=branch_path,
+                meta=meta,
+            )
 
-            if isinstance(value, SPARQLModel):
-                if meta is not None and meta.cascade:
-                    data[name] = load_from_graph(
-                        related_cls,
-                        IRI(value.subject_uri()),
-                        graph,
-                        depth=depth - 1,
-                        path=branch_path.copy(),
-                    )
-                else:
-                    if allows_iri:
-                        data[name] = IRI(value.subject_uri())
-                    else:
-                        from sparqlmodel.exceptions import HydrationError
+    instance = model_cls.model_validate(data)
+    if depth > 0:
+        from triplemodel.fields.resource_ref import ResourceRef
+        from triplemodel.io.hydrate import hydrate_refs
 
-                        raise HydrationError(
-                            f"Non-cascade relationship {name!r} on {model_cls.__name__} "
-                            f"resolved to embedded model; use cascade=False with IRI annotation"
-                        )
-            elif isinstance(value, str) and _iri_like(value):
-                if subject_has_rdf_type(related_cls, value, graph):
-                    data[name] = load_from_graph(
-                        related_cls,
-                        IRI(value),
-                        graph,
-                        depth=depth - 1,
-                        path=branch_path.copy(),
-                    )
-                elif allows_iri:
-                    data[name] = IRI(value)
-                else:
-                    data[name] = None
-            else:
-                data[name] = value
-
-    return model_cls.model_validate(data)
+        ref_fields = [
+            (n, fi, rc)
+            for n, fi, rc in model_cls.get_relationship_fields()
+            if relationship_is_ref_link(fi)
+        ]
+        if ref_fields:
+            spec = {n: rc for n, _fi, rc in ref_fields}
+            ref_names: list[str] = []
+            for n, _fi, _rc in ref_fields:
+                val = getattr(instance, n, None)
+                if val is None or isinstance(val, IRI):
+                    continue
+                if isinstance(val, (SPARQLModel, ResourceRef)):
+                    ref_names.append(n)
+                    continue
+                if isinstance(val, (list, set)) and any(
+                    isinstance(x, (SPARQLModel, ResourceRef)) for x in val
+                ):
+                    ref_names.append(n)
+            if ref_names:
+                hydrated = hydrate_refs(
+                    [instance],
+                    graph,
+                    *ref_names,
+                    spec=spec,
+                    validate_type=True,
+                )
+                if hydrated:
+                    return hydrated[0]
+    return instance
 
 
 def sparql_from_graph(

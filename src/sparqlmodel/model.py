@@ -16,6 +16,7 @@ from sparqlmodel.exceptions import ConfigurationError
 from sparqlmodel.expressions import FieldRef
 from sparqlmodel.fields import (
     get_field_metadata,
+    is_relationship_field,
     resolve_related_model,
 )
 from sparqlmodel.types import DEFAULT_PREFIXES, IRI, NamespaceRegistry, expand_iri
@@ -71,6 +72,9 @@ class SPARQLModel(TripleModel, metaclass=SPARQLModelMetaclass):
         super().__pydantic_init_subclass__(**kwargs)
         _ensure_id_field_has_iri_id(cls)
         cls._validate_unique_predicates()
+        from triplemodel.fields.back_populates import register_back_populates
+
+        register_back_populates(cls)
 
     @classmethod
     def _validate_unique_predicates(cls) -> None:
@@ -117,9 +121,12 @@ class SPARQLModel(TripleModel, metaclass=SPARQLModelMetaclass):
         rels: list[tuple[str, FieldInfo, type[SPARQLModel]]] = []
         for name, field_info, annotation in cls.iter_sparql_fields():
             meta = get_field_metadata(field_info)
-            if meta and meta.is_relationship:
-                related = resolve_related_model(name, annotation, meta)
-                rels.append((name, field_info, related))
+            if meta is None:
+                continue
+            if not is_relationship_field(field_info, meta):
+                continue
+            related = resolve_related_model(name, annotation, meta)
+            rels.append((name, field_info, related))
         return rels
 
     @classmethod
@@ -128,7 +135,9 @@ class SPARQLModel(TripleModel, metaclass=SPARQLModelMetaclass):
         scalars: list[tuple[str, FieldInfo]] = []
         for name, field_info, _ in cls.iter_sparql_fields():
             meta = get_field_metadata(field_info)
-            if meta and not meta.is_relationship:
+            if meta is None:
+                continue
+            if not is_relationship_field(field_info, meta):
                 scalars.append((name, field_info))
         return scalars
 
@@ -186,6 +195,14 @@ def _apply_rdf_config(cls: type[SPARQLModel]) -> None:
     """Inject TripleModel ``Rdf`` config from SparqlModel class variables."""
     merged_prefixes = cls.get_prefixes()
     expanded_type_uri = expand_iri(cls.rdf_type, merged_prefixes)
+    reg = None
+    for base in cls.__mro__:
+        if base is cls and "ontology_registry" in cls.__dict__:
+            reg = cls.__dict__["ontology_registry"]
+            break
+        if "ontology_registry" in getattr(base, "__dict__", {}):
+            reg = base.__dict__["ontology_registry"]
+            break
 
     class Rdf:
         type_uri = expanded_type_uri
@@ -193,5 +210,7 @@ def _apply_rdf_config(cls: type[SPARQLModel]) -> None:
         namespace = "urn:sparqlmodel:unused/"
         embed = "iri"
         id_field = "id"
+        resolve_subclass = True
+        ontology_registry = reg
 
     cls.Rdf = Rdf

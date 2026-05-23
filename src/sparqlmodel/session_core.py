@@ -42,9 +42,13 @@ def sparql_has_prefix_declarations(sparql: str) -> bool:
 
 
 def relationships_materialized(model: SPARQLModel) -> bool:
+    from sparqlmodel.fields import iter_relationship_values
+
     for name, _field_info, _related in model.get_relationship_fields():
-        if isinstance(getattr(model, name, None), SPARQLModel):
-            return True
+        value = getattr(model, name, None)
+        for item in iter_relationship_values(value):
+            if isinstance(item, SPARQLModel):
+                return True
     return False
 
 
@@ -122,19 +126,25 @@ def depth_satisfied(model: SPARQLModel, depth: int) -> bool:
     if not rel_fields:
         return True
     saw_relationship = False
+    from sparqlmodel.fields import iter_relationship_values
+
     for name, field_info, _related_cls in rel_fields:
         value = getattr(model, name, None)
         if value is None:
             continue
+        items = iter_relationship_values(value)
+        if not items:
+            continue
         saw_relationship = True
-        if isinstance(value, IRI):
-            if relationship_allows_iri(field_info.annotation):
-                continue
-            return False
-        if not isinstance(value, SPARQLModel):
-            return False
-        if not depth_satisfied(value, depth - 1):
-            return False
+        for item in items:
+            if isinstance(item, IRI):
+                if relationship_allows_iri(field_info.annotation):
+                    continue
+                return False
+            if not isinstance(item, SPARQLModel):
+                return False
+            if not depth_satisfied(item, depth - 1):
+                return False
     return saw_relationship
 
 

@@ -65,7 +65,7 @@ def test_compile_negative_offset_raises() -> None:
 
 def test_compile_order_by_non_scalar_raises() -> None:
     registry = NamespaceRegistry(Person.get_prefixes())
-    with pytest.raises(QueryError, match="non-scalar"):
+    with pytest.raises(QueryError, match="not a collection"):
         compile_where(Person, (), registry, order_by=((Person.works_for, False),))
 
 

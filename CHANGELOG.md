@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-05-22
+
+### Added
+
+- **`triplemodel>=0.12.0,<2`** — multi-valued mapping, `MultiLangString`, `TypedLiteral`, `ResourceRef`, `OntologyRegistry`, `BackPopulates` (re-exported from `sparqlmodel`)
+- **Multi-valued export/load/cascade** — `set`/`list` scalars and relationship refs; orphan cleanup for removed collection members
+- **`SchemaRegistry`** — alias for `OntologyRegistry`; `Rdf.ontology_registry`; `Query.polymorphic()`
+- **Query DSL** — `Query.values(...)`, `not_()` / `~expr`, `FieldRef.str()` / `lower()` / `upper()`, `property_eq()` / `property_path()` for SPARQL property paths
+- **Collection filters** — `.in_()` on multi-valued scalar and ref fields
+- **`Relationship`** — `inverse=`, `back_populates=`, `lang=` on `Field`, `literal_datatype=`, `transitive=`
+
+### Changed
+
+- Field classification uses TripleModel cardinality (`is_relationship_field`, collection-aware cascade)
+
+### Documentation
+
+- ROADMAP — **0.13** shipped; focus **0.14**; SPECS P1 modeling items checked
+- Guides — models, queries, ORM, README, ECOSYSTEM (`triplemodel>=0.12.0`)
+
 ## [0.12.0] - 2026-05-22
 
 ### Added
