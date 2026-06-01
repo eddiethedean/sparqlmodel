@@ -531,6 +531,32 @@ def test_get_deep_reload_reconciles_nested_identity(
     assert session.get(Organization, acme.id) is person.works_for
 
 
+def test_register_embedded_identities_collection() -> None:
+    from unittest.mock import patch
+
+    from pydantic.fields import FieldInfo
+
+    from sparqlmodel.session_core import _register_embedded_identities
+    from sparqlmodel.session_state import SessionState, identity_key_for_iri
+
+    acme = Organization(id=IRI("urn:org:acme"), name="Acme")
+    beta = Organization(id=IRI("urn:org:beta"), name="Beta")
+    root = Person(id=IRI("urn:p:1"), name="P", works_for=None)
+    object.__setattr__(root, "members", [acme, beta])
+
+    state = SessionState()
+    field_info = FieldInfo()
+    with patch.object(
+        Person,
+        "get_relationship_fields",
+        return_value=[("members", field_info, Organization)],
+    ):
+        _register_embedded_identities(state, root)
+
+    assert state.get_identity(identity_key_for_iri(Organization, acme.id)) is acme
+    assert state.get_identity(identity_key_for_iri(Organization, beta.id)) is beta
+
+
 def test_get_shallow_after_deep_updates_identity_map(session: SPARQLSession, odos: Person) -> None:
     from sparqlmodel.session_state import identity_key_for_iri
 

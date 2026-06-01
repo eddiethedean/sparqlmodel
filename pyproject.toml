@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sparqlmodel"
-version = "0.13.0"
+version = "0.13.1"
 description = "SPARQL ORM for Python — sessions, queries, and graph persistence on RDF stores"
 readme = "README.md"
 license = "MIT"

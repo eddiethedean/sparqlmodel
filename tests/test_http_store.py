@@ -1031,6 +1031,60 @@ def test_http_store_sync_mirror_replaces_mirror() -> None:
     store.close()
 
 
+def test_http_store_sync_mirror_refreshes_session_cache() -> None:
+    remote_turtle = (
+        b"@prefix schema: <https://schema.org/> .\n"
+        b'<http://example.org/person/1> a schema:Person ; schema:name "Remote" .\n'
+    )
+    stale = Store()
+    stale.add(
+        (
+            "http://example.org/person/1",
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+            "https://schema.org/Person",
+        )
+    )
+    stale.add(
+        (
+            "http://example.org/person/1",
+            "https://schema.org/name",
+            Literal("Stale"),
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/data"):
+            return httpx.Response(
+                200, content=remote_turtle, headers={"Content-Type": "text/turtle"}
+            )
+        if request.method == "POST" and b"SELECT" in request.content:
+            return httpx.Response(
+                200,
+                content=b'{"head":{"vars":["person"]},"results":{"bindings":[]}}',
+                headers={"Content-Type": "application/sparql-results+json"},
+            )
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    store = HttpStore(
+        "http://example.org/ds/sparql",
+        client=client,
+        graph=stale,
+        graph_store_url="http://example.org/ds/data",
+        prefixes={"schema": "https://schema.org/"},
+    )
+    person_iri = IRI("http://example.org/person/1")
+    with SPARQLSession(store=store, close_on_exit=False) as session:
+        cached = session.get(Person, person_iri)
+        assert cached is not None
+        assert cached.name == "Stale"
+        store.sync_mirror()
+        fresh = session.get(Person, person_iri)
+        assert fresh is not None
+        assert fresh.name == "Remote"
+    store.close()
+
+
 def test_http_store_sync_mirror_empty_remote_clears_mirror() -> None:
     stale = Store()
     stale.add(("http://ex/s", "http://ex/p", "http://ex/o"))

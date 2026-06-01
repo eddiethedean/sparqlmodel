@@ -279,6 +279,7 @@ def load_from_graph(
     depth: int = 0,
     path: set[str] | None = None,
     visited: set[str] | None = None,
+    validate_type: bool = True,
 ) -> SPARQLModel:
     """Hydrate a SPARQLModel from graph data via TripleModel ``from_graph``."""
     path = path if path is not None else (visited or set())
@@ -289,7 +290,7 @@ def load_from_graph(
     branch_path = path | {subject_key}
 
     uri = expand_iri(str(subject_iri), prefixes)
-    raw = model_cls.from_graph(graph, uri, validate_type=True, on_duplicate="warn")
+    raw = model_cls.from_graph(graph, uri, validate_type=validate_type, on_duplicate="warn")
     data: dict[str, object] = {"id": IRI(raw.subject_uri())}
 
     for name, _field_info in model_cls.get_scalar_fields():

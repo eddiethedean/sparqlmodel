@@ -955,4 +955,4 @@ def test_depth_satisfied_empty_collection(session) -> None:
         related=set(),
     )
     session.put(article)
-    assert depth_satisfied(article, 1) is False
+    assert depth_satisfied(article, 1) is True

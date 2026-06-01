@@ -201,6 +201,17 @@ def test_parse_gsp_response_missing_content_type() -> None:
     assert len(graph) == 1
 
 
+def test_parse_construct_response_nt_content_type() -> None:
+    body = b"<http://ex/s> <http://ex/p> <http://ex/o> .\n"
+    graph = http_common.parse_construct_response(body, "application/n-triples")
+    assert len(graph) == 1
+
+
+def test_parse_construct_response_empty() -> None:
+    graph = http_common.parse_construct_response(b"", None)
+    assert len(graph) == 0
+
+
 def test_gsp_format_from_content_type_trig() -> None:
     assert http_common._gsp_format_from_content_type("application/x-trig") == "trig"
     assert http_common._gsp_format_from_content_type("application/x-turtle") == "turtle"

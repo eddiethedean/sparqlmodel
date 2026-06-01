@@ -9,7 +9,7 @@
 
 Build knowledge-graph and metadata apps with typed `SPARQLModel` classes, `with SPARQLSession() as session:`, and ORM-style `put`, `get`, nested relationships, and a query builder — on in-memory graphs or remote SPARQL 1.1 endpoints. Same validation ergonomics as FastAPI and SQLModel: invalid data fails at construction and on load, before bad triples reach the store.
 
-**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.12+ + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0130---2026-05-22) (0.13.0)
+**Requires Python 3.10+** · Built on [TripleModel](https://github.com/eddiethedean/triplemodel) 0.12+ + **pyoxigraph** · [Changelog](https://github.com/eddiethedean/sparqlmodel/blob/main/CHANGELOG.md#0131---2026-06-01) (0.13.1)
 
 ---
 
@@ -235,7 +235,7 @@ File parse/serialize is implemented by [TripleModel](https://github.com/eddiethe
 
 ---
 
-## Known limitations (0.13.0)
+## Known limitations (0.13.1)
 
 - `list[SPARQLModel]` embed collections are not supported (TripleModel); use `set[IRI]` / `set[ResourceRef]` with `Relationship(..., model=...)` for multi-ref
 - Multi-valued scalars and refs (`set`/`list`), `LangString` / `MultiLangString`, polymorphic query, property paths, and `not_()` — see [Models](https://sparqlmodel.readthedocs.io/en/latest/guides/models.html) and [Queries](https://sparqlmodel.readthedocs.io/en/latest/guides/queries.html) guides

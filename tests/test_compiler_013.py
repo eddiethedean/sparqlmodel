@@ -96,3 +96,62 @@ def test_query_polymorphic_session() -> None:
         )
         results = session.query(Person).polymorphic().where(Person.name == "Pat").all()
     assert len(results) >= 1
+
+
+def test_query_polymorphic_hydrates_subtype() -> None:
+    reg = OntologyRegistry()
+    reg.register_subclasses(
+        "https://schema.org/Person",
+        ["https://schema.org/Employee"],
+    )
+
+    class PolymorphicPerson(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        ontology_registry: ClassVar[OntologyRegistry] = reg
+        id: IRI
+        name: str = Field("schema:name")
+
+    class Employee(SPARQLModel):
+        rdf_type = "schema:Employee"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        name: str = Field("schema:name")
+
+    emp = Employee(id=IRI("urn:person:emp"), name="Pat")
+    with SPARQLSession() as session:
+        session.put(emp)
+        results = (
+            session.query(PolymorphicPerson)
+            .polymorphic()
+            .where(PolymorphicPerson.name == "Pat")
+            .all()
+        )
+    assert len(results) == 1
+    assert str(results[0].id) == "urn:person:emp"
+
+
+def test_not_property_path() -> None:
+    sparql = compile_where(
+        Person,
+        (not_(property_eq(Person, "schema:worksFor/schema:name", "Acme")),),
+        NamespaceRegistry(Person.get_prefixes()),
+    )
+    assert "NOT" in sparql
+    assert "worksFor" in sparql
+
+
+def test_not_iri_str_lower() -> None:
+    class WithIri(SPARQLModel):
+        rdf_type = "schema:Person"
+        __prefixes__ = {"schema": "https://schema.org/"}
+        id: IRI
+        alt_id: IRI | None = Field("schema:identifier")
+
+    sparql = compile_where(
+        WithIri,
+        (not_(WithIri.alt_id.lower() == "abc"),),
+        NamespaceRegistry(WithIri.get_prefixes()),
+    )
+    assert "NOT" in sparql
+    assert "LCASE" in sparql

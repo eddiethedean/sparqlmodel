@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-06-01
+
+### Fixed
+
+- **Polymorphic query hydration** — `.polymorphic()` SELECT results typed as registered subtypes hydrate correctly (previously skipped when `rdf:type` did not exactly match the query root class)
+- **`not_()` compiler** — negation works for property-path (`property_eq`) and IRI string filters (`FieldRef.str()` / `lower()` / `upper()`)
+- **Identity map** — embedded models inside relationship collections are registered on `put`/`get`/`merge` (parity with cascade graph walks)
+- **`depth_satisfied`** — models with empty multi-ref fields no longer fail depth-1 cache checks indefinitely
+- **`HttpStore` / `AsyncHttpStore` session cache** — `sync_mirror()` and `pull_subjects_into_mirror()` bump `mirror_generation`, clearing session identity/hydration caches on the next read
+- **CONSTRUCT pull** — response body parsed using `Content-Type` (not always Turtle)
+- **Fuseki integration tests** — admin/update helpers use the same default Basic auth as `HttpStore` when `FUSEKI_ADMIN_PASSWORD` is unset
+
 ## [0.13.0] - 2026-05-22
 
 ### Fixed

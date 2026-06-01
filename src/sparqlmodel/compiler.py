@@ -597,6 +597,22 @@ def compile_not(
         if inner_filter.startswith("FILTER(") and inner_filter.endswith(")"):
             inner_filter = inner_filter[7:-1]
         return [], [f"FILTER(!({inner_filter}))"]
+    if isinstance(inner, PropertyPathCompare):
+        pats, filts = compile_property_path_compare(inner, root_var, registry)
+        exists = _exists_block(pats, filts)
+        return [], [f"NOT ({exists})"]
+    if isinstance(inner, IriStrCompare):
+        pats, filts = compile_iri_str_compare(
+            inner,
+            model_cls,
+            root_var,
+            registry,
+            join_counter,
+            join_cache,
+            use_not_exists_for_ne=use_not_exists_for_ne,
+        )
+        exists = _exists_block(pats, filts)
+        return [], [f"NOT ({exists})"]
     raise QueryError(f"not_() does not support {type(inner).__name__}")
 
 

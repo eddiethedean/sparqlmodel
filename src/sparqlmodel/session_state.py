@@ -35,6 +35,7 @@ class SessionState:
         self._identity: dict[IdentityKey, SPARQLModel] = {}
         self._hydration: dict[HydrationKey, SPARQLModel | None] = {}
         self._pending: list[SPARQLModel] = []
+        self.store_generation: int = 0
 
     def get_identity(self, key: IdentityKey) -> SPARQLModel | None:
         return self._identity.get(key)

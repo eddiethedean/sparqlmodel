@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from sparqlmodel.exceptions import ConfigurationError, HydrationError
-from sparqlmodel.graph import subject_has_rdf_type
+from sparqlmodel.graph import subject_matches_model_type
 from sparqlmodel.model import SPARQLModel
 from sparqlmodel.rdf_bridge import load_from_graph
 from sparqlmodel.stores.base import Store
@@ -70,14 +70,21 @@ def hydrate_one(
     store: Store,
     *,
     depth: int = 0,
+    polymorphic: bool = False,
 ) -> SPARQLModel | None:
     """Load a single model by IRI from the store."""
     validate_depth(depth)
-    if not subject_has_rdf_type(model_cls, iri, store.graph):
+    if not subject_matches_model_type(model_cls, iri, store.graph, polymorphic=polymorphic):
         return None
 
     try:
-        return load_from_graph(model_cls, IRI(str(iri)), store.graph, depth=depth)
+        return load_from_graph(
+            model_cls,
+            IRI(str(iri)),
+            store.graph,
+            depth=depth,
+            validate_type=not polymorphic,
+        )
     except ConfigurationError:
         raise
     except (ValidationError, ValueError, TypeError) as exc:

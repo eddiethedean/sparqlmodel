@@ -33,6 +33,11 @@ class MemoryStore:
     def namespaces(self) -> NamespaceRegistry:
         return self._registry
 
+    @property
+    def mirror_generation(self) -> int:
+        """Monotonic counter; ``0`` for in-memory stores (no wholesale mirror sync)."""
+        return 0
+
     def query(self, sparql: str) -> list[dict[str, Any]]:
         """Execute SPARQL SELECT and return variable bindings."""
         try:

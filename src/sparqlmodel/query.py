@@ -94,6 +94,7 @@ class Query:
             self._state.model_cls,
             bindings,
             depth=depth,
+            polymorphic=self._state.polymorphic,
         )
 
     def first(self, *, depth: int = 0) -> SPARQLModel | None:
@@ -104,5 +105,6 @@ class Query:
             self._state.model_cls,
             bindings,
             depth=depth,
+            polymorphic=self._state.polymorphic,
         )
         return results[0] if results else None

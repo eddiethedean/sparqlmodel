@@ -68,13 +68,31 @@ def subject_has_rdf_type(
     graph: Store,
 ) -> bool:
     """Return True if the graph subject has the expected ``rdf:type`` for ``model_cls``."""
+    return subject_matches_model_type(model_cls, subject_iri, graph, polymorphic=False)
+
+
+def subject_matches_model_type(
+    model_cls: type[SPARQLModel],
+    subject_iri: str | IRI,
+    graph: Store,
+    *,
+    polymorphic: bool = False,
+) -> bool:
+    """Return True if the subject's ``rdf:type`` matches ``model_cls`` (and subtypes when polymorphic)."""
     prefixes = model_cls.get_prefixes()
     subject = _subject_pattern(subject_iri, prefixes)
     types = list(graph.objects(subject, RDF_TYPE))
     if not types:
         return False
     expected = expand_iri(model_cls.rdf_type, prefixes)
-    return any(term_str(t) == expected for t in types)
+    type_uris: set[str] = {expected}
+    if polymorphic:
+        from sparqlmodel.schema_registry import registry_for_model
+
+        reg = registry_for_model(model_cls)
+        if reg is not None:
+            type_uris |= {expand_iri(u, prefixes) for u in reg.subtypes_of(expected)}
+    return any(term_str(t) in type_uris for t in types)
 
 
 def _subject_pattern(iri: str | IRI, prefixes: dict[str, str]) -> str | BlankNode:

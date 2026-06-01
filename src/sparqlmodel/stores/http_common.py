@@ -422,6 +422,17 @@ def parse_gsp_response(content: bytes, content_type: str | None) -> Store:
         raise QueryError(f"Failed to parse Graph Store response: {exc}") from exc
 
 
+def parse_construct_response(content: bytes, content_type: str | None) -> Store:
+    """Parse a SPARQL CONSTRUCT response body into a :class:`~triplemodel.Store`."""
+    if not content.strip():
+        return Store()
+    fmt = _gsp_format_from_content_type(content_type)
+    try:
+        return load_graph(data=content, format=fmt)
+    except Exception as exc:
+        raise QueryError(f"Failed to parse CONSTRUCT response: {exc}") from exc
+
+
 def fetch_graph_store(
     client: httpx.Client,
     url: str,

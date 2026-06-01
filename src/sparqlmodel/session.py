@@ -293,17 +293,34 @@ class SPARQLSession:
         bindings: list[dict[str, Any]],
         *,
         depth: int = 0,
+        polymorphic: bool = False,
     ) -> list[SPARQLModel]:
         """Hydrate query results with identity map and session cache."""
         self._check_open()
         self._maybe_autoflush()
+
+        def get_fn(
+            mcls: type[SPARQLModel],
+            subject_iri: str | IRI,
+            *,
+            depth: int = 0,
+        ) -> SPARQLModel | None:
+            return session_core.get_impl(
+                self._state,
+                self._store,
+                mcls,
+                subject_iri,
+                depth=depth,
+                polymorphic=polymorphic,
+            )
+
         return session_core.hydrate_bindings_impl(
             self._state,
             self._store,
             model_cls,
             bindings,
             depth=depth,
-            get_fn=self.get,
+            get_fn=get_fn,
         )
 
     def query(self, model_cls: type[SPARQLModel]) -> Query:

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 import httpx
-from triplemodel import Store, load_graph
+from triplemodel import Store
 
 from sparqlmodel.exceptions import ConfigurationError, QueryError
 from sparqlmodel.rdf_n3 import validate_iri_token
@@ -94,6 +94,7 @@ class AsyncHttpStore:
                 follow_redirects=True,
             )
         self._closed = False
+        self._mirror_generation = 0
 
     def _check_open(self) -> None:
         if self._closed:
@@ -143,6 +144,14 @@ class AsyncHttpStore:
         """Graph Store HTTP URL for :meth:`sync_mirror` (optional)."""
         return self._graph_store_url
 
+    @property
+    def mirror_generation(self) -> int:
+        """Monotonic counter bumped when the local mirror is wholesale or partially replaced."""
+        return self._mirror_generation
+
+    def _bump_mirror_generation(self) -> None:
+        self._mirror_generation += 1
+
     async def sync_mirror(self) -> None:
         """Replace the local mirror with the remote default graph (Graph Store HTTP GET)."""
         self._check_open()
@@ -160,6 +169,7 @@ class AsyncHttpStore:
         remote = http_common.parse_gsp_response(content, content_type)
         http_common.replace_mirror_from_graph(self._graph, remote)
         self._registry.bind(self._graph)
+        self._bump_mirror_generation()
 
     async def aclose(self) -> None:
         if self._closed:
@@ -246,7 +256,10 @@ class AsyncHttpStore:
         remote: Store | None = None
         if response.content.strip():
             try:
-                remote = load_graph(data=response.content, format="turtle")
+                remote = http_common.parse_construct_response(
+                    response.content,
+                    response.headers.get("Content-Type"),
+                )
             except Exception as exc:
                 raise QueryError(f"Failed to parse CONSTRUCT response: {exc}") from exc
         http_common.apply_construct_to_mirror(
@@ -255,6 +268,7 @@ class AsyncHttpStore:
             subjects=unique,
             prefixes=prefixes,
         )
+        self._bump_mirror_generation()
 
     async def update_graph(self, add: Store | None = None, remove: Store | None = None) -> None:
         """Apply graph delta to remote endpoint and local mirror."""

@@ -57,6 +57,8 @@ with SPARQLSession(store=store) as session:
     person = session.get(Person, IRI("http://example.org/p/1"))
 ```
 
+Since **0.13.1**, `sync_mirror()` and `pull_subjects_into_mirror()` bump the store's `mirror_generation`, which clears the session identity map and hydration cache on the next `get`, `refresh`, or query hydration — you do not need `expunge_all()` after a mirror sync.
+
 | Mechanism | Scope | When to use |
 |-----------|--------|-------------|
 | `pull_subjects_into_mirror([iri, ...])` | Listed subjects (CONSTRUCT) | Targeted refresh after known IRIs changed |
@@ -108,7 +110,7 @@ Configure on `HttpStore` / `AsyncHttpStore` (and via `http_store_lifespan(..., m
 
 | `mirror_mode` | When `get` / `refresh` pull from remote | Typical use |
 |---------------|------------------------------------------|-------------|
-| **`writer`** (default) | Only when the subject has **no** triples in the mirror | This app is the primary writer for the endpoint |
+| **`writer`** (default) | Only when the subject lacks the expected **`rdf:type`** in the mirror | This app is the primary writer for the endpoint |
 | **`remote_authoritative`** | **Every** `get` / `refresh` (CONSTRUCT + replace-on-pull) | Read replicas, admin UIs, or multi-reader apps that must see remote truth |
 
 Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: outgoing mirror triples `(subject, ?, ?)` for each requested IRI are removed before remote triples are merged. Triples where the IRI appears only as object are not removed by per-subject pull; use **`sync_mirror()`** for a full-graph refresh.
@@ -120,7 +122,7 @@ Replace-on-pull applies to explicit `pull_subjects_into_mirror` in both modes: o
 | `query`, `execute`, `Query.count()` | **Remote** endpoint |
 | `get`, `refresh`, cascade, `session.graph` | **Mirror** (after any pull for that read) |
 
-With **`writer`**, a subject already in the mirror may be stale until you call `pull_subjects_into_mirror` or the subject was never written locally (then `get` pulls once). With **`remote_authoritative`**, each `get`/`refresh` re-syncs that IRI from remote.
+With **`writer`**, a subject already in the mirror may have **stale properties** until you call `pull_subjects_into_mirror`, `sync_mirror()`, or switch to `remote_authoritative`. Auto-pull on `get`/`refresh` runs only when the expected `rdf:type` is missing from the mirror, not when literals or links are outdated. With **`remote_authoritative`**, each `get`/`refresh` re-syncs that IRI from remote.
 
 **Caution:** `remote_authoritative` does not flush pending `put(..., flush=False)`; avoid reading the same IRI with unflushed local writes.
 

@@ -37,11 +37,8 @@ def _fuseki_base_url() -> str:
     return base
 
 
-def _fuseki_admin_auth() -> httpx.BasicAuth | None:
-    password = os.environ.get(FUSEKI_ADMIN_PASSWORD_ENV)
-    if not password:
-        return None
-    user = os.environ.get(FUSEKI_ADMIN_USER_ENV, "admin")
+def _fuseki_admin_auth() -> httpx.BasicAuth:
+    user, password = fuseki_basic_auth_tuple()
     return httpx.BasicAuth(user, password)
 
 

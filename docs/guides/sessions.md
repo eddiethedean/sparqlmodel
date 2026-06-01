@@ -93,7 +93,7 @@ store = HttpStore(
 with SPARQLSession(store=store) as session:
     session.put(model)
 # After external bulk changes to the remote dataset (0.12+)
-store.sync_mirror()
+store.sync_mirror()  # next get/refresh sees fresh mirror (0.13.1+ clears session cache)
 
 # Multi-reader: re-sync each get from remote (0.10+)
 with SPARQLSession(
